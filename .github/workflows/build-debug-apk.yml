@@ -15,7 +15,7 @@ on:
       - '.github/workflows/build-debug-apk.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -78,6 +78,19 @@ jobs:
           tar -xJf /tmp/badminton-v20-ui.tar.xz
           grep -q premiumv20 app/build.gradle
           grep -q 'New contribution' app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java
+      - name: Publish public-safe UI source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p src/source-view
+          cp app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java src/source-view/MainActivity.java
+          git config user.name 'badminton-build-bot'
+          git config user.email 'badminton-build-bot@users.noreply.github.com'
+          git add src/source-view/MainActivity.java
+          if ! git diff --cached --quiet; then
+            git commit -m 'Expose generated native UI source for premium upgrades'
+            git push origin HEAD:main
+          fi
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
