@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'src/archive/**'
+      - 'src/premium/**'
       - 'app/**'
       - 'tools/**'
       - 'build.gradle'
@@ -68,11 +69,20 @@ jobs:
           s = s.replace(old_bg, new_bg, 1)
           p.write_text(s)
           PY
+      - name: Restore Premium v20 screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/badminton-v20-ui.tar.xz
+          echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/badminton-v20-ui.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-v20-ui.tar.xz
+          grep -q premiumv20 app/build.gradle
+          grep -q 'New contribution' app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Native-Android-APK
+          name: Badminton-Premium-v20-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
