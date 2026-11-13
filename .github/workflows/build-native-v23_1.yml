@@ -6,7 +6,7 @@ on:
     branches: [main]
     paths:
       - 'src/premium/v23_1/**'
-      - '.github/workflows/build-native-v23.yml'
+      - '.github/workflows/build-native-v23_1.yml'
 
 permissions:
   contents: read
@@ -93,14 +93,13 @@ jobs:
           assert "historicalDonationRecorded" in s
           assert "verifyClassicPdf" in s
           assert "ClassicLedgerV231.master" in s
-          assert "ClassicLedgerV231.master" in s
           p=Path("app/build.gradle")
           s=p.read_text()
           assert "premiumv20" in s, "Unknown v20 application identity"
           s=s.replace("premiumv20","premiumv23")
           s=s.replace("versionCode 20","versionCode 22")
           if 'versionName "20"' in s:
-           s=s.replace('versionName "20"','versionName "23.1"')
+              s=s.replace('versionName "20"','versionName "23.1"')
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
