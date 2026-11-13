@@ -29,6 +29,25 @@ The **Stable** v24 release is prepared in `.github/workflows/build-native-v24-st
 
 ## One-time stable signing key setup (repo owner)
 
+### Recommended: guided Windows setup
+
+A Windows one-time setup script is included at
+[tools/SETUP_BADMINTON_STABLE_SIGNING.ps1](tools/SETUP_BADMINTON_STABLE_SIGNING.ps1).
+
+On a **trusted Windows computer**, install [GitHub CLI](https://cli.github.com/) and a JDK or Android Studio, then download the script from GitHub. Open PowerShell in the folder holding that downloaded script and run:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\SETUP_BADMINTON_STABLE_SIGNING.ps1
+```
+
+The script will sign you into your own GitHub account, create or reuse **one local permanent Android signing keystore**, ask for a password, show the certificate SHA-256 fingerprint, require a confirmed **offline backup**, store the four GitHub Actions secrets via standard input, and pin the release certificate fingerprint in a GitHub Actions repository variable. It optionally triggers the signed release workflow once you type BUILD.
+
+The script does **not** send the keystore or passwords to ChatGPT or commit them into the repository. It protects against accidental key replacement: if a certificate is already pinned, it refuses to create an unrelated signing key. **A brand-new stable app requires one import; later stable APKs use the same key and app identity and can update in place.**
+
+The key is saved locally under `%LOCALAPPDATA%\Badminton_Stable_Signing_Keep_Private\badminton-stable.p12` unless a different path is explicitly selected. **Copy the .p12 file to an offline drive and store the password in a secure password manager before completing setup.** Loss of both the key and its backup can prevent future in-place updates.
+
+### Manual alternative (Windows, macOS or Linux)
+
 Because Android checks both **application ID** and **signing certificate** during an upgrade, a v23.2 debug APK and a future stable APK cannot safely be treated as interchangeable. v24 Stable has its own app ID, with the explicit goal of **one import, then in-place upgrades for all subsequent stable versions**.
 
 1. On a trusted PC with JDK installed, create an Android signing key. Example command:
@@ -42,7 +61,7 @@ Because Android checks both **application ID** and **signing certificate** durin
 
    Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\\path\\Badminton-stable.p12"))`
 
-   macOS: `base64 -i Badminton-stable.p12 | tr -d '\\n'`
+   macOS: `base64 -i Badminton-stable.p12 | tr -d '\n'`
 
    Linux: `base64 -w 0 Badminton-stable.p12`
 
@@ -54,7 +73,8 @@ Because Android checks both **application ID** and **signing certificate** durin
    - `BADMINTON_KEY_PASSWORD`: private-key password
 
 5. Open **Actions → Build Badminton Premium v24 STABLE (private signing key) → Run workflow**. Successful runs produce an artifact named `Badminton-Premium-v24-STABLE-signed`.
-6. The release workflow verifies the APK signature, and assigns an increasing Android `versionCode`. Future stable versions must reuse the same package ID and signing key.
+6. The release workflow verifies the APK signature and checks its SHA-256 certificate fingerprint against the pinned repository variable `BADMINTON_EXPECTED_CERT_SHA256`. Future versions must reuse the same package ID and signing key. The Android version code is assigned from the stable workflow run number.
+7. For manual setup, create the repository variable `BADMINTON_EXPECTED_CERT_SHA256` with the lowercase, 64-character certificate SHA-256 fingerprint (no colons). The Windows script handles this automatically. A mismatched or missing fingerprint **blocks APK upload**.
 
 **Security:** The workflow fails when required secrets are absent; it never checks a signing key or password into the public repository. The separate `test-v24-release-signing.yml` uses a throwaway key **only to validate the build configuration** and never distributes that APK.
 
@@ -68,7 +88,7 @@ Because Android checks both **application ID** and **signing certificate** durin
 ## Limitations / QA
 
 - GitHub compilation and accounting regression tests do **not** replace installation and restore testing on an Android phone.
-- The stable signed APK has **not** been produced until the four GitHub secrets are configured and the stable workflow runs successfully.
+- The stable signed APK has **not** been produced until the four GitHub secrets and the expected certificate fingerprint are configured and the stable workflow runs successfully.
 - The first v24 Stable installation needs **one verified JSON import** from v23.2. Subsequent v24 Stable releases should install over it with matching signing key and increasing versionCode.
 - The backup system makes best-effort snapshots and reports errors; it does not roll back successful payments if a backup folder is unavailable. Check the backup status periodically.
 - Do not uninstall the old version until a verified external backup and the target app's closing balances have been checked.
