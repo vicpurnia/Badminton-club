@@ -155,6 +155,17 @@ jobs:
           BADMINTON_KEY_ALIAS: disposable
           BADMINTON_KEY_PASSWORD: throwaway_ci_only_2026
         run: gradle --no-daemon :app:assembleRelease
-      - name: Verify temporary APK signing (not for distribution)
+      - name: Verify signer identity and reject mismatched fingerprints
+        shell: bash
+        env:
+          BADMINTON_LOCAL_PASSWORD: throwaway_ci_only_2026
         run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+          set -euo pipefail
+          certificate="$(keytool -list -v -keystore "$RUNNER_TEMP/disposable-ci.jks" -storetype PKCS12 -alias disposable -storepass:env BADMINTON_LOCAL_PASSWORD)"
+          expected="$(printf '%s\n' "$certificate" | sed -nE 's/.*SHA256: ([[:xdigit:]:]+).*$/\1/p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          bash tools/check-stable-signature.sh app/build/outputs/apk/release/app-release.apk "$expected"
+          if bash tools/check-stable-signature.sh app/build/outputs/apk/release/app-release.apk "$(printf '0%.0s' {1..64})"; then
+            echo "::error::Certificate pin mismatch was incorrectly accepted"
+            exit 1
+          fi
+          echo "Negative test passed: wrong release certificate was rejected"
