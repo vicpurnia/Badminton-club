@@ -62,6 +62,10 @@ jobs:
           s = s.replace(old, new, 1)
           s = s.replace('if(result!=RESULT_OK||data==null', 'if(resultCode!=RESULT_OK||data==null', 1)
           s = s.replace('if(req!=PICK_LEDGER||result!=RESULT_OK', 'if(req!=PICK_LEDGER||resultCode!=RESULT_OK', 1)
+          old_bg = 'private void background(Runnable job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}'
+          new_bg = '@FunctionalInterface interface CheckedJob{void run() throws Exception;}\n  private void background(CheckedJob job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}'
+          assert old_bg in s, 'Unexpected background worker source'
+          s = s.replace(old_bg, new_bg, 1)
           p.write_text(s)
           PY
       - name: Build debug APK
