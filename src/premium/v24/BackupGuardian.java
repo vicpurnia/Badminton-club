@@ -7,6 +7,9 @@ import android.net.Uri;
 import android.provider.DocumentsContract;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -41,8 +44,8 @@ final class BackupGuardian {
  }
  static void setExternalFolder(Context context,Uri treeUri,int grantedFlags) throws IOException {
   int flags=grantedFlags&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-  if((flags&Intent.FLAG_GRANT_WRITE_URI_PERMISSION)==0)
-   throw new IOException("The chosen backup folder did not grant write permission.");
+  if((flags&(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION))!=(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_WRITE_URI_PERMISSION))
+   throw new IOException("The selected folder needs both read and write permission to verify copies.");
   try {
    context.getContentResolver().takePersistableUriPermission(treeUri,flags);
   }catch(SecurityException ex){
@@ -79,6 +82,63 @@ final class BackupGuardian {
  private static String stamp(){
   return new SimpleDateFormat("yyyyMMdd_HHmmss_SSS",Locale.ROOT).format(new Date());
  }
+
+ private static byte[] readAndVerify(InputStream in,long expectedLength,byte[] expectedHash) throws Exception {
+  if(in==null)throw new IOException("Backup file could not be reopened for verification.");
+  MessageDigest md=MessageDigest.getInstance("SHA-256");
+  ByteArrayOutputStream buffer=new ByteArrayOutputStream();
+  byte[] block=new byte[16384];
+  int n;
+  while((n=in.read(block))!=-1){
+   if(n==0)continue;
+   if(buffer.size()+n>12_000_000)throw new IOException("Backup exceeds 12 MB during verification.");
+   buffer.write(block,0,n);
+   md.update(block,0,n);
+  }
+  byte[] data=buffer.toByteArray();
+  if(data.length!=expectedLength||!MessageDigest.isEqual(md.digest(),expectedHash))
+   throw new IOException("Backup copy failed SHA-256 integrity verification.");
+  // A correctly copied file must ALSO remain decodable as a verified ledger.
+  MigrationCodec.inspect(new String(data,StandardCharsets.UTF_8));
+  return data;
+ }
+ private static byte[] sha256(byte[] bytes) throws Exception {
+  return MessageDigest.getInstance("SHA-256").digest(bytes);
+ }
+ private static String checksumShort(byte[] hash){
+  StringBuilder result=new StringBuilder(8);
+  for(int i=0;i<4;i++)result.append(String.format(Locale.ROOT,"%02x",hash[i]&0xff));
+  return result.toString();
+ }
+ /** Verify a stored app-private snapshot without importing or changing any account. */
+ static String verifyLatestPrivate(Context context) throws Exception {
+  File dir=new File(context.getFilesDir(),"verified_backups");
+  File[] all=dir.listFiles((folder,name)->name.startsWith("Badminton_Verified_")&&name.endsWith(".json"));
+  if(all==null||all.length==0)throw new IOException("No private backup found. Use BACK UP NOW first.");
+  Arrays.sort(all,Comparator.comparing(File::getName));
+  File latest=all[all.length-1];
+  long length=latest.length();
+  if(length<=0||length>12_000_000)throw new IOException("Latest backup has an unexpected size.");
+  // The name ends with a digest prefix. Compare the entire file's SHA256 prefix as well.
+  byte[] bytes;
+  try(FileInputStream in=new FileInputStream(latest)){
+   bytes=readAndVerify(in,length,sha256File(latest));
+  }
+  String prefix=latest.getName().replaceAll("^.*_([0-9a-f]{8})\\.json$","$1");
+  if(prefix.equals(latest.getName())||!prefix.equals(checksumShort(sha256(bytes))))
+   throw new IOException("Latest backup filename and checksum disagree.");
+  return "Verified "+all.length+" private snapshot(s).\\nLatest: "+latest.getName()+
+   "\\nBytes: "+length+"\\nSHA-256 verified; JSON import validation passed."+
+   "\\nThese app-private snapshots are lost if the app is uninstalled.";
+ }
+ private static byte[] sha256File(File file) throws Exception {
+  MessageDigest hash=MessageDigest.getInstance("SHA-256");
+  try(FileInputStream in=new FileInputStream(file)){
+   byte[] b=new byte[16384];int n;
+   while((n=in.read(b))!=-1)if(n>0)hash.update(b,0,n);
+  }
+  return hash.digest();
+ }
  private static String digest(byte[] bytes) throws Exception {
   MessageDigest md=MessageDigest.getInstance("SHA-256");
   byte[] hash=md.digest(bytes);
@@ -110,6 +170,9 @@ final class BackupGuardian {
    try(FileOutputStream out=new FileOutputStream(temp)){
     out.write(bytes);out.flush();out.getFD().sync();
    }
+   try(FileInputStream check=new FileInputStream(temp)){
+    readAndVerify(check,bytes.length,sha256(bytes));
+   }
    if(!temp.renameTo(dest)){temp.delete();throw new IOException("Could not finish an atomic private backup.");}
    p.edit().putLong(LAST_OK,System.currentTimeMillis()).remove(LAST_ERROR).apply();
    File[] files=dir.listFiles((folder,n)->n.startsWith("Badminton_Verified_")&&n.endsWith(".json"));
@@ -119,19 +182,27 @@ final class BackupGuardian {
    }
    String uriString=p.getString(TREE,"");
    if(!uriString.isEmpty()){
+    Uri created=null;
     try{
      Uri tree=Uri.parse(uriString);
      Uri root=DocumentsContract.buildDocumentUriUsingTree(tree,DocumentsContract.getTreeDocumentId(tree));
-     Uri document=DocumentsContract.createDocument(context.getContentResolver(),root,"application/json",name);
-     if(document==null)throw new IOException("The selected provider could not create a backup file.");
-     try(OutputStream out=context.getContentResolver().openOutputStream(document,"w")){
+     created=DocumentsContract.createDocument(context.getContentResolver(),root,"application/json",name);
+     if(created==null)throw new IOException("The selected provider could not create a backup file.");
+     try(OutputStream out=context.getContentResolver().openOutputStream(created,"w")){
       if(out==null)throw new IOException("The selected provider could not write backup data.");
       out.write(bytes);out.flush();
      }
+     // Verify the provider returned the same bytes. Do not claim a completed
+     // external backup based only on output-stream close.
+     try(InputStream check=context.getContentResolver().openInputStream(created)){
+      readAndVerify(check,bytes.length,sha256(bytes));
+     }
      p.edit().putLong(LAST_EXTERNAL,System.currentTimeMillis()).remove(LAST_ERROR).apply();
     }catch(Exception ex){
-     // Private backup remains available; never hide a failed external backup.
-     p.edit().putString(LAST_ERROR,"External folder write failed: "+ex.getMessage()).apply();
+     // Best-effort removal of an incomplete external copy; prior backups stay.
+     if(created!=null)try{DocumentsContract.deleteDocument(context.getContentResolver(),created);}
+      catch(Exception ignored){}
+     p.edit().putString(LAST_ERROR,"External folder verification failed: "+ex.getMessage()).apply();
     }
    }
   }catch(Exception ex){
