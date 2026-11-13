@@ -127,9 +127,9 @@ final class BackupGuardian {
   String prefix=latest.getName().replaceAll("^.*_([0-9a-f]{8})\\.json$","$1");
   if(prefix.equals(latest.getName())||!prefix.equals(checksumShort(sha256(bytes))))
    throw new IOException("Latest backup filename and checksum disagree.");
-  return "Verified "+all.length+" private snapshot(s).\\nLatest: "+latest.getName()+
-   "\\nBytes: "+length+"\\nSHA-256 verified; JSON import validation passed."+
-   "\\nThese app-private snapshots are lost if the app is uninstalled.";
+  return "Verified "+all.length+" private snapshot(s).\nLatest: "+latest.getName()+
+   "\nBytes: "+length+"\nSHA-256 verified; JSON import validation passed."+
+   "\nThese app-private snapshots are lost if the app is uninstalled.";
  }
  private static byte[] sha256File(File file) throws Exception {
   MessageDigest hash=MessageDigest.getInstance("SHA-256");
