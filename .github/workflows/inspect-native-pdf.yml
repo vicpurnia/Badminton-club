@@ -1,0 +1,36 @@
+name: Inspect native PDF renderer
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-native-pdf.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract source used by Premium v22
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat src/archive/*.b64 > /tmp/source.b64
+          echo '086180d2fedb7a9084986ab65fd00c9d4098d821f22cbf5aee1dc197eae908a7  /tmp/source.b64' | sha256sum -c -
+          base64 -d /tmp/source.b64 > /tmp/source.tar.xz
+          tar -xJf /tmp/source.tar.xz
+          base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/premium.tar.xz
+          echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/premium.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/premium.tar.xz
+          mkdir -p src/source-view
+          cp app/src/main/java/com/vinayak/badminton/nativepreview/PdfReports.java src/source-view/PdfReports.java
+          git config user.name badminton-ci-bot
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/source-view/PdfReports.java
+          if ! git diff --cached --quiet; then
+            git commit -m 'Inspect PDF renderer in current native APK'
+            git push origin HEAD:main
+          fi
