@@ -85,7 +85,7 @@ jobs:
           assert "pdf.finishPage(page)" in pdfsource
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/ClassicLedgerV231.java").write_text(pdf.read_text())
           s=p.read_text()
-          assert "Save Classic PDF to phone" in s
+          assert "SAVE CLASSIC PDF · A4 LANDSCAPE" in s
           assert "monthPicker()" in s
           assert "if(req==SAVE_PDF)" in s
           assert "chooseMonth(" in s
