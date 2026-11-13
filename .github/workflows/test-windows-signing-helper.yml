@@ -1,0 +1,54 @@
+name: Check Windows one-time signing setup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'
+      - '.github/workflows/test-windows-signing-helper.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  windows-safety:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Parse Windows setup PowerShell without executing it
+        shell: pwsh
+        run: |
+          $tokens=$null
+          $errors=$null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Join-Path (Get-Location) 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'),
+            [ref]$tokens,
+            [ref]$errors
+          ) | Out-Null
+          if ($errors -and $errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "PowerShell signing-setup script has syntax errors"
+          }
+          Write-Host "Windows setup script syntax passed."
+      - name: Validate secure keytool env-password syntax using temporary key only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference="Stop"
+          $env:BADMINTON_LOCAL_PASSWORD="temporary-ci-only-not-for-release"
+          $path=Join-Path $env:RUNNER_TEMP "throwaway-windows-key.p12"
+          & keytool -genkeypair -noprompt -keystore $path -storetype PKCS12 -alias badminton-stable -keyalg RSA -keysize 3072 -validity 2 -dname "CN=Windows CI Only, O=Vinayak, C=IN" "-storepass:env" "BADMINTON_LOCAL_PASSWORD" "-keypass:env" "BADMINTON_LOCAL_PASSWORD"
+          if ($LASTEXITCODE -ne 0) { throw "keytool generation failed" }
+          $details=& keytool -list -v -keystore $path -storetype PKCS12 -alias badminton-stable "-storepass:env" "BADMINTON_LOCAL_PASSWORD"
+          if ($LASTEXITCODE -ne 0) { throw "keytool list failed" }
+          $found=[Regex]::Match(($details | Out-String),'SHA256:\s*([0-9a-fA-F:]+)')
+          if (-not $found.Success -or $found.Groups[1].Value.Replace(":","").Length -ne 64) {
+            throw "Windows certificate fingerprint extraction failed"
+          }
+          Remove-Item Env:\BADMINTON_LOCAL_PASSWORD
+          Remove-Item $path -Force
+          Write-Host "Windows one-time signing prerequisites passed using disposable key."
