@@ -50,6 +50,20 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      - name: Apply verified Android compilation fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
+          s = p.read_text()
+          old = 'onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);'
+          new = 'onActivityResult(int req,int resultCode,Intent data){super.onActivityResult(req,resultCode,data);'
+          assert old in s, 'Unexpected migration activity source'
+          s = s.replace(old, new, 1)
+          s = s.replace('if(result!=RESULT_OK||data==null', 'if(resultCode!=RESULT_OK||data==null', 1)
+          s = s.replace('if(req!=PICK_LEDGER||result!=RESULT_OK', 'if(req!=PICK_LEDGER||resultCode!=RESULT_OK', 1)
+          p.write_text(s)
+          PY
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload APK
