@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'
+      - 'tools/START_HERE_STABLE_SIGNING.bat'
+      - 'tools/STABLE_SIGNING_README.txt'
       - '.github/workflows/test-windows-signing-helper.yml'
 
 permissions:
@@ -52,3 +54,19 @@ jobs:
           Remove-Item Env:\BADMINTON_LOCAL_PASSWORD
           Remove-Item $path -Force
           Write-Host "Windows one-time signing prerequisites passed using disposable key."
+      - name: Package Windows setup scripts (no private keys)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist,dist\\Badminton_Windows_Setup | Out-Null
+          Copy-Item tools/SETUP_BADMINTON_STABLE_SIGNING.ps1 dist\\Badminton_Windows_Setup
+          Copy-Item tools/START_HERE_STABLE_SIGNING.bat dist\\Badminton_Windows_Setup
+          Copy-Item tools/STABLE_SIGNING_README.txt dist\\Badminton_Windows_Setup
+          Compress-Archive -Path dist\\Badminton_Windows_Setup\\* -DestinationPath dist\\Badminton_Stable_Signing_Setup_Windows.zip -CompressionLevel Optimal
+          if (-not (Test-Path dist\\Badminton_Stable_Signing_Setup_Windows.zip)) { throw "Setup archive not generated" }
+      - name: Upload Windows signing setup ZIP
+        uses: actions/upload-artifact@v4
+        with:
+          name: Badminton-Stable-Signing-Setup-Windows
+          path: dist/Badminton_Stable_Signing_Setup_Windows.zip
+          if-no-files-found: error
+
