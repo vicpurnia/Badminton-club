@@ -1,0 +1,28 @@
+# Android build outputs
+.gradle/
+build/
+app/build/
+*.apk
+*.aab
+local.properties
+*.jks
+*.keystore
+*.key
+
+# Private ledger and migration exports
+*Backup*.json
+*backup*.json
+*Ledger*.json
+*ledger*.json
+*Migration*.json
+*migration*.json
+qa/
+assets/seed.json
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.idea/
+*.iml
+.DS_Store
