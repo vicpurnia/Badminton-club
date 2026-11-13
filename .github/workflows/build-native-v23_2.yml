@@ -1,0 +1,121 @@
+name: Build Badminton Premium Native v23.2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'src/premium/v23_2/**'
+      - 'src/premium/v23_1/ClassicLedgerV231.java'
+      - '.github/workflows/build-native-v23_2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Restore verified public-safe source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat src/archive/*.b64 > /tmp/badminton-src.b64
+          echo '086180d2fedb7a9084986ab65fd00c9d4098d821f22cbf5aee1dc197eae908a7  /tmp/badminton-src.b64' | sha256sum -c -
+          base64 -d /tmp/badminton-src.b64 > /tmp/badminton-src.tar.xz
+          echo '7dceec606199c51815e7b56ff7500843a4d696c9c14cba167fac6b73c4ef40bd  /tmp/badminton-src.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-src.tar.xz
+          test -f app/build.gradle && test -f settings.gradle
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Check accounting regressions
+        run: bash tools/run_java_regression.sh
+      - name: Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - name: Android 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Apply existing Android compilation fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
+          s=p.read_text()
+          a='onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);'
+          b='onActivityResult(int req,int resultCode,Intent data){super.onActivityResult(req,resultCode,data);'
+          assert a in s
+          s=s.replace(a,b,1)
+          s=s.replace('if(result!=RESULT_OK||data==null','if(resultCode!=RESULT_OK||data==null',1)
+          s=s.replace('if(req!=PICK_LEDGER||result!=RESULT_OK','if(req!=PICK_LEDGER||resultCode!=RESULT_OK',1)
+          a='private void background(Runnable job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}'
+          b='@FunctionalInterface interface CheckedJob{void run() throws Exception;}\n  private void background(CheckedJob job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}'
+          assert a in s
+          s=s.replace(a,b,1)
+          p.write_text(s)
+          PY
+      - name: Restore premium base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/badminton-v20-ui.tar.xz
+          echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/badminton-v20-ui.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-v20-ui.tar.xz
+      - name: Apply Premium v23.2 UI as a separate side-by-side test app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
+          p.write_text(Path("src/premium/v23_2/MainActivity.java").read_text())
+          pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
+          assert pdf.exists()
+          pdfsource=pdf.read_text()
+          assert "new PdfDocument.PageInfo.Builder(842,595,1)" in pdfsource
+          assert "purchaseDetails" in pdfsource
+          assert "2026-02" in pdfsource
+          assert "pdf.finishPage(page)" in pdfsource
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/ClassicLedgerV231.java").write_text(pdf.read_text())
+          s=p.read_text()
+          assert "Save Classic PDF to phone" in s
+          assert "monthPicker()" in s
+          assert "if(req==SAVE_PDF)" in s
+          assert "chooseMonth(" in s
+          assert "Monthly receipts" in s
+          assert "restoreHistoricalPack" in s
+          assert "historicalDonationRecorded" in s
+          assert "verifyClassicPdf" in s
+          assert "ClassicLedgerV231.master" in s
+          assert 'PRINT CLASSIC · A4 LANDSCAPE' in s
+          assert 'setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())' in s
+          assert 'new FileOutputStream(destination.getFileDescriptor())' in s
+          assert 'callback.onLayoutFailed("Please select A4 landscape instead of portrait")' in s
+          p=Path("app/build.gradle")
+          s=p.read_text()
+          assert "premiumv20" in s, "Unknown v20 application identity"
+          s=s.replace("premiumv20","premiumv232")
+          s=s.replace("versionCode 20","versionCode 23")
+          p.write_text(s)
+          manifest=Path("app/src/main/AndroidManifest.xml")
+          text=manifest.read_text()
+          import re
+          text,n=re.subn(r'android:label="[^"]+"','android:label="Badminton Premium v23.2"',text,count=1)
+          assert n==1
+          manifest.write_text(text)
+          PY
+      - name: Compile APK
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Upload native APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Badminton-Premium-Native-v23.2
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
