@@ -194,11 +194,13 @@ final class ClassicLedgerV23 {
    }
    outline(c,left,top,196,18+66+29);
   }
-  txt(c,"FM / AM / JJ / AS / ON / Dec: 2025 historical periods. Donated shuttle packs do not affect cash balance.",x,576,7.15f,GRAY,false);
-  String warning="";
-  if(missingHistoricPack)warning="February 2026 donated-pack entry is absent from the imported database; use the in-app historical correction.";
-  else if(summaries.stream().anyMatch(r->r.difference!=0))warning="February 2026 cash reconciliation difference of −₹1,000 remains unresolved; official totals unchanged.";
-  if(!warning.isEmpty())txt(c,shorten(warning,806,7.0f,false),x,589,7.0f,RED,true);
+  txt(c,"FM / AM / JJ / AS / ON / Dec: 2025 historical periods. Donated shuttle packs are noncash.",x,565,7.0f,GRAY,false);
+  boolean cashDiscrepancy=false;
+  for(ReportMath.Result result:summaries)if(result.difference!=0){cashDiscrepancy=true;break;}
+  if(cashDiscrepancy)
+   txt(c,"RECONCILIATION: February 2026 cash difference of ₹1,000 remains unresolved. Official balances unchanged.",x,577,7.0f,RED,true);
+  if(missingHistoricPack)
+   txt(c,"DONATION: Kanishk's February 2026 +1 pack is missing in this import. Restore once from the Reports correction action.",x,589,7.0f,RED,true);
   pdf.finishPage(page);
   File dir=new File(context.getCacheDir(),"pdfs");if(!dir.exists()&&!dir.mkdirs())throw new java.io.IOException("Unable to create PDF folder");
   File result=new File(dir,"Classic_v23_"+cutoff+"_"+System.currentTimeMillis()+".pdf");
