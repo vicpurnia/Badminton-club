@@ -21,6 +21,9 @@ The **Stable** v24 release is prepared in `.github/workflows/build-native-v24-st
 - For persistent copies, in **Reports → CHOOSE EXTERNAL BACKUP FOLDER**, choose a dedicated writable subfolder under Documents using Android's folder picker. The app stores persisted Android folder permission and writes new dated JSON copies there after ledger changes.
 - External backups are *opt-in and append-only*; old external copies are not automatically deleted. It is the user's responsibility to manage their storage space.
 - In **Reports → BACK UP NOW**, you can force a new snapshot and read the backup status, including errors and the last external copy.
+- Under **Reports → VERIFY LAST PRIVATE BACKUP**, the app checks the most recent private JSON snapshot's filename checksum and ledger envelope without changing accounts.
+- Under **Reports → VERIFY ANY JSON BACKUP**, choose a previously exported or external copy; the app displays the account counts and balances after read-only JSON verification. This does **not** overwrite or restore any records.
+- Each new external copy is read back and checked against its SHA-256 digest and JSON structure before being marked successful. A failed write is reported, and any newly created partial external file is deleted where the provider allows it. Older backups remain untouched.
 - **Restore / import verified JSON** is available only when the destination app database is empty. Import is blocked for a nonempty ledger; no automatic destructive replacement takes place.
 - The JSON files contain member financial records in **unencrypted plain text**. Store them privately. The app does not upload them on its own; a selected cloud-synced Documents provider may sync copies according to that provider's settings.
 
@@ -54,6 +57,13 @@ Because Android checks both **application ID** and **signing certificate** durin
 6. The release workflow verifies the APK signature, and assigns an increasing Android `versionCode`. Future stable versions must reuse the same package ID and signing key.
 
 **Security:** The workflow fails when required secrets are absent; it never checks a signing key or password into the public repository. The separate `test-v24-release-signing.yml` uses a throwaway key **only to validate the build configuration** and never distributes that APK.
+
+## Current source hardening
+- The 13 Nov 2026 v24 Preview source adds checksum/readback verification and a read-only recovery rehearsal. Existing confirmed November financial balances remain untouched.
+- Do not confuse **verification** with **restoration**. Importing into a populated ledger stays blocked by design.
+- The first v24 Stable installation remains a separate application from v23.2 and must import a verified JSON backup. To upgrade subsequent stable versions without reimporting, keep the same release application ID and signing certificate.
+- GitHub's normal debug APK cannot be upgraded in place with a new debug signing certificate; do not uninstall an app until an externally saved verified backup has been checked.
+- Folder providers such as cloud-synced Documents locations may upload the JSON according to their own settings. The JSON is not encrypted; select a trusted private folder.
 
 ## Limitations / QA
 
