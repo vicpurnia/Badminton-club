@@ -148,7 +148,7 @@ final class ClassicLedgerV231 {
   txt(c,"THROUGH "+cutoff,693,44,9.6f,Color.WHITE,true);
   float x=13,y=76,tableW=816,nameW=128,totalW=92,hHeader=24;
   float cw=(tableW-nameW-totalW)/columns.size();
-  float rowH=19.6f,totalH=23;
+  float rowH=19.25f,totalH=23;
   box(c,GREEN,x,y,tableW,hHeader);
   txt(c,"PLAYER",x+7,y+15.8f,8.75f,Color.WHITE,true);
   for(int j=0;j<columns.size();j++){
@@ -177,7 +177,7 @@ final class ClassicLedgerV231 {
    valueCell(c,v[0],v[1],x+nameW+j*cw,totalY,cw,totalH,true);
   }
   outline(c,x,y,tableW,hHeader+players.size()*rowH+totalH);
-  float section=totalY+totalH+12;
+  float section=totalY+totalH+10;
   txt(c,"BALANCE COMPUTATION · FOUR MOST RECENT MONTHS",x,section,10.6f,GREEN,true);
   int start=Math.max(0,summaries.size()-4);
   Map<String,List<Expense>> expensesByMonth=new HashMap<>();
@@ -205,15 +205,15 @@ final class ClassicLedgerV231 {
    outline(c,left,top,196,18+66+35);
   }
 
-  txt(c,"FM / AM / JJ / AS / ON / Dec = historical 2025 periods. Pack donations are noncash. All amounts in ₹.",x,569,7.2f,GRAY,false);
+  txt(c,"FM / AM / JJ / AS / ON / Dec = historical 2025 periods. Pack donations are noncash. All amounts in ₹.",x,560,7.2f,GRAY,false);
   boolean febCashDifference=false;
   for(ReportMath.Result r:summaries)if("2026-02".equals(r.month)&&r.difference!=0)febCashDifference=true;
   if(febCashDifference)
-   txt(c,"RECONCILIATION: February 2026 ₹1,000 cash difference remains unresolved. Official balances are unchanged.",x,580,7.2f,RED,true);
+   txt(c,"RECONCILIATION: February 2026 ₹1,000 cash difference remains unresolved. Official balances are unchanged.",x,571,7.2f,RED,true);
   if(missingHistoricPack){
    String memberName="historical member";
    for(Member member:players)if("p11".equals(member.id)){memberName=member.name;break;}
-   txt(c,shorten("DONATION: "+memberName+"'s February 2026 +1pk is not yet in this import. Use the one-time in-app correction.",806,7.15f,true),x,590,7.15f,RED,true);
+   txt(c,shorten("DONATION: "+memberName+"'s February 2026 +1pk is not yet in this import. Use the one-time in-app correction.",806,7.15f,true),x,582,7.15f,RED,true);
   }
   pdf.finishPage(page);
   File dir=new File(context.getCacheDir(),"pdfs");if(!dir.exists()&&!dir.mkdirs())throw new java.io.IOException("Unable to create PDF folder");
