@@ -64,7 +64,7 @@ jobs:
           base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/badminton-v20-ui.tar.xz
           echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/badminton-v20-ui.tar.xz' | sha256sum -c -
           tar -xJf /tmp/badminton-v20-ui.tar.xz
-      - name: Apply Premium v23.2 UI as a separate side-by-side test app
+      - name: Apply v24 stable UI and preserve the stable application ID
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -158,9 +158,11 @@ jobs:
           BADMINTON_KEY_ALIAS: ${{ secrets.BADMINTON_KEY_ALIAS }}
           BADMINTON_KEY_PASSWORD: ${{ secrets.BADMINTON_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
-      - name: Verify stable APK signature and certificate fingerprint
-        run: |
-          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
+      - name: Verify stable APK signature against permanent release certificate
+        env:
+          EXPECTED_CERT_SHA256: ${{ vars.BADMINTON_EXPECTED_CERT_SHA256 }}
+        shell: bash
+        run: bash tools/check-stable-signature.sh app/build/outputs/apk/release/app-release.apk "$EXPECTED_CERT_SHA256"
       - name: Upload signed stable APK
         uses: actions/upload-artifact@v4
         with:
