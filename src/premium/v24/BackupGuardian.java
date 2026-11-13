@@ -65,10 +65,16 @@ final class BackupGuardian {
   String when=stamp==0?"No verified backup yet":
    new SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.ENGLISH).format(new Date(stamp));
   String location=folderSelected(context)?"External folder selected":"Only app-private copies; lost if app is uninstalled";
+  String external="";
+  if(folderSelected(context)){
+   long done=p.getLong(LAST_EXTERNAL,0);
+   external="\\nExternal folder last written: "+(done==0?"Not yet":
+    new SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.ENGLISH).format(new Date(done)));
+  }
   String err=p.getString(LAST_ERROR,"");
   if(err.length()>120)err=err.substring(0,120);
-  return "Last verified copy: "+when+"\\n"+location+
-   (err.isEmpty()?"":"\\nBackup warning: "+err);
+  return "Last verified copy: "+when+"\n"+location+external+
+   (err.isEmpty()?"":"\nBackup warning: "+err);
  }
  private static String stamp(){
   return new SimpleDateFormat("yyyyMMdd_HHmmss_SSS",Locale.ROOT).format(new Date());
