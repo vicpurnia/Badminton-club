@@ -133,9 +133,6 @@ jobs:
           printf '%s' "$BADMINTON_SIGNING_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/badminton-stable.keystore"
           test -s "$RUNNER_TEMP/badminton-stable.keystore"
           echo "BADMINTON_SIGNING_FILE=$RUNNER_TEMP/badminton-stable.keystore" >> "$GITHUB_ENV"
-          echo "BADMINTON_KEYSTORE_PASSWORD=$BADMINTON_KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
-          echo "BADMINTON_KEY_ALIAS=$BADMINTON_KEY_ALIAS" >> "$GITHUB_ENV"
-          echo "BADMINTON_KEY_PASSWORD=$BADMINTON_KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Attach private signing configuration
         run: |
           cat >> app/build.gradle <<'GRADLE'
@@ -156,6 +153,10 @@ jobs:
           }
           GRADLE
       - name: Compile stable signed APK
+        env:
+          BADMINTON_KEYSTORE_PASSWORD: ${{ secrets.BADMINTON_KEYSTORE_PASSWORD }}
+          BADMINTON_KEY_ALIAS: ${{ secrets.BADMINTON_KEY_ALIAS }}
+          BADMINTON_KEY_PASSWORD: ${{ secrets.BADMINTON_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
       - name: Verify stable APK signature and certificate fingerprint
         run: |
