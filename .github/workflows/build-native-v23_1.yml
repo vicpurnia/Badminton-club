@@ -69,7 +69,7 @@ jobs:
           base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/badminton-v20-ui.tar.xz
           echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/badminton-v20-ui.tar.xz' | sha256sum -c -
           tar -xJf /tmp/badminton-v20-ui.tar.xz
-      - name: Apply Premium v23.1 UI while retaining v23 app ID (safe upgrade)
+      - name: Apply Premium v23.1 UI as a separate side-by-side test app
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -96,7 +96,7 @@ jobs:
           p=Path("app/build.gradle")
           s=p.read_text()
           assert "premiumv20" in s, "Unknown v20 application identity"
-          s=s.replace("premiumv20","premiumv23")
+          s=s.replace("premiumv20","premiumv231")
           s=s.replace("versionCode 20","versionCode 22")
           if 'versionName "20"' in s:
               s=s.replace('versionName "20"','versionName "23.1"')
