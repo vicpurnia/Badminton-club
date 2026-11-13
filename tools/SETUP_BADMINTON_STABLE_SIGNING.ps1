@@ -26,8 +26,15 @@ function SecureToText([Security.SecureString]$Value) {
 
 function UploadSecret([string]$Name, [string]$Value) {
     # GitHub CLI reads from standard input. No password on the command line.
-    $Value | & $script:gh secret set $Name -R $Repository -a actions
-    NativeCheck "Setting GitHub secret $Name"
+    # Explicit UTF-8 protects non-ASCII passwords from Windows PowerShell 5's ASCII pipe default.
+    $priorEncoding = $OutputEncoding
+    try {
+        $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        $Value | & $script:gh secret set $Name -R $Repository -a actions
+        NativeCheck "Setting GitHub secret $Name"
+    } finally {
+        $OutputEncoding = $priorEncoding
+    }
     Write-Host "Configured secret: $Name" -ForegroundColor Green
 }
 
@@ -55,8 +62,15 @@ if ($keytoolCommand) {
 }
 
 # Owner authentication happens locally in their GitHub account.
-& $gh auth status -h github.com *> $null
-if ($LASTEXITCODE -ne 0) {
+$loggedIn = $false
+try {
+    & $gh auth status -h github.com *> $null
+    $loggedIn = ($LASTEXITCODE -eq 0)
+} catch {
+    # Native stderr can throw under Windows PowerShell ErrorActionPreference=Stop.
+    $loggedIn = $false
+}
+if (-not $loggedIn) {
     Write-Host "Please sign in to your GitHub account in the browser." -ForegroundColor Yellow
     & $gh auth login --hostname github.com --web
     NativeCheck "GitHub login"
