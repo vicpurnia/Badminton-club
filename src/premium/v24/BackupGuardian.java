@@ -68,7 +68,7 @@ final class BackupGuardian {
   String external="";
   if(folderSelected(context)){
    long done=p.getLong(LAST_EXTERNAL,0);
-   external="\\nExternal folder last written: "+(done==0?"Not yet":
+   external="\nExternal folder last written: "+(done==0?"Not yet":
     new SimpleDateFormat("dd MMM yyyy, HH:mm",Locale.ENGLISH).format(new Date(done)));
   }
   String err=p.getString(LAST_ERROR,"");
