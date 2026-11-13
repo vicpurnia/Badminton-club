@@ -164,7 +164,7 @@ public final class MainActivity extends Activity {
    BackupGuardian.save(this,database,"manual",true);
    String status=BackupGuardian.status(this);
    runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Verified backup status")
-    .setMessage(status+"\\n\\nOnly user-selected external folders survive app removal. Do not delete the old app until its import is verified.")
+    .setMessage(status+"\n\nOnly user-selected external folders survive app removal. Do not delete the old app until its import is verified.")
     .setPositiveButton("OK",null).show());
   });
  }
@@ -185,7 +185,7 @@ public final class MainActivity extends Activity {
      BackupGuardian.save(this,database,"external-folder-selected",true);
      runOnUiThread(()->{
       new AlertDialog.Builder(this).setTitle("Backup folder configured")
-       .setMessage(BackupGuardian.status(this)+"\\n\\nFuture recorded changes will be backed up here automatically.")
+       .setMessage(BackupGuardian.status(this)+"\n\nFuture recorded changes will be backed up here automatically.")
        .setPositiveButton("OK",null).show();
       if(tab.equals("Reports"))showReports();
      });
