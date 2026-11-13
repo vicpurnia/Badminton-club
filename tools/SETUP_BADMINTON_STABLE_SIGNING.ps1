@@ -1,0 +1,164 @@
+# Badminton Premium v24 — one-time, owner-controlled release signing setup.
+# Run on a trusted Windows PC with GitHub CLI and a JDK / Android Studio installed.
+# Never put passwords or the private keystore in a Git repository or ChatGPT chat.
+[CmdletBinding()]
+param(
+    [string]$Repository = "vicpurnia/Badminton-club",
+    [string]$KeystorePath = ""
+)
+
+$ErrorActionPreference = "Stop"
+Set-StrictMode -Version Latest
+$aliasName = "badminton-stable"
+$pinVariable = "BADMINTON_EXPECTED_CERT_SHA256"
+
+function Fail([string]$Message) { throw $Message }
+
+function NativeCheck([string]$Action) {
+    if ($LASTEXITCODE -ne 0) { Fail "$Action failed (exit code $LASTEXITCODE)." }
+}
+
+function SecureToText([Security.SecureString]$Value) {
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Value)
+    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+
+function UploadSecret([string]$Name, [string]$Value) {
+    # GitHub CLI reads from standard input. No password on the command line.
+    $Value | & $script:gh secret set $Name -R $Repository -a actions
+    NativeCheck "Setting GitHub secret $Name"
+    Write-Host "Configured secret: $Name" -ForegroundColor Green
+}
+
+Write-Host ""
+Write-Host "BADMINTON PREMIUM — STABLE ANDROID SIGNING" -ForegroundColor Cyan
+Write-Host "Repository: $Repository"
+Write-Host "A permanent key will be created ONLY on this PC. It will not be uploaded to a public repository."
+Write-Host ""
+
+$ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+if (-not $ghCommand) {
+    Fail "GitHub CLI is missing. Install from https://cli.github.com/ and rerun this script."
+}
+$gh = $ghCommand.Source
+
+$keytoolCommand = Get-Command keytool -ErrorAction SilentlyContinue
+if ($keytoolCommand) {
+    $keytool = $keytoolCommand.Source
+} else {
+    $candidates = @()
+    if ($env:JAVA_HOME) { $candidates += (Join-Path $env:JAVA_HOME "bin\keytool.exe") }
+    if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles "Android\Android Studio\jbr\bin\keytool.exe") }
+    $keytool = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $keytool) { Fail "JDK keytool is missing. Install a JDK or Android Studio, then rerun." }
+}
+
+# Owner authentication happens locally in their GitHub account.
+& $gh auth status -h github.com *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Please sign in to your GitHub account in the browser." -ForegroundColor Yellow
+    & $gh auth login --hostname github.com --web
+    NativeCheck "GitHub login"
+}
+
+# Fail closed if the repository already pins a different signing identity.
+$variablesJson = & $gh variable list -R $Repository --json name,value
+NativeCheck "Reading existing signing-certificate pin"
+$variables = @($variablesJson | ConvertFrom-Json)
+$currentPin = $variables | Where-Object { $_.name -eq $pinVariable } | Select-Object -First 1
+
+if (-not $KeystorePath) {
+    if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable; use -KeystorePath." }
+    $privateDir = Join-Path $env:LOCALAPPDATA "Badminton_Stable_Signing_Keep_Private"
+    $KeystorePath = Join-Path $privateDir "badminton-stable.p12"
+}
+$KeystorePath = [IO.Path]::GetFullPath($KeystorePath)
+$privateDir = Split-Path -Parent $KeystorePath
+if (-not (Test-Path $privateDir)) { [void](New-Item -ItemType Directory -Path $privateDir -Force) }
+$exists = Test-Path $KeystorePath
+
+if ($currentPin -and -not $exists) {
+    Fail "An approved certificate is already pinned in GitHub, but its local keystore is missing. Do NOT create a replacement: restore the original badminton-stable.p12 from your offline backup or use -KeystorePath."
+}
+
+Write-Host "Signing keystore location: $KeystorePath"
+if ($exists) {
+    Write-Host "Existing keystore found. It will NOT be overwritten." -ForegroundColor Green
+} else {
+    Write-Host "A NEW permanent signing key is about to be generated." -ForegroundColor Yellow
+    $confirmNew = Read-Host "Type CREATE to generate it"
+    if ($confirmNew -cne "CREATE") { Fail "Cancelled: no signing key created." }
+}
+
+$secure = Read-Host "Enter your permanent signing password (at least 14 characters)" -AsSecureString
+$password = SecureToText $secure
+if ($password.Length -lt 14) { Fail "Use a password with at least 14 characters." }
+if (-not $exists) {
+    $again = Read-Host "Repeat the permanent signing password" -AsSecureString
+    $passwordConfirm = SecureToText $again
+    if ($passwordConfirm -cne $password) { Fail "Passwords do not match. No key was created." }
+    $passwordConfirm = $null
+}
+
+try {
+    # -storepass:env avoids showing the password in process command-line arguments.
+    $env:BADMINTON_LOCAL_PASSWORD = $password
+    if (-not $exists) {
+        $generateArgs = @("-genkeypair","-noprompt","-keystore",$KeystorePath,"-storetype","PKCS12","-alias",$aliasName,"-keyalg","RSA","-keysize","3072","-validity","10000","-dname","CN=Badminton Premium, OU=Vinayak, O=Vinayak, C=IN","-storepass:env","BADMINTON_LOCAL_PASSWORD","-keypass:env","BADMINTON_LOCAL_PASSWORD")
+        & $keytool @generateArgs
+        NativeCheck "Creating signing keystore"
+    }
+
+    $listArgs = @("-list","-v","-keystore",$KeystorePath,"-storetype","PKCS12","-alias",$aliasName,"-storepass:env","BADMINTON_LOCAL_PASSWORD")
+    $certificate = & $keytool @listArgs 2>&1
+    NativeCheck "Reading the signing certificate"
+    $certificateText = ($certificate | Out-String)
+    $match = [Regex]::Match($certificateText, 'SHA256:\s*([0-9a-fA-F:]+)')
+    if (-not $match.Success) { Fail "Unable to locate a SHA-256 certificate fingerprint." }
+    $fingerprint = $match.Groups[1].Value.Replace(":","").ToLowerInvariant()
+    if ($fingerprint -notmatch '^[0-9a-f]{64}$') { Fail "Unexpected signing certificate fingerprint format." }
+
+    if ($currentPin) {
+        $existingValue = ([string]$currentPin.value).Trim().ToLowerInvariant()
+        if ($existingValue -ne $fingerprint) {
+            Fail "CRITICAL: The GitHub release certificate pin differs from this keystore. STOP. Restore the original key. No secrets have been changed."
+        }
+        Write-Host "Matches the already-pinned signing certificate." -ForegroundColor Green
+    } else {
+        Write-Host "This is the FIRST stable-signing setup." -ForegroundColor Yellow
+    }
+    Write-Host "Certificate SHA-256 (public identifier): $fingerprint" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Before proceeding, save an OFFLINE backup of the .p12 file and record your password in a password manager."
+    Write-Host "Losing the .p12 file or password may prevent future upgrades and require another migration."
+    Write-Host "Do not send either item through ChatGPT, email, or a public GitHub issue."
+    $backupConfirm = Read-Host "After copying the file OFFLINE and securing the password, type BACKED UP"
+    if ($backupConfirm -cne "BACKED UP") { Fail "Stopped before uploading secrets. Back up your key first." }
+
+    # Pass values via STDIN to gh. The GitHub CLI encrypts each value client-side.
+    $base64 = [Convert]::ToBase64String([IO.File]::ReadAllBytes($KeystorePath))
+    UploadSecret "BADMINTON_SIGNING_KEYSTORE_B64" $base64
+    $base64 = $null
+    UploadSecret "BADMINTON_KEYSTORE_PASSWORD" $password
+    UploadSecret "BADMINTON_KEY_ALIAS" $aliasName
+    UploadSecret "BADMINTON_KEY_PASSWORD" $password
+
+    if (-not $currentPin) {
+        $fingerprint | & $gh variable set $pinVariable -R $Repository
+        NativeCheck "Pinning the stable signing certificate"
+        Write-Host "Certificate pinned to the GitHub repository." -ForegroundColor Green
+    }
+    Write-Host ""
+    Write-Host "SUCCESS: All signing secrets and the expected certificate pin are configured." -ForegroundColor Green
+    $build = Read-Host "Type BUILD to launch your first stable v24 APK, or press Enter to exit"
+    if ($build -ceq "BUILD") {
+        & $gh workflow run build-native-v24-stable.yml -R $Repository --ref main
+        NativeCheck "Triggering stable APK build"
+        Write-Host "Build started. Visit: https://github.com/$Repository/actions/workflows/build-native-v24-stable.yml"
+    }
+} finally {
+    Remove-Item Env:\BADMINTON_LOCAL_PASSWORD -ErrorAction SilentlyContinue
+    $password = $null
+    $secure = $null
+}
