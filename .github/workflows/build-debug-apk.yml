@@ -40,10 +40,12 @@ jobs:
       - name: Run accounting regression
         run: |
           bash tools/run_java_regression.sh
-      - name: Install Android SDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android 36 components
-        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Install Android 36 components using preinstalled SDK
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          command -v sdkmanager
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Install Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
