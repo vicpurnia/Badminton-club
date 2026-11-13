@@ -29,7 +29,7 @@ function UploadSecret([string]$Name, [string]$Value) {
     # Explicit UTF-8 protects non-ASCII passwords from Windows PowerShell 5's ASCII pipe default.
     $priorEncoding = $OutputEncoding
     try {
-        $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+        $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
         $Value | & $script:gh secret set $Name -R $Repository -a actions
         NativeCheck "Setting GitHub secret $Name"
     } finally {
