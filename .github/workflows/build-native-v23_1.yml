@@ -98,15 +98,6 @@ jobs:
           assert "premiumv20" in s, "Unknown v20 application identity"
           s=s.replace("premiumv20","premiumv231")
           s=s.replace("versionCode 20","versionCode 22")
-          lines=s.splitlines()
-          version_lines=0
-          for i,line in enumerate(lines):
-           if line.strip().startswith("versionName "):
-            indent=line[:len(line)-len(line.lstrip())]
-            lines[i]=indent+'versionName "23.1.0"'
-            version_lines+=1
-          assert version_lines==1, "Unknown Gradle versionName format"
-          s="\n".join(lines)+"\n"
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
