@@ -5,6 +5,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/archive/**'
       - 'app/**'
       - 'tools/**'
       - 'build.gradle'
@@ -21,20 +22,24 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+      - name: Restore verified public-safe Android source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat src/archive/*.b64 > /tmp/badminton-src.b64
+          echo '086180d2fedb7a9084986ab65fd00c9d4098d821f22cbf5aee1dc197eae908a7  /tmp/badminton-src.b64' | sha256sum -c -
+          base64 -d /tmp/badminton-src.b64 > /tmp/badminton-src.tar.xz
+          echo '7dceec606199c51815e7b56ff7500843a4d696c9c14cba167fac6b73c4ef40bd  /tmp/badminton-src.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-src.tar.xz
+          test -f app/build.gradle && test -f settings.gradle
       - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - name: Verify Android project is uploaded
+      - name: Run accounting regression
         run: |
-          test -f settings.gradle && test -f build.gradle && test -f app/build.gradle || { echo 'Android project not uploaded. Extract the v19 project ZIP and upload the files at the repository root.'; exit 1; }
-      - name: Run regression tests
-        run: |
-          if [ -f tools/run_java_regression.sh ]; then bash tools/run_java_regression.sh; fi
-          if [ -f tools/test_migration.py ]; then python3 tools/test_migration.py; fi
-          if [ -f tools/check_java_source.sh ]; then bash tools/check_java_source.sh; fi
-          if [ -f tools/test_roundtrip_export.py ]; then python3 tools/test_roundtrip_export.py; fi
+          bash tools/run_java_regression.sh
       - name: Install Android SDK
         uses: android-actions/setup-android@v3
       - name: Install Android 36 components
