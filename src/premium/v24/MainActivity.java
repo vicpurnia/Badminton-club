@@ -208,12 +208,12 @@ public final class MainActivity extends Activity {
      }
     }
     MigrationCodec.Preview result=MigrationCodec.inspect(jsonBytes.toString(StandardCharsets.UTF_8.name()));
-    String message="SHA-256 envelope and ledger structure validated.\\n\\n"
+    String message="SHA-256 envelope and ledger structure validated.\n\n"
       +result.players+" players · "+result.payments+" contributions · "+result.expenses+" expenses"
-      +"\\nOpening "+rupee(result.openingBalance)
-      +"\\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth
-      +"\\nUnresolved historical differences: "+result.differences.size()
-      +"\\n\\nRead-only verification: no records were imported or changed.";
+      +"\nOpening "+rupee(result.openingBalance)
+      +"\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth
+      +"\nUnresolved historical differences: "+result.differences.size()
+      +"\n\nRead-only verification: no records were imported or changed.";
     runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Verified backup — read only")
      .setMessage(message).setPositiveButton("OK",null).show());
    });
