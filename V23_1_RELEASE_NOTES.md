@@ -18,7 +18,7 @@ Improve the green one-page Classic Master Ledger on Android without altering his
 - Until the user confirms the correction on their installed app, the report **continues to flag the missing pack**. A code update alone does not silently mutate the user's local ledger.
 
 ### Installation / important
-- Keeps the same Android application ID as v23 (**premiumv23**), with higher versionCode 22. This is an in-place v23 upgrade, not a new empty app. Backup the verified ledger before upgrading.
+- Uses a **separate app ID `premiumv231`** because GitHub's ephemeral debug signing certificate differs across workflow runs. **This is NOT an in-place update**: it installs alongside the old v23 app and starts with an empty private database. Export a verified ledger JSON from your currently installed version, import it into v23.1, reconcile all balances, and retain the older app until the import has been checked. Do **not** uninstall the existing app to resolve any installation or signature error.
 - Open **Reports → Save Classic PDF to phone**; choose a folder. Avoid using Android **Print → Save as PDF** on a shared PDF, which can re-scale a landscape file to a portrait page (as happened in the uploaded example).
 - Never assume the imported expense records include a date. If the app displays “purchase dates not recorded”, review the source entries before assigning dates.
 
@@ -26,6 +26,6 @@ Improve the green one-page Classic Master Ledger on Android without altering his
 - Build workflow: `.github/workflows/build-native-v23_1.yml`.
 - Existing Java accounting regression tests run before compilation.
 - Workflow performs static source assertions on PDF size, historical correction safeguards, and new renderer.
-- Real Android installation and PDF export must still be checked on a device; no successful build is asserted here prior to observing the workflow.
+- Android installation, data import and PDF export still require device testing. GitHub's accounting tests and compilation validate the code and APK build, not a real on-phone migration.
 
 The repository contains code only; do not commit real member financial exports or signing keys.
