@@ -1047,6 +1047,7 @@ public final class MainActivity extends Activity {
           database.runInTransaction(()->{
            LedgerDao live=database.dao();LedgerMeta active=live.meta();
            if(active==null)throw new IllegalStateException("No ledger");
+           requireOpenMonth(mm);
            String event="physical-count-"+UUID.randomUUID();
            String at=new Date().toString();
            String json=StockReconciliationV257.append(active.inventoryStockJson,mm,
@@ -1142,6 +1143,10 @@ public final class MainActivity extends Activity {
          database.runInTransaction(()->{
           LedgerDao dao=database.dao();LedgerMeta live=dao.meta();
           if(live==null)throw new IllegalStateException("Cannot set stock before importing the ledger.");
+          for(MonthlyCloseV258.MonthState closed:MonthlyCloseV258.read(live.inventoryStockJson).values()){
+           if(closed.closed()&&closed.month.compareTo(mm)>=0)
+            throw new IllegalStateException("A closed month depends on this stock baseline. Reopen closed months from "+mm+" onward before changing the checkpoint.");
+          }
           String updated=InventoryCheckpoint.updatedJson(live.inventoryStockJson,chosen);
           if(dao.updateInventoryJson(updated)!=1)
            throw new IllegalStateException("Inventory metadata update was not applied.");
