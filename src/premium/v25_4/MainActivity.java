@@ -517,7 +517,7 @@ public final class MainActivity extends Activity {
     final Runnable[] repaint=new Runnable[1];
     repaint[0]=()->{
      results.removeAllViews();
-     String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);
+     String query=search.getText().toString().trim().toLowerCase(Locale.ROOT).replace("₹","").replace(",","").replace("inr","").trim();
      int matches=0,rendered=0,recorded=0,archived=0;
      for(ReceiptIndexLine item:all){
       if(item.isHistorical())archived++;else recorded++;
@@ -1218,6 +1218,9 @@ public final class MainActivity extends Activity {
    reportTile("⇩","Restore / import verified JSON","Safe import only into an empty database; existing accounts cannot be overwritten",this::pickMigration);
    notice("Important", "App-private copies disappear on uninstall. Select a dedicated Documents folder for persistent external backups. JSON contains member financial information and is not encrypted.");
    gap(content,14);
+   sectionHeading("Previous paid receipts","Read-only copies of existing cash entries");
+   reportTile("▤","RECEIPT LIBRARY · ALL MONTHS","Search by member or month, then share or save any existing receipt or historical statement",this::showReceiptLibrary);
+   gap(content,13);
    sectionHeading("Choose a report","PDF export and native landscape printing");
    reportTile("!","Kanishk February: +1 shuttle pack","Check and apply the documented noncash correction once; does not change cash balances",this::restoreHistoricalPack);
    reportTile("↓","SAVE CLASSIC PDF · A4 LANDSCAPE","Recommended: direct file export, original landscape page, larger readable text",()->{try{String m=MigrationCodec.ym(month.getText().toString().trim());reportMonth=m;savePdf("Badminton_Classic_A4_Landscape_"+m+".pdf",()->ClassicLedgerV231.master(this,database.dao(),m));}catch(Exception e){error(e);}});
