@@ -1,4 +1,4 @@
-# Badminton Premium v24 — one-time, owner-controlled release signing setup.
+# Badminton Premium v24 - one-time, owner-controlled release signing setup.
 # Run on a trusted Windows PC with GitHub CLI and a JDK / Android Studio installed.
 # Never put passwords or the private keystore in a Git repository or ChatGPT chat.
 [CmdletBinding()]
@@ -39,7 +39,7 @@ function UploadSecret([string]$Name, [string]$Value) {
 }
 
 Write-Host ""
-Write-Host "BADMINTON PREMIUM — STABLE ANDROID SIGNING" -ForegroundColor Cyan
+Write-Host "BADMINTON PREMIUM - STABLE ANDROID SIGNING" -ForegroundColor Cyan
 Write-Host "Repository: $Repository"
 Write-Host "A permanent key will be created ONLY on this PC. It will not be uploaded to a public repository."
 Write-Host ""
