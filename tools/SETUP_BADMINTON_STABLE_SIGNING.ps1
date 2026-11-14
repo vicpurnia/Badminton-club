@@ -6,7 +6,8 @@ param(
     [string]$Repository = "vicpurnia/Badminton-club",
     [string]$KeystorePath = "",
     [switch]$CheckJavaOnly,
-    [switch]$CheckGithubOnly
+    [switch]$CheckGithubOnly,
+    [switch]$CheckVariableListOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -182,10 +183,44 @@ Write-Host "GitHub CLI authentication verified." -ForegroundColor Green
 if ($CheckGithubOnly) { return }
 
 # Fail closed if the repository already pins a different signing identity.
+# gh returns the JSON array [] when no repository variables exist. PowerShell 5.1
+# turns that into an empty pipeline or a null element. StrictMode forbids accessing
+# a .name property on $null, so enumerate only actual validated objects.
 $variablesJson = & $gh variable list -R $Repository --json name,value
 NativeCheck "Reading existing signing-certificate pin"
-$variables = @($variablesJson | ConvertFrom-Json)
-$currentPin = $variables | Where-Object { $_.name -eq $pinVariable } | Select-Object -First 1
+$variableResponse = ($variablesJson | Out-String).Trim()
+if ([string]::IsNullOrWhiteSpace($variableResponse)) {
+    Fail "GitHub returned an empty variable response. Refusing to create a new key until the existing certificate pin can be checked."
+}
+if (-not $variableResponse.StartsWith("[")) {
+    Fail "GitHub did not return an array of repository variables. No signing key has been created."
+}
+try {
+    $parsedVariables = ConvertFrom-Json -InputObject $variableResponse -ErrorAction Stop
+} catch {
+    Fail "GitHub returned invalid repository-variable JSON. Refusing to create a signing key."
+}
+$currentPin = $null
+foreach ($entry in @($parsedVariables)) {
+    if ($null -eq $entry) { continue }
+    $nameProperty = $entry.PSObject.Properties["name"]
+    $valueProperty = $entry.PSObject.Properties["value"]
+    if ($null -eq $nameProperty -or $null -eq $valueProperty) {
+        Fail "A repository-variable entry is malformed. Refusing to replace an existing signing identity."
+    }
+    if ([string]$nameProperty.Value -eq $pinVariable) {
+        $currentPin = $entry
+        break
+    }
+}
+if ($CheckVariableListOnly) {
+    if ($null -eq $currentPin) {
+        Write-Output "GitHub repository-variable lookup passed: NO_CERTIFICATE_PIN"
+    } else {
+        Write-Output "GitHub repository-variable lookup passed: CERTIFICATE_PIN_FOUND"
+    }
+    return
+}
 
 if (-not $KeystorePath) {
     if (-not $env:LOCALAPPDATA) { Fail "LOCALAPPDATA is unavailable; use -KeystorePath." }
