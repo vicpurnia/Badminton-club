@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_2/**'
+      - 'src/premium/v25_3/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,7 +75,16 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_2/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_3/MainActivity.java").read_text())
+          receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
+          assert receipt.exists()
+          receiptSource=receipt.read_text()
+          assert "Not available in imported history" in receiptSource
+          assert "Exact payment date not recorded" in receiptSource
+          assert "Only an existing positive cash payment" in receiptSource
+          assert "Only positive historical cash records" in receiptSource
+          assert "This copy does not record a new payment" in receiptSource
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/HistoricalReceiptsV253.java").write_text(receiptSource)
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_3/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
@@ -99,7 +108,12 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
-          assert "STABLE v25.2" in s
+          assert "STABLE v25.3" in s
+          assert "Share previous paid receipt" in s
+          assert "Share receipt" in s
+          assert "Share statement" in s
+          assert "HistoricalReceiptsV253.payment(this,member,payment" in s
+          assert "HistoricalReceiptsV253.legacy(this,member,historical" in s
           assert "Stock position from confirmed baseline" in s
           assert "openInventoryCheckpoint()" in s
           assert "InventoryCheckpoint.calculate" in s
