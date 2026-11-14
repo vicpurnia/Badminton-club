@@ -235,12 +235,14 @@ public final class MainActivity extends Activity {
       +"\nMembers: "+current.players+" vs "+result.players
       +"\nContributions: "+current.payments+" vs "+result.payments
       +"\nExpenses: "+current.expenses+" vs "+result.expenses
+      +"\nShuttle usage entries: "+current.stockUsage+" vs "+result.stockUsage
       +"\nLast month: "+current.lastMonth+" vs "+result.lastMonth
       +"\nClosing balance: "+rupee(current.closingBalance)+" vs "+rupee(result.closingBalance)
       +"\nThese are summary checks; matching totals alone do not prove every entry is identical.";
     }
     String message="SHA-256 envelope and ledger structure validated.\n\n"
       +result.players+" players · "+result.payments+" contributions · "+result.expenses+" expenses"
+      +" · "+result.stockUsage+" shuttle usage entries"
       +"\nOpening "+rupee(result.openingBalance)
       +"\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth
       +"\nUnresolved historical differences: "+result.differences.size()
@@ -312,7 +314,7 @@ public final class MainActivity extends Activity {
    MigrationCodec.Preview result=MigrationCodec.inspect(out.toString(StandardCharsets.UTF_8.name()));
    if(database.dao().metaCount()>0)throw new IllegalStateException("The native ledger already contains data. Replacement is blocked for your safety.");pendingImport=result;
    runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Verified ledger ready")
-    .setMessage("SHA-256 verified\n\n"+result.players+" members · "+result.payments+" payments · "+result.expenses+" expenses\nOpening "+rupee(result.openingBalance)+"\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth+"\n\nHistorical differences: "+result.differences.size()+"\n\nImport into this EMPTY app? Your original app will remain unchanged.")
+    .setMessage("SHA-256 verified\n\n"+result.players+" members · "+result.payments+" payments · "+result.expenses+" expenses · "+result.stockUsage+" usage entries\nOpening +rupee(result.openingBalance)+"\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth+"\n\nHistorical differences: "+result.differences.size()+"\n\nImport into this EMPTY app? Your original app will remain unchanged.")
     .setNegativeButton("Cancel",(d,w)->pendingImport=null)
     .setPositiveButton("Import securely",(d,w)->importPending()).show());
   });
