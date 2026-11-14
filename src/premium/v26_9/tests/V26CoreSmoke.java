@@ -205,6 +205,31 @@ public final class V26CoreSmoke {
   reject(()->PremiumV26ClosingGuard.requireWritable(closure,"2026-02"),
    "All later closed periods must be reopened, not just the nearest one");
 
+  // Repeating the exact same payment form ID is not a new cash collection.
+  String submission="pay-synthetic-form-123";
+  Contribution formRow=payment(submission,"2026-11",1200);
+  formRow.method="UPI";
+  List<Contribution> pending=Arrays.asList(c,another);
+  yes(!PremiumV26PaymentOnce.alreadyCommitted(pending,submission,
+      "synthetic-A","2026-11",1200,"UPI"),
+      "New form identity must not be a replay");
+  List<Contribution> committed=Arrays.asList(c,another,formRow);
+  yes(PremiumV26PaymentOnce.alreadyCommitted(committed,submission,
+      "synthetic-A","2026-11",1200,"UPI"),
+      "Already committed exact form ID must return an idempotent no-op");
+  reject(()->PremiumV26PaymentOnce.alreadyCommitted(committed,submission,
+      "synthetic-A","2026-11",1300,"UPI"),
+      "Matching form ID must never be reused with a different amount");
+  reject(()->PremiumV26PaymentOnce.alreadyCommitted(committed,submission,
+      "synthetic-B","2026-11",1200,"UPI"),
+      "Matching form ID must never be reused for a different member");
+  reject(()->PremiumV26PaymentOnce.alreadyCommitted(Arrays.asList(formRow,formRow),
+      submission,"synthetic-A","2026-11",1200,"UPI"),
+      "Existing duplicate original IDs indicate ledger corruption");
+  yes(!PremiumV26PaymentOnce.alreadyCommitted(committed,
+      "pay-independent-second-payment","synthetic-A","2026-11",1200,"UPI"),
+      "An independent payment form can still record a second genuine receipt");
+
   // Encryption test uses a synthetic verified ledger and never touches a real database.
   String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
@@ -227,7 +252,7 @@ public final class V26CoreSmoke {
 
 /* Minimal compile-time stubs: tests exercise the real production v26 logic. */
 final class Contribution {
- String id,memberId,feeMonth,kind,receivedDate;long amount;boolean approximate;
+ String id,memberId,feeMonth,kind,receivedDate,method;long amount;boolean approximate;
 }
 final class MigrationCodec {
  static String ym(String s){
