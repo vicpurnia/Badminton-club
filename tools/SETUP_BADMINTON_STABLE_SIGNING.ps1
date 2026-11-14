@@ -147,19 +147,35 @@ $gh = $ghCommand.Source
 $keytool = Ensure-Keytool
 
 # Owner authentication happens locally in their GitHub account.
-$loggedIn = $false
-try {
-    & $gh auth status -h github.com *> $null
-    $loggedIn = ($LASTEXITCODE -eq 0)
-} catch {
-    # Native stderr can throw under Windows PowerShell ErrorActionPreference=Stop.
-    $loggedIn = $false
+# GitHub CLI may successfully authenticate, but return a nonzero exit code
+# while configuring the optional Git credential helper when Git for Windows
+# is not installed. The important check is 'gh auth status', not login's exit.
+function Test-GitHubAuthorization {
+    try {
+        & $script:gh auth status -h github.com *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        # Native stderr can throw under Windows PowerShell 5.1 with Stop.
+        return $false
+    }
 }
-if (-not $loggedIn) {
-    Write-Host "Please sign in to your GitHub account in the browser." -ForegroundColor Yellow
-    & $gh auth login --hostname github.com --web
-    NativeCheck "GitHub login"
+if (-not (Test-GitHubAuthorization)) {
+    Write-Host "Please authorize GitHub CLI in your browser." -ForegroundColor Yellow
+    $loginIssue = $null
+    try {
+        & $gh auth login --hostname github.com --web
+        if ($LASTEXITCODE -ne 0) { $loginIssue = "Exit code $LASTEXITCODE" }
+    } catch {
+        $loginIssue = $_.Exception.Message
+    }
+    if (-not (Test-GitHubAuthorization)) {
+        Fail "GitHub CLI authorization is incomplete. If prompted about 'Authenticate Git with your GitHub credentials?', select No when Git for Windows is not installed. Otherwise install Git for Windows and retry. No signing key has been created."
+    }
+    if ($loginIssue) {
+        Write-Host "GitHub CLI is authorized. Optional Git credential setup was unavailable; continuing without Git for Windows." -ForegroundColor Yellow
+    }
 }
+Write-Host "GitHub CLI authentication verified." -ForegroundColor Green
 
 # Fail closed if the repository already pins a different signing identity.
 $variablesJson = & $gh variable list -R $Repository --json name,value
