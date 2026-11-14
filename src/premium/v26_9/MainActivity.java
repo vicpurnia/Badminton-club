@@ -1056,20 +1056,41 @@ public final class MainActivity extends Activity {
    month.setCompoundDrawablePadding(dp(10));month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);
    pressable(month,()->chooseMonth(month.getText().toString(),month::setText));form.addView(month);gap(form,16);
    form.addView(text("PAYMENT METHOD",11,GRAY,true));gap(form,8);Spinner via=new Spinner(this);via.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Cash","UPI","Bank transfer","Other"}));form.addView(via);gap(form,20);
+   // This form has exactly one submission identity; repeated taps must not
+   // become separate ledger entries even if Android repeats a callback.
+   final String submissionId="pay-"+UUID.randomUUID();
+   final java.util.concurrent.atomic.AtomicBoolean reviewing=new java.util.concurrent.atomic.AtomicBoolean(false);
    Button save=button("Save & share receipt  →",()->{
+    if(!reviewing.compareAndSet(false,true))return;
     String name=who.getText().toString().trim();Member selected=null;for(Member m:members)if(effectiveName(m,profiles).equalsIgnoreCase(name)){selected=m;break;}
-    if(selected==null){who.setError("Choose a player from the list");return;}final Member m=selected;
-    String fee=month.getText().toString().trim();long value;try{MigrationCodec.ym(fee);value=Long.parseLong(amount.getText().toString());if(value<=0)throw new NumberFormatException();}catch(Exception e){error(new IllegalArgumentException("Enter a valid YYYY-MM month and positive amount"));return;}
-    String method=via.getSelectedItem().toString();background(()->{int existing=database.dao().existingCash(m.id,fee);runOnUiThread(()->{
-     if(existing>0)new AlertDialog.Builder(this).setTitle("Contribution already recorded").setMessage(m.name+" has "+existing+" cash entry/entries for "+fee+". Record an additional payment?")
-       .setNegativeButton("Keep editing",null).setPositiveButton("Add payment",(d,w)->{dialog.dismiss();savePayment(m,fee,value,method);}).show();
-     else {dialog.dismiss();savePayment(m,fee,value,method);}
-    });});
+    if(selected==null){who.setError("Choose a player from the list");reviewing.set(false);return;}final Member m=selected;
+    String fee=month.getText().toString().trim();long value;try{MigrationCodec.ym(fee);value=Long.parseLong(amount.getText().toString());if(value<=0)throw new NumberFormatException();}catch(Exception e){reviewing.set(false);error(new IllegalArgumentException("Enter a valid YYYY-MM month and positive amount"));return;}
+    String method=via.getSelectedItem().toString();
+    background(()->{
+     try{
+      int existing=database.dao().existingCash(m.id,fee);
+      runOnUiThread(()->{
+       if(existing>0)new AlertDialog.Builder(this).setTitle("Contribution already recorded")
+        .setMessage(m.name+" has "+existing+" cash entry/entries for "+fee+
+         ". Add another only if you actually received an additional separate payment.")
+        .setNegativeButton("Keep editing",(d,w)->reviewing.set(false))
+        .setPositiveButton("Add separate payment",(d,w)->{
+         dialog.dismiss();savePayment(m,fee,value,method,submissionId);
+        }).show();
+       else {dialog.dismiss();savePayment(m,fee,value,method,submissionId);}
+      });
+     }catch(Exception ex){
+      runOnUiThread(()->{
+       reviewing.set(false);
+       error(new IllegalStateException("Payment duplicate check failed: "+ex.getMessage()));
+      });
+     }
+    });
    });form.addView(save);gap(form,9);TextView disclaimer=text("Enter cash actually received. A monthly fee obligation is not proof of collection. Existing payments are checked before saving.",11,GRAY,false);disclaimer.setGravity(Gravity.CENTER);form.addView(disclaimer);
    ScrollView scroll=new ScrollView(this);scroll.addView(form);dialog.setContentView(scroll);dialog.show();Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setGravity(Gravity.BOTTOM);w.setLayout(-1,Math.min(dp(740),(int)(getResources().getDisplayMetrics().heightPixels*.91f)));}who.clearFocus();
   });});
  }
- private void savePayment(Member m,String fee,long amount,String method){
+ private void savePayment(Member m,String fee,long amount,String method,String submissionId){
   background(()->{
    boolean historicalControl=false;
    for(MonthlyControl control:database.dao().controls())if(control.month.equals(fee)){historicalControl=true;break;}
@@ -1077,17 +1098,44 @@ public final class MainActivity extends Activity {
      .setTitle("Historical control month")
      .setMessage("The historical collection base for "+fee+" is preserved. Your new payment will be added as a separate adjustment, increasing the balance without erasing any old discrepancy. Continue?")
      .setNegativeButton("Cancel",null)
-     .setPositiveButton("Add with reconciliation flag",(d,w)->persistPayment(m,fee,amount,method)).show());
-   else persistPayment(m,fee,amount,method);
+     .setPositiveButton("Add with reconciliation flag",(d,w)->persistPayment(m,fee,amount,method,submissionId)).show());
+   else persistPayment(m,fee,amount,method,submissionId);
   });
  }
- private void persistPayment(Member m,String fee,long amount,String method){background(()->{
-  Contribution c=new Contribution();c.id="pay-"+UUID.randomUUID();c.memberId=m.id;c.feeMonth=fee;c.receivedDate=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date());c.amount=amount;c.kind="cash";c.method=method;
-  database.runInTransaction(()->{requireImportedLedger();requireOpenMonth(fee);database.dao().insertPayment(c);AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();a.createdAt=new Date().toString();a.action="Contribution added";a.details=c.id+" / "+rupee(amount);database.dao().audit(a);});
-  BackupGuardian.save(this,database,"payment",true);
-  warnOnBackupFailure();
-  runOnUiThread(()->{Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();selectTab("Collect");sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));});
- });}
+ private void persistPayment(Member m,String fee,long amount,String method,String submissionId){
+  background(()->{
+   Contribution c=new Contribution();
+   c.id=submissionId;c.memberId=m.id;c.feeMonth=fee;
+   c.receivedDate=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date());
+   c.amount=amount;c.kind="cash";c.method=method;
+   final boolean[] created={false};
+   database.runInTransaction(()->{
+    requireImportedLedger();
+    LedgerDao dao=database.dao();
+    // A repeated callback must not produce another cash row or audit event.
+    if(PremiumV26PaymentOnce.alreadyCommitted(dao.contributions(),
+       submissionId,m.id,fee,amount,method))return;
+    requireOpenMonth(fee);
+    dao.insertPayment(c);
+    AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
+    a.createdAt=new Date().toString();a.action="Contribution added";
+    a.details=c.id+" / "+rupee(amount)+" / original form submission";
+    dao.audit(a);created[0]=true;
+   });
+   if(!created[0]){
+    runOnUiThread(()->Toast.makeText(this,
+     "This form's payment was already recorded; duplicate blocked",Toast.LENGTH_LONG).show());
+    return;
+   }
+   BackupGuardian.save(this,database,"payment",true);
+   warnOnBackupFailure();
+   runOnUiThread(()->{
+    Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();
+    selectTab("Collect");
+    sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));
+   });
+  });
+ }
 
  private static boolean isShuttlePurchase(Expense e){
   return e!=null&&e.category!=null&&e.category.toLowerCase(Locale.ROOT).contains("shuttle");
