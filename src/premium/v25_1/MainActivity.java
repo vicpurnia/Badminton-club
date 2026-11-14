@@ -102,7 +102,7 @@ public final class MainActivity extends Activity {
   content.addView(holder,fill());gap(content,16);
  }
  private void layout(){root=col();root.setBackgroundColor(LIGHT);setContentView(root);if(Build.VERSION.SDK_INT>=35){root.setOnApplyWindowInsetsListener((view,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(0,bars.top,0,bars.bottom);return insets;});}getWindow().setStatusBarColor(DARK);getWindow().setNavigationBarColor(0xFFFFFFFF);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
-  header=col();header.setBackground(gradient(DARK,0xFF154E3E,0));pad(header,21,15);LinearLayout top=row();LinearLayout brand=col();brand.addView(text("BADMINTON CLUB",10,GOLD,true));gap(brand,5);brand.addView(text("Smart Manager",23,Color.WHITE,true));gap(brand,3);brand.addView(text("STABLE v25",10,0xFFD1EBDC,true));top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));TextView offline=pill("●  OFFLINE",0xFFBDEBCB,0xFF235A49);top.addView(offline);header.addView(top);root.addView(header,fill());
+  header=col();header.setBackground(gradient(DARK,0xFF154E3E,0));pad(header,21,15);LinearLayout top=row();LinearLayout brand=col();brand.addView(text("BADMINTON CLUB",10,GOLD,true));gap(brand,5);brand.addView(text("Smart Manager",23,Color.WHITE,true));gap(brand,3);brand.addView(text("STABLE v25.1",10,0xFFD1EBDC,true));top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));TextView offline=pill("●  OFFLINE",0xFFBDEBCB,0xFF235A49);top.addView(offline);header.addView(top);root.addView(header,fill());
   ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);content=col();pad(content,17,20);scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
   nav=row();nav.setBackgroundColor(Color.WHITE);nav.setElevation(dp(10));pad(nav,7,7);root.addView(nav,new LinearLayout.LayoutParams(-1,dp(76)));}
  private void drawNav(){nav.removeAllViews();for(String item:new String[]{"Home","Collect","Shuttles","Members","Reports"}){
@@ -483,22 +483,25 @@ public final class MainActivity extends Activity {
   title("Shuttle desk","Purchases, donated packs and acquisition history");monthPicker();
   LinearLayout hero=col();hero.setBackground(gradient(GREEN,DARK,22));pad(hero,20,22);
   hero.addView(text("SHUTTLE ACTIVITY",11,0xFFD6EBDD,true));gap(hero,10);
-  hero.addView(text("Purchases & donations",21,Color.WHITE,true));gap(hero,9);
+  hero.addView(text("Purchases, donations & usage",21,Color.WHITE,true));gap(hero,9);
   hero.addView(text("Cash spending and noncash donations are always recorded separately.",12,0xFFD6EBDD,false));gap(hero,15);
   hero.addView(button("＋ Record shuttle purchase",this::openExpense));gap(hero,9);
-  hero.addView(button("＋ Record donated shuttle pack",this::openShuttleDonation));
+  hero.addView(button("＋ Record donated shuttle pack",this::openShuttleDonation));gap(hero,9);
+  hero.addView(button("− Record shuttle usage",this::openShuttleUsage));
   content.addView(hero);gap(content,16);
-  notice("Inventory limitation","Acquired packs are not the same as remaining stock. Shuttle usage is not yet logged, so the app does not calculate or invent a stock balance.");
+  notice("Stock tracking","Usage is recorded in individual shuttles, while acquisitions are recorded in packs. A remaining-stock calculation needs confirmed opening stock and pack size; neither is assumed.");
   final String selected=reportMonth;
   background(()->{
    List<Expense> entries=database.dao().expenses();
    List<Contribution> contributions=database.dao().contributions();
    List<LegacyEntry> legacy=database.dao().legacy();
+   List<StockUsage> issued=database.dao().stockUsages();
    Map<String,String> names=new HashMap<>();
    for(Member person:database.dao().members())names.put(person.id,person.name);
-   long spending=0,purchased=0,donated=0,legacyDonated=0;
+   long spending=0,purchased=0,donated=0,legacyDonated=0,used=0,lifetimeUsed=0;
    ArrayList<Expense> purchases=new ArrayList<>();
    ArrayList<Contribution> donations=new ArrayList<>();
+   ArrayList<StockUsage> usageHistory=new ArrayList<>();
    for(Expense e:entries)if(selected.equals(e.month)){
     spending+=e.amount;
     if(isShuttlePurchase(e)){purchased+=Math.max(0,e.quantity);purchases.add(e);}
@@ -507,6 +510,17 @@ public final class MainActivity extends Activity {
     donated+=Math.max(0,c.amount);donations.add(c);
    }
    for(LegacyEntry e:legacy)if("packs".equals(e.kind))legacyDonated+=Math.max(0,e.amount);
+   for(StockUsage item:issued){
+    lifetimeUsed=Math.addExact(lifetimeUsed,Math.max(0,item.shuttles));
+    if(selected.equals(item.month)){
+     used=Math.addExact(used,Math.max(0,item.shuttles));
+     usageHistory.add(item);
+    }
+   }
+   usageHistory.sort((a,b)->{
+    String ad=a.date==null?"":a.date,bd=b.date==null?"":b.date;
+    return bd.compareTo(ad);
+   });
    purchases.sort((a,b)->{
     String ad=a.date==null?"":a.date,bd=b.date==null?"":b.date;
     return bd.compareTo(ad);
@@ -515,7 +529,8 @@ public final class MainActivity extends Activity {
     String ad=a.receivedDate==null?"":a.receivedDate,bd=b.receivedDate==null?"":b.receivedDate;
     return bd.compareTo(ad);
    });
-   final long fSpent=spending,fBought=purchased,fGiven=donated,fLegacyGiven=legacyDonated;
+   final long fSpent=spending,fBought=purchased,fGiven=donated,fLegacyGiven=legacyDonated,
+    fUsed=used,fLifetimeUsed=lifetimeUsed;
    runOnUiThread(()->{
     sectionHeading("Selected-month summary",dateLabel(selected));
     LinearLayout stats=row();
@@ -526,6 +541,10 @@ public final class MainActivity extends Activity {
     supply.addView(metric("Packs donated",String.valueOf(fGiven),"＋"),new LinearLayout.LayoutParams(0,-2,1));
     supply.addView(metric("Total packs acquired",String.valueOf(fBought+fGiven),"▤"),new LinearLayout.LayoutParams(0,-2,1));
     content.addView(supply);gap(content,9);
+    LinearLayout useStats=row();
+    useStats.addView(metric("Shuttles used this month",String.valueOf(fUsed),"−"),new LinearLayout.LayoutParams(0,-2,1));
+    useStats.addView(metric("Shuttles used all-time",String.valueOf(fLifetimeUsed),"▦"),new LinearLayout.LayoutParams(0,-2,1));
+    content.addView(useStats);gap(content,9);
     notice("Imported 2025 donations","The historic ledger also contains "+fLegacyGiven+" donated pack(s) across its original 2025 periods. These are not added to the selected month's total.");
     gap(content,14);
     sectionHeading("Shuttle purchases ("+purchases.size()+")","Selected month · recorded prices and dates");
@@ -551,6 +570,19 @@ public final class MainActivity extends Activity {
      info.addView(text(when+" · noncash",11,GRAY,false));
      card.addView(info,new LinearLayout.LayoutParams(0,-2,1));
      card.addView(text("+"+c.amount+" pk",13,GREEN,true));panel(content,card);
+    }
+    gap(content,16);
+    sectionHeading("Shuttle usage ("+usageHistory.size()+")","Individual shuttles · selected month");
+    if(usageHistory.isEmpty())notice("No shuttle usage recorded","No usage records have been inferred. Use Record shuttle usage to add a real count.");
+    for(StockUsage item:usageHistory){
+     LinearLayout card=row();card.addView(avatar("Shuttle"));
+     LinearLayout info=col();pad(info,12,0);
+     String day=item.date==null||item.date.isEmpty()?"Exact usage date not recorded":item.date;
+     info.addView(text(day,13,DARK,true));gap(info,5);
+     String details=item.note==null||item.note.isEmpty()?"No note":item.note;
+     info.addView(text(details,11,GRAY,false));
+     card.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+     card.addView(text("−"+item.shuttles+" shuttles",13,GREEN,true));panel(content,card);
     }
    });
   });
