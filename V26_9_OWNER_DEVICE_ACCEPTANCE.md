@@ -82,3 +82,25 @@ The following checks have been implemented in the draft source and synthetic reg
 - **All inventory metadata:** In-memory restore now checks canonical equality of the *entire* inventory/audit metadata object, including opening physical checkpoint and any future extension keys, instead of relying only on a fixed list.
 
 These improvements are **not** evidence of installed-phone data continuity. The production release gate remains open.
+
+
+## Added verified evidence — signed Android upgrade with synthetic records
+
+**Passed, Nov 14 2026:** [GitHub Actions run 43620161516](https://github.com/vicpurnia/Badminton-club/actions/runs/43620161516).
+
+In a disposable Android 35 emulator, the archived and owner-signed **v25.9.19** APK (`versionCode=24019`) was installed first. An instrumentation APK signed with the same pinned permanent owner certificate inserted one **synthetic** member, one cash contribution for a fixed fee month, one shuttle-purchase expense and one usage entry into the actual persistent Room database `badminton_room_v18.db` (`version=1`). The app was **upgraded in place**, using `adb install -r` without uninstall/clear-data, to the owner-signed **v26.9-rc-test.2** APK (`versionCode=27002`). A second instrumentation test reopened Room and asserted that each record's ID, member, dates, amount and quantity still matched; both test methods passed, and the updated app launched successfully.
+
+**This is a tested database-schema and exact row-persistence upgrade, NOT a complete historical-ledger migration or physical-phone acceptance.** The synthetic fixture deliberately did not contain the club's real monthly ledger metadata, 15 members, historical controls or backups. Do not replace the remaining production acceptance checks with this result.
+
+### Exact backup comparison now available in the development candidate
+
+After verifying the selected external pre-upgrade JSON, use **Reports → COMPARE SAVED JSON WITH CURRENT LEDGER**. The comparison now inspects **all verified ledger fields**, not just counts and closing totals. When all canonical fields match, it reports an exact ledger-data match. Any difference identifies the affected JSON sections without exposing individual member names in the summary.
+
+Run this check **before entering any new payments or expenses** in the upgraded app, because genuine post-backup changes will correctly produce a DIFFERENT result. A match does not replace retention of a separate external backup, and a difference does not automatically prove data loss.
+
+### Still required for production
+
+- Physically verified owner-device v25.9 → signed v26.9 test update without uninstall/clear-data
+- Full 15-member real imported ledger, Kanishk February noncash +1 pack, unresolved February ₹1,000 difference and every historical record preserved
+- Exact pre/post-upgrade verified JSON comparison on device, before entering new data
+- WhatsApp/receipt/ZIP/PDF sharing, SAF folder exports, password recovery and cross-phone import acceptance
