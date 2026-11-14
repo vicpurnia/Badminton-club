@@ -391,7 +391,7 @@ public final class MainActivity extends Activity {
   background(()->{MigrationCodec.importChecked(database,preview);BackupGuardian.save(this,database,"import",true);warnOnBackupFailure();runOnUiThread(()->{Toast.makeText(this,"Ledger imported. Review backups in Reports.",Toast.LENGTH_LONG).show();showHome();});});}
  private void showMembers(){title("Members","Your club, one player at a time");monthPicker();
   LinearLayout searchPanel=col();EditText search=new EditText(this);search.setSingleLine(true);search.setTextSize(14);search.setHint("Search all players");search.setCompoundDrawablePadding(dp(10));search.setBackground(border(Color.WHITE,LINE,14));pad(search,15,13);search.setText(searchText);searchPanel.addView(search);content.addView(searchPanel);gap(content,13);
-  LinearLayout filters=row();for(String option:new String[]{"All","Received","Partial","No entry"}){
+  LinearLayout filters=row();for(String option:new String[]{"All","Received","Partial","No entry","Unconfigured"}){
    TextView c=pill(option,option.equals(memberFilter)?Color.WHITE:GREEN,option.equals(memberFilter)?GREEN:PALE);
    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(2),0,dp(2),0);filters.addView(c,lp);pressable(c,()->{memberFilter=option;searchText=search.getText().toString();showMembers();});}
   content.addView(filters);gap(content,14);
@@ -399,9 +399,13 @@ public final class MainActivity extends Activity {
   LinearLayout results=col();content.addView(results);gap(content,10);content.addView(button("＋  Add new player",this::addMember),fill());
   Runnable render=()->background(()->{
    List<Member> members=database.dao().members();List<Contribution> payments=database.dao().contributions();
-   Map<String,CashCorrectionsV256.State> correct=CashCorrectionsV256.states(database.dao().meta().inventoryStockJson,payments);
+   String v26meta=database.dao().meta().inventoryStockJson;
+   Map<String,CashCorrectionsV256.State> correct=CashCorrectionsV256.states(v26meta,payments);
+   Map<String,PremiumV26State.Profile> profiles=PremiumV26State.profiles(v26meta,knownMembers());
+   List<PremiumV26State.FeePolicy> policies=PremiumV26State.policies(v26meta,knownMembers());
    List<LegacyEntry> legacy=database.dao().legacy();
-   runOnUiThread(()->{results.removeAllViews();int shown=0;for(Member member:members){if(!member.name.toLowerCase(Locale.ROOT).contains(search.getText().toString().trim().toLowerCase(Locale.ROOT)))continue;
+   runOnUiThread(()->{results.removeAllViews();int shown=0;for(Member member:members){String displayName=effectiveName(member,profiles);
+    if(!displayName.toLowerCase(Locale.ROOT).contains(search.getText().toString().trim().toLowerCase(Locale.ROOT)))continue;
     long current=0,lifetime=0,donated=0;for(Contribution c:payments)if(member.id.equals(c.memberId)){if("packs".equals(c.kind))donated+=c.amount;else {
      long effective=correct.containsKey(c.id)?correct.get(c.id).effective:c.amount;
      lifetime=Math.addExact(lifetime,effective);
@@ -411,8 +415,10 @@ public final class MainActivity extends Activity {
       if("cash".equals(e.kind))lifetime+=e.amount;
       else if("packs".equals(e.kind))donated+=e.amount;
     }
-    String status=current>=2000?"Received":current>0?"Partial":"No entry";if(!memberFilter.equals("All")&&!status.equals(memberFilter))continue;
-    final long cTotal=current,lTotal=lifetime,dPacks=donated;LinearLayout card=row();card.addView(avatar(member.name));LinearLayout labels=col();pad(labels,11,0);labels.addView(text(member.name,14,DARK,true));gap(labels,5);labels.addView(text(reportMonth+"  ·  "+(current>0?rupee(current):"No contribution recorded"),11,GRAY,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+    long due=PremiumV26State.rateFor(policies,member.id,reportMonth);
+    String status=due<0?"Unconfigured":(due==0||current>=due)?"Received":current>0?"Partial":"No entry";
+    if(!memberFilter.equals("All")&&!status.equals(memberFilter))continue;
+    final long cTotal=current,lTotal=lifetime,dPacks=donated;LinearLayout card=row();card.addView(avatar(displayName));LinearLayout labels=col();pad(labels,11,0);labels.addView(text(displayName+(profiles.containsKey(member.id)&&!profiles.get(member.id).active?"  ·  Archived":""),14,DARK,true));gap(labels,5);labels.addView(text(reportMonth+" · Collected "+rupee(current)+" · "+(due<0?"Fee not set":"Due "+rupee(due)),11,GRAY,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
     TextView bubble=pill(status,status.equals("Received")?GREEN:status.equals("Partial")?0xFF9B6B18:GRAY,status.equals("Received")?PALE:status.equals("Partial")?0xFFFFF2D7:0xFFF1F3F1);
     card.addView(bubble);pressable(card,()->memberWallet(member,cTotal,lTotal,dPacks));panel(results,card);shown++;}
     if(shown==0){LinearLayout n=blockHeader("No matching members","Try another name or filter.");panel(results,n);}
@@ -517,7 +523,27 @@ public final class MainActivity extends Activity {
  private File pendingEncryptedExport;
  private static final int SAVE_ENCRYPTED_V26=2010,READ_ENCRYPTED_V26=2011;
  private boolean encryptedImportAfterCheck=false;
- private void addMember(){EditText e=new EditText(this);e.setHint("Full player name");new AlertDialog.Builder(this).setTitle("New player").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Add",(d,w)->background(()->{String n=e.getText().toString().trim();if(n.isEmpty())throw new IllegalArgumentException("Name required");requireImportedLedger();Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();runOnUiThread(this::showMembers);})).show();}
+ private void addMember(){EditText e=new EditText(this);e.setHint("Full player name");
+  new AlertDialog.Builder(this).setTitle("New player").setView(e).setNegativeButton("Cancel",null)
+   .setPositiveButton("Add",(d,w)->background(()->{
+    String n=e.getText().toString().trim();
+    if(n.isEmpty()||n.length()>100)throw new IllegalArgumentException("Name must be 1–100 characters");
+    database.runInTransaction(()->{
+     requireImportedLedger();
+     Map<String,PremiumV26State.Profile> profiles=PremiumV26State.profiles(database.dao().meta().inventoryStockJson,knownMembers());
+     String normal=n.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");
+     for(Member other:database.dao().members())if(
+      effectiveName(other,profiles).trim().toLowerCase(Locale.ROOT).replaceAll("\\s+"," ").equals(normal))
+      throw new IllegalArgumentException("Possible duplicate member: "+n+"; original ID protected");
+     Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);
+     AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
+     a.createdAt=new Date().toString();a.action="New member";
+     a.details="Created member "+m.id+" with display name "+n;database.dao().audit(a);
+    });
+    BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();
+    runOnUiThread(this::showMembers);
+   })).show();
+ }
 
 
  private File renderCashReceipt(Member member,Contribution payment) throws Exception {
@@ -828,12 +854,18 @@ public final class MainActivity extends Activity {
    right.addView(inlineButton(net==0?"Void record":"Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
    if(n==0)notice("No receipts this month","Choose another month above or collect a contribution.");});});
  }
- private void openPayment(String chosen){background(()->{requireImportedLedger();List<Member> members=database.dao().members();runOnUiThread(()->{
+ private void openPayment(String chosen){background(()->{requireImportedLedger();
+    List<Member> all=database.dao().members();
+    Map<String,PremiumV26State.Profile> profiles=PremiumV26State.profiles(
+     database.dao().meta().inventoryStockJson,knownMembers());
+    List<Member> members=new ArrayList<>();
+    for(Member item:all)if(!profiles.containsKey(item.id)||profiles.get(item.id).active)members.add(item);
+    runOnUiThread(()->{
    if(members.isEmpty()){error(new IllegalStateException("Import your verified ledger first"));return;}
    Dialog dialog=new Dialog(this);LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,21,23);
    LinearLayout cap=row();LinearLayout headline=col();headline.addView(text("New contribution",22,DARK,true));gap(headline,5);headline.addView(text("Securely record and share",12,GRAY,false));cap.addView(headline,new LinearLayout.LayoutParams(0,-2,1));TextView close=inlineButton("✕",GRAY,dialog::dismiss);cap.addView(close);form.addView(cap);gap(form,25);
-   form.addView(text("PLAYER",11,GRAY,true));gap(form,9);AutoCompleteTextView who=new AutoCompleteTextView(this);who.setSingleLine(true);who.setTextSize(15);who.setThreshold(1);String[] options=new String[members.size()];for(int i=0;i<members.size();i++)options[i]=members.get(i).name;
-   who.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,options));who.setHint("Search player name");who.setBackground(border(LIGHT,LINE,12));pad(who,14,12);if(chosen!=null)for(Member m:members)if(m.id.equals(chosen))who.setText(m.name,false);form.addView(who);gap(form,16);
+   form.addView(text("PLAYER",11,GRAY,true));gap(form,9);AutoCompleteTextView who=new AutoCompleteTextView(this);who.setSingleLine(true);who.setTextSize(15);who.setThreshold(1);String[] options=new String[members.size()];for(int i=0;i<members.size();i++)options[i]=effectiveName(members.get(i),profiles);
+   who.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,options));who.setHint("Search player name");who.setBackground(border(LIGHT,LINE,12));pad(who,14,12);if(chosen!=null)for(Member m:members)if(m.id.equals(chosen))who.setText(effectiveName(m,profiles),false);form.addView(who);gap(form,16);
    form.addView(text("AMOUNT RECEIVED",11,GRAY,true));gap(form,9);EditText amount=new EditText(this);amount.setSingleLine(true);amount.setText("2000");amount.setTextSize(23);amount.setTypeface(Typeface.DEFAULT,Typeface.BOLD);amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);amount.setBackground(border(LIGHT,LINE,12));pad(amount,14,11);form.addView(amount);gap(form,9);
    LinearLayout presets=row();for(int a:new int[]{500,1000,2000,4000}){TextView c=pill("₹"+a,GREEN,PALE);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1);cp.setMargins(dp(3),0,dp(3),0);presets.addView(c,cp);pressable(c,()->amount.setText(String.valueOf(a)));}form.addView(presets);gap(form,16);
    form.addView(text("CONTRIBUTION MONTH",11,GRAY,true));gap(form,9);
@@ -844,7 +876,7 @@ public final class MainActivity extends Activity {
    pressable(month,()->chooseMonth(month.getText().toString(),month::setText));form.addView(month);gap(form,16);
    form.addView(text("PAYMENT METHOD",11,GRAY,true));gap(form,8);Spinner via=new Spinner(this);via.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,new String[]{"Cash","UPI","Bank transfer","Other"}));form.addView(via);gap(form,20);
    Button save=button("Save & share receipt  →",()->{
-    String name=who.getText().toString().trim();Member selected=null;for(Member m:members)if(m.name.equalsIgnoreCase(name)){selected=m;break;}
+    String name=who.getText().toString().trim();Member selected=null;for(Member m:members)if(effectiveName(m,profiles).equalsIgnoreCase(name)){selected=m;break;}
     if(selected==null){who.setError("Choose a player from the list");return;}final Member m=selected;
     String fee=month.getText().toString().trim();long value;try{MigrationCodec.ym(fee);value=Long.parseLong(amount.getText().toString());if(value<=0)throw new NumberFormatException();}catch(Exception e){error(new IllegalArgumentException("Enter a valid YYYY-MM month and positive amount"));return;}
     String method=via.getSelectedItem().toString();background(()->{int existing=database.dao().existingCash(m.id,fee);runOnUiThread(()->{
@@ -905,6 +937,7 @@ public final class MainActivity extends Activity {
   hero.addView(button("＋ Record donated shuttle pack",this::openShuttleDonation));gap(hero,9);
   hero.addView(button("− Record shuttle usage",this::openShuttleUsage));gap(hero,9);
   hero.addView(button("◉ Configure confirmed opening stock",this::openInventoryCheckpoint));gap(hero,9);
+  hero.addView(button("Configure low-stock warning",this::openStockThreshold));gap(hero,9);
   hero.addView(button("✓ Reconcile completed-month physical stock",this::openPhysicalStockCount));
   content.addView(hero);gap(content,16);
   notice("Stock accounting basis","The first stock checkpoint is a confirmed month-start count. Later independently measured end-of-month counts can reconcile discrepancies without rewriting past purchases or usage. Pack sizes are explicit when known.");
@@ -1433,6 +1466,11 @@ public final class MainActivity extends Activity {
    pressable(chip,()->count.setText(String.valueOf(q)));
   }
   form.addView(shortcuts);gap(form,14);
+  form.addView(text("USAGE CATEGORY",11,GRAY,true));gap(form,7);
+  Spinner lossCategory=new Spinner(this);
+  lossCategory.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
+   new String[]{"Consumed in play","Damaged shuttles","Lost shuttles","Other documented use"}));
+  form.addView(lossCategory);gap(form,12);
   form.addView(text("OPTIONAL NOTE",11,GRAY,true));gap(form,7);
   EditText note=new EditText(this);note.setSingleLine(false);note.setMinLines(2);
   note.setHint("e.g. weekend practice");
@@ -1443,7 +1481,7 @@ public final class MainActivity extends Activity {
     final String actual=checkedPurchaseDate(date.getText().toString(),mm);
     final long qty=Long.parseLong(count.getText().toString().trim());
     if(qty<1||qty>1000)throw new IllegalArgumentException("Enter 1 to 1,000 shuttles.");
-    final String details=note.getText().toString().trim();
+    final String details=lossCategory.getSelectedItem().toString()+" · "+note.getText().toString().trim();
     if(details.length()>200)throw new IllegalArgumentException("Note must be 200 characters or fewer.");
     String summary=qty+" individual shuttles used in "+mm
      +"\nActual date: "+(actual.isEmpty()?"not recorded":actual)
