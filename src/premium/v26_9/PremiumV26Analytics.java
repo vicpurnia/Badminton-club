@@ -75,7 +75,7 @@ final class PremiumV26Analytics {
   return new ArrayList<>(rows.values());
  }
  static String annualCsv(List<Month> months){
-  StringBuilder s=new StringBuilder("Year,Recorded_Months,Cash_Collected_INR,Expenditure_INR,Final_Closing_INR,Unresolved_Differences_INR,Shuttles_Used,Shuttles_Acquired\r\n");
+  StringBuilder s=new StringBuilder("Year,Recorded_Months,Recognized_Contributions_By_Fee_Period_INR,Expenditure_INR,Final_Closing_INR,Unresolved_Differences_INR,Shuttles_Used,Shuttles_Acquired\r\n");
   for(Year y:annual(months))s.append(y.year).append(',').append(y.reportedMonths)
    .append(',').append(y.received).append(',').append(y.spent).append(',')
    .append(y.closing).append(',').append(y.unresolved).append(',')
@@ -83,7 +83,7 @@ final class PremiumV26Analytics {
   return s.toString();
  }
  static String csv(List<Month> months){
-  StringBuilder s=new StringBuilder("Month,Collections_INR,Expenses_INR,Closing_INR,Unresolved_Difference_INR,Recorded_Shuttles_Used,Recorded_Shuttles_Acquired,Members_With_Recorded_Cash\r\n");
+  StringBuilder s=new StringBuilder("Fee_Period,Recognized_Contributions_INR,Expenses_INR,Closing_INR,Unresolved_Difference_INR,Recorded_Shuttles_Used,Recorded_Shuttles_Acquired,Members_With_Recorded_Cash\r\n");
   for(Month m:months)s.append(m.month).append(',').append(m.collections).append(',')
     .append(m.expenses).append(',').append(m.closing).append(',')
     .append(m.difference).append(',').append(m.usage).append(',')
@@ -99,9 +99,9 @@ final class PremiumV26Analytics {
   p.setColor(Color.rgb(21,75,60));p.setTextSize(20);p.setTypeface(Typeface.create("sans-serif",Typeface.BOLD));
   c.drawText("BADMINTON PREMIUM  |  FINANCIAL DASHBOARD",36,43,p);
   p.setColor(Color.rgb(100,112,105));p.setTextSize(11);p.setTypeface(Typeface.DEFAULT);
-  c.drawText("Verified recorded amounts through "+through+"  •  This report does not replace the Classic Master Ledger",36,66,p);
+  c.drawText("Recognized contributions by FEE PERIOD through "+through+"  •  Original Classic Master unchanged",36,66,p);
   p.setColor(Color.rgb(15,83,60));p.setTextSize(11);p.setTypeface(Typeface.DEFAULT_BOLD);
-  c.drawText("MONTH",36,99,p);c.drawText("RECEIVED",185,99,p);c.drawText("EXPENSE",295,99,p);
+  c.drawText("MONTH",36,99,p);c.drawText("RECOGNIZED",185,99,p);c.drawText("EXPENSE",295,99,p);
   c.drawText("CLOSING",402,99,p);c.drawText("DIFFERENCE",507,99,p);
   c.drawText("USED",650,99,p);c.drawText("ACQUIRED",730,99,p);
   int start=Math.max(0,data.size()-12);
@@ -128,7 +128,7 @@ final class PremiumV26Analytics {
   c.drawText(String.valueOf(totalAcq),730,527,p);
   p.setTextSize(9);p.setTypeface(Typeface.DEFAULT);p.setColor(Color.rgb(80,95,87));
   c.drawText("Usage and acquisitions are recorded quantities only. Unknown historical quantities are not estimated.",36,561,p);
-  c.drawText("Any unresolved reconciliation difference remains visible and is not silently settled.",36,576,p);
+  c.drawText("Fee-period totals may differ from cash received by DATE; unresolved differences remain visible.",36,576,p);
   document.finishPage(page);
   File dir=new File(context.getCacheDir(),"pdfs");
   if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Shared PDF folder unavailable");
