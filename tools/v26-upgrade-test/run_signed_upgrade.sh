@@ -62,6 +62,8 @@ adb shell am force-stop "$PKG" || true
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
 sleep 3
 adb shell pidof "$PKG" >/dev/null
+echo "5. Verify real Android navigation across populated synthetic ledger after upgrade"
+python3 tools/v26-upgrade-test/check_populated_navigation.py
 # Both instrumentation invocations above are mandatory pass/fail. The emulator
 # can transiently go offline when taking screenshots at shutdown; diagnostics are
 # best-effort and must not erase two independently passing persistence checks.
