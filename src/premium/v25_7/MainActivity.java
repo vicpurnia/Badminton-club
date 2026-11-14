@@ -1087,7 +1087,11 @@ public final class MainActivity extends Activity {
   day.setSingleLine(true);day.setBackground(border(LIGHT,LINE,12));pad(day,14,12);form.addView(day);gap(form,14);
   form.addView(text("NUMBER OF PACKS",11,GRAY,true));gap(form,7);
   EditText count=new EditText(this);count.setInputType(2);count.setText("1");
-  count.setBackground(border(LIGHT,LINE,12));pad(count,14,12);form.addView(count);gap(form,15);
+  count.setBackground(border(LIGHT,LINE,12));pad(count,14,12);form.addView(count);gap(form,14);
+  form.addView(text("SHUTTLES PER PACK (OPTIONAL IF UNCHANGED)",11,GRAY,true));gap(form,7);
+  EditText packSize=new EditText(this);packSize.setInputType(2);
+  packSize.setHint("Actual size 1–60; blank uses confirmed base size");
+  packSize.setBackground(border(LIGHT,LINE,12));pad(packSize,14,12);form.addView(packSize);gap(form,15);
   form.addView(text("PRICE PER PACK",11,GRAY,true));gap(form,7);
   EditText price=new EditText(this);price.setInputType(2);price.setText("4000");
   price.setBackground(border(LIGHT,LINE,12));pad(price,14,12);form.addView(price);gap(form,8);
@@ -1105,7 +1109,12 @@ public final class MainActivity extends Activity {
     final long unit=Long.parseLong(price.getText().toString().trim());
     if(qty<=0||unit<=0)throw new NumberFormatException();
     final long total=Math.multiplyExact(qty,unit);
+    final String sizeText=packSize.getText().toString().trim();
+    final long explicitSize=sizeText.isEmpty()?0:Long.parseLong(sizeText);
+    if(explicitSize!=0&&(explicitSize<1||explicitSize>60))
+     throw new IllegalArgumentException("Actual pack size must be 1–60.");
     String summary="Record "+qty+" pack(s) at "+rupee(unit)+" each in "+mm+
+     "\nPack factor: "+(explicitSize==0?"confirmed baseline size":"explicit "+explicitSize+" shuttles per pack")+
      "\nTotal cash expense: "+rupee(total)+
      "\nPurchase date: "+(dd.isEmpty()?"not recorded":dd)+
      "\n\nConfirm this new purchase? Existing expenses are not replaced.";
@@ -1116,6 +1125,7 @@ public final class MainActivity extends Activity {
       background(()->{
        Expense e=new Expense();e.id="expense-"+UUID.randomUUID();e.month=mm;
        e.category="Shuttle pack";e.date=dd;e.quantity=qty;e.amount=total;
+       if(explicitSize>0)e.note=StockReconciliationV257.packNote(explicitSize,"Original purchase pack size");
        database.runInTransaction(()->{
         database.dao().insertExpense(e);
         AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
@@ -1154,6 +1164,10 @@ public final class MainActivity extends Activity {
     form.addView(text("DONATED PACKS",11,GRAY,true));gap(form,7);
     EditText quantity=new EditText(this);quantity.setText("1");quantity.setInputType(2);
     quantity.setBackground(border(LIGHT,LINE,12));pad(quantity,14,12);form.addView(quantity);gap(form,14);
+    form.addView(text("SHUTTLES PER DONATED PACK (OPTIONAL)",11,GRAY,true));gap(form,7);
+    EditText packSize=new EditText(this);packSize.setInputType(2);
+    packSize.setHint("Actual size 1–60; blank uses confirmed base size");
+    packSize.setBackground(border(LIGHT,LINE,12));pad(packSize,14,12);form.addView(packSize);gap(form,14);
     form.addView(text("DATE (OPTIONAL)",11,GRAY,true));gap(form,7);
     EditText day=new EditText(this);day.setHint("YYYY-MM-DD · leave blank if unknown");day.setSingleLine(true);
     day.setBackground(border(LIGHT,LINE,12));pad(day,14,12);form.addView(day);gap(form,16);
@@ -1167,6 +1181,10 @@ public final class MainActivity extends Activity {
       final String dd=checkedPurchaseDate(day.getText().toString(),mm);
       final long qty=Long.parseLong(quantity.getText().toString().trim());
       if(qty<=0||qty>100)throw new IllegalArgumentException("Enter 1–100 donated packs.");
+      final String sizeText=packSize.getText().toString().trim();
+      final long explicitSize=sizeText.isEmpty()?0:Long.parseLong(sizeText);
+      if(explicitSize!=0&&(explicitSize<1||explicitSize>60))
+       throw new IllegalArgumentException("Pack size must be 1–60 shuttles.");
       // Inspect existing donations before adding another: warns, never silently
       // merges or deletes a legitimate historical record.
       background(()->{
@@ -1195,6 +1213,7 @@ public final class MainActivity extends Activity {
          warning+="\n\nHISTORICAL CONTROL: Earlier monthly reconciliation remains unchanged. The new noncash entry does not erase past differences.";
         new AlertDialog.Builder(this).setTitle(existingCount>0?"Review possible duplicate donation":"Confirm noncash donation")
          .setMessage(donor.name+" · "+qty+" donated pack(s) · "+mm+
+        "\nPack factor: "+(explicitSize==0?"confirmed baseline size":explicitSize+" shuttles per pack")+
           "\nDate: "+(dd.isEmpty()?"not recorded":dd)+warning+
           "\n\nCash collection, expenditure and closing balance remain unchanged.")
          .setNegativeButton("Keep editing",null)
@@ -1207,6 +1226,7 @@ public final class MainActivity extends Activity {
            c.historical=false;c.kind="packs";c.amount=qty;
            c.method="Donated shuttle packs";
            c.note=dd.isEmpty()?"Month-only donated packs; exact day unknown.":"Member donated packs on recorded day.";
+         if(explicitSize>0)c.note=StockReconciliationV257.packNote(explicitSize,c.note);
            database.runInTransaction(()->{
             database.dao().insertPayment(c);
             AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
