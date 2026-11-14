@@ -381,4 +381,5 @@ jobs:
         with:
           name: Badminton-Premium-v26.9-SIGNED-TEST-CANDIDATE_NOT-PRODUCTION
           path: app/build/outputs/apk/release/app-release.apk
+          retention-days: 7
           if-no-files-found: error
