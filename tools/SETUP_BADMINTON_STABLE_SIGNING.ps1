@@ -4,7 +4,8 @@
 [CmdletBinding()]
 param(
     [string]$Repository = "vicpurnia/Badminton-club",
-    [string]$KeystorePath = ""
+    [string]$KeystorePath = "",
+    [switch]$CheckJavaOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,22 +45,106 @@ Write-Host "Repository: $Repository"
 Write-Host "A permanent key will be created ONLY on this PC. It will not be uploaded to a public repository."
 Write-Host ""
 
+function Find-Keytool {
+    # Find a JDK even when JAVA_HOME and PATH have not been updated.
+    $found = Get-Command keytool.exe -ErrorAction SilentlyContinue
+    if ($found -and $found.Source -and (Test-Path -LiteralPath $found.Source)) {
+        return $found.Source
+    }
+    $direct = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($home in @(
+        $env:JAVA_HOME,
+        [Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine"),
+        [Environment]::GetEnvironmentVariable("JAVA_HOME", "User"),
+        $env:JDK_HOME
+    )) {
+        if (-not [string]::IsNullOrWhiteSpace($home)) {
+            $direct.Add((Join-Path $home "bin\keytool.exe"))
+        }
+    }
+    $roots = New-Object 'System.Collections.Generic.List[string]'
+    foreach ($base in @($env:ProgramFiles, [Environment]::GetFolderPath("ProgramFilesX86"), $env:LOCALAPPDATA)) {
+        if ([string]::IsNullOrWhiteSpace($base)) { continue }
+        foreach ($sub in @("Eclipse Adoptium", "Microsoft", "Java", "Amazon Corretto", "Zulu", "BellSoft", "Programs\Eclipse Adoptium", "Programs\Microsoft")) {
+            $roots.Add((Join-Path $base $sub))
+        }
+        $direct.Add((Join-Path $base "Android\Android Studio\jbr\bin\keytool.exe"))
+        $direct.Add((Join-Path $base "Android\Android Studio\jre\bin\keytool.exe"))
+    }
+    if ($env:USERPROFILE) {
+        $roots.Add((Join-Path $env:USERPROFILE ".jdks"))
+        $direct.Add((Join-Path $env:USERPROFILE "scoop\apps\temurin17-jdk\current\bin\keytool.exe"))
+    }
+    if ($env:ChocolateyInstall) {
+        $roots.Add((Join-Path $env:ChocolateyInstall "lib"))
+    }
+    foreach ($root in $roots) {
+        if (-not (Test-Path -LiteralPath $root -PathType Container)) { continue }
+        foreach ($directory in @(Get-ChildItem -LiteralPath $root -Directory -ErrorAction SilentlyContinue)) {
+            $direct.Add((Join-Path $directory.FullName "bin\keytool.exe"))
+            $direct.Add((Join-Path $directory.FullName "jbr\bin\keytool.exe"))
+            $direct.Add((Join-Path $directory.FullName "tools\bin\keytool.exe"))
+        }
+    }
+    foreach ($candidate in $direct) {
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+    return $null
+}
+
+# CI may test Java discovery without contacting GitHub or creating any signing key.
+if ($CheckJavaOnly) {
+    $located = Find-Keytool
+    if (-not $located) { Fail "No JDK keytool found (check mode)." }
+    Write-Host "JDK detected: $located" -ForegroundColor Green
+    return
+}
+
+function Ensure-Keytool {
+    $located = Find-Keytool
+    if ($located) {
+        Write-Host "Java keytool found: $located" -ForegroundColor Green
+        return $located
+    }
+    Write-Host ""
+    Write-Host "Java Development Kit (JDK) not found." -ForegroundColor Yellow
+    Write-Host "A JDK is required once to create your permanent Android signing certificate."
+    Write-Host "Recommended: free Eclipse Temurin 17 from https://adoptium.net/installation/"
+    $wingetCommand = Get-Command winget.exe -ErrorAction SilentlyContinue
+    if ($wingetCommand) {
+        Write-Host ""
+        Write-Host "Type INSTALL to approve Temurin 17 JDK installation using Windows Package Manager."
+        Write-Host "Type SKIP to stop and install Java yourself. No change occurs unless you type INSTALL."
+        $decision = Read-Host "Choice"
+        if ($decision -cne "INSTALL") {
+            Fail "Java installation skipped. No signing key or GitHub secret was changed."
+        }
+        Write-Host "Starting Microsoft winget installer. Approve Windows prompts only if you agree." -ForegroundColor Yellow
+        & $wingetCommand.Source install --id EclipseAdoptium.Temurin.17.JDK --exact --source winget --accept-package-agreements --accept-source-agreements
+        if ($LASTEXITCODE -ne 0) {
+            Fail "JDK installation did not finish. Install Eclipse Temurin 17 JDK from https://adoptium.net/installation/, then rerun."
+        }
+        # An already-open PowerShell window may still have the old PATH.
+        # Search common JDK installation directories without requiring a reboot.
+        $located = Find-Keytool
+        if ($located) {
+            Write-Host "Java successfully installed; continuing signing setup." -ForegroundColor Green
+            return $located
+        }
+    }
+    Write-Host ""
+    Write-Host "Install Eclipse Temurin 17 JDK from https://adoptium.net/installation/" -ForegroundColor Yellow
+    Fail "Java keytool was not detected. Close this window, reopen the setup BAT after installation. No signing key has been created."
+}
+
 $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
 if (-not $ghCommand) {
     Fail "GitHub CLI is missing. Install from https://cli.github.com/ and rerun this script."
 }
 $gh = $ghCommand.Source
-
-$keytoolCommand = Get-Command keytool -ErrorAction SilentlyContinue
-if ($keytoolCommand) {
-    $keytool = $keytoolCommand.Source
-} else {
-    $candidates = @()
-    if ($env:JAVA_HOME) { $candidates += (Join-Path $env:JAVA_HOME "bin\keytool.exe") }
-    if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles "Android\Android Studio\jbr\bin\keytool.exe") }
-    $keytool = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-    if (-not $keytool) { Fail "JDK keytool is missing. Install a JDK or Android Studio, then rerun." }
-}
+$keytool = Ensure-Keytool
 
 # Owner authentication happens locally in their GitHub account.
 $loggedIn = $false
