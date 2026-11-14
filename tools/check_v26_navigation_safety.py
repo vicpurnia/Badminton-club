@@ -66,4 +66,14 @@ assert "MigrationCodec.canonical(current)" in comparison
 assert "MigrationCodec.canonical(backup)" in comparison
 assert "No records were changed." in comparison
 
+patch=Path("src/premium/v26_9/patch_v26.py").read_text(encoding="utf-8")
+assert 'sourceAuditPresent=state.has("nativeAuditHistory")' in patch
+assert 'if(e.id.startsWith("import-"))continue;' in patch
+assert 'if(sourceAuditPresent||audit.length()>0)state.put("nativeAuditHistory",audit)' in patch
+assert 'if s.count(audit_filter)!=1:' in patch
+tests=Path("tools/v26-upgrade-test/V26SignedUpgradePersistenceTest.java").read_text(encoding="utf-8")
+assert "preserveVerifiedLedgerDigest(db);" in tests
+assert "assertVerifiedLedgerDigestUnchanged(db);" in tests
+assert "assertFingerprintUnchanged(db);" in tests
+assert "BackupRecoveryV259.dryRun(" in tests
 print("v26 navigation / chronological closing / payment replay / receipt ZIP / full restore-metadata safety: PASS")
