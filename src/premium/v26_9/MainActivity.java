@@ -1870,6 +1870,130 @@ public final class MainActivity extends Activity {
   });
  }
 
+
+ private void openStockThreshold(){
+  background(()->{
+   requireImportedLedger();
+   long old=PremiumV26State.reorderThreshold(database.dao().meta().inventoryStockJson);
+   runOnUiThread(()->{
+    LinearLayout v=col();pad(v,16,8);
+    EditText count=new EditText(this);count.setInputType(2);count.setHint("Individual shuttles");count.setText(old<0?"":String.valueOf(old));
+    EditText reason=new EditText(this);reason.setHint("Required audit reason (8–200 chars)");
+    v.addView(text("REORDER BELOW THIS STOCK COUNT",11,GRAY,true));v.addView(count);gap(v,12);v.addView(reason);
+    new AlertDialog.Builder(this).setTitle("Low-stock alert · recorded counts only")
+     .setView(v).setNegativeButton("Cancel",null).setPositiveButton("Review",(d,w)->{
+      try{
+       long value=Long.parseLong(count.getText().toString().trim());
+       String why=reason.getText().toString().trim();
+       if(value<0||value>1000000L||why.length()<8||why.length()>200)
+        throw new IllegalArgumentException("Invalid count or reason");
+       new AlertDialog.Builder(this).setTitle("Confirm reorder threshold")
+        .setMessage("Previous: "+(old<0?"unconfigured":old+" shuttles")+
+         "\nNext: "+value+" shuttles\nReason: "+why+
+         "\n\nThis is a warning only, not an inventory adjustment.")
+        .setNegativeButton("Cancel",null).setPositiveButton("Save",(dd,ww)->
+         commitV26Metadata("Shuttle threshold",null,raw->
+          PremiumV26State.setReorder(raw,value,why,"threshold-"+UUID.randomUUID(),new Date().toString())))
+        .show();
+      }catch(Exception ex){error(new IllegalArgumentException("Set a quantity up to one million and meaningful reason."));}
+     }).show();
+   });
+  });
+ }
+ private void showExecutiveDashboard(){
+  background(()->{
+   requireImportedLedger();
+   LedgerDao dao=database.dao();String month=reportMonth;
+   List<PremiumV26Analytics.Month> data=PremiumV26Analytics.timeline(dao,month);
+   String drift=PremiumV26State.closedMonthDrift(dao.meta().inventoryStockJson,ReportMath.monthly(dao,month));
+   long max=0,collections=0,expenses=0,usage=0;
+   for(PremiumV26Analytics.Month record:data){
+    max=Math.max(max,Math.max(record.collections,record.expenses));
+    collections=Math.addExact(collections,record.collections);
+    expenses=Math.addExact(expenses,record.expenses);
+    usage=Math.addExact(usage,record.usage);
+   }
+   long scale=Math.max(1,max);
+   long recordedIn=collections,recordedOut=expenses,recordedUsed=usage;
+   runOnUiThread(()->{
+    LinearLayout v=col();pad(v,18,17);
+    v.addView(text("Executive Dashboard",23,DARK,true));gap(v,9);
+    v.addView(text("Recorded financial and stock movements through "+month,12,GRAY,false));gap(v,11);
+    v.addView(text("Collections "+rupee(recordedIn)+"  ·  Expenses "+rupee(recordedOut)+
+     "  ·  Usage "+recordedUsed+" shuttles",13,GREEN,true));gap(v,12);
+    v.addView(text(drift,12,drift.startsWith("WARNING")?0xFF9F383A:GREEN,true));gap(v,13);
+    int start=Math.max(0,data.size()-12);
+    for(int i=start;i<data.size();i++){
+     PremiumV26Analytics.Month r=data.get(i);
+     LinearLayout item=col();item.addView(text(r.month+"    In "+rupee(r.collections)+"  ·  Out "+rupee(r.expenses),12,DARK,true));gap(item,6);
+     ProgressBar a=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+     a.setMax(1000);a.setProgress((int)Math.min(1000,r.collections*1000.0/scale));a.setProgressTintList(android.content.res.ColorStateList.valueOf(GREEN));
+     item.addView(a,fill());gap(item,3);
+     ProgressBar b=new ProgressBar(this,null,android.R.attr.progressBarStyleHorizontal);
+     b.setMax(1000);b.setProgress((int)Math.min(1000,r.expenses*1000.0/scale));b.setProgressTintList(android.content.res.ColorStateList.valueOf(0xFFC58E50));
+     item.addView(b,fill());gap(item,3);
+     item.addView(text("Closing "+rupee(r.closing)+" · Difference "+rupee(r.difference)+
+       " · Used "+r.usage+" / acquired "+r.acquired+" shuttles",10,GRAY,false));
+     panel(v,item);
+    }
+    v.addView(text("Green bar = recorded collections; amber = recorded expenditure. Zero is not imputed when data are missing.",11,GRAY,false));gap(v,13);
+    v.addView(button("Share independent A4 dashboard PDF",()->sharePdf("Premium_Dashboard_"+month+".pdf",()->PremiumV26Analytics.pdf(this,data,month))));gap(v,9);
+    v.addView(button("Export verified monthly CSV",()->shareAnalyticsCsv(data,month)));
+    ScrollView scroll=new ScrollView(this);scroll.addView(v);
+    new AlertDialog.Builder(this).setView(scroll).setPositiveButton("Close",null).show();
+   });
+  });
+ }
+ private void shareAnalyticsCsv(List<PremiumV26Analytics.Month> data,String month){
+  background(()->{
+   File file=new File(getCacheDir(),"Premium_Dashboard_"+month+".csv");
+   try(OutputStream out=new FileOutputStream(file)){
+    out.write(PremiumV26Analytics.csv(data).getBytes(StandardCharsets.UTF_8));
+   }
+   runOnUiThread(()->{
+    try{
+     Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",file);
+     Intent share=new Intent(Intent.ACTION_SEND);share.setType("text/csv");
+     share.putExtra(Intent.EXTRA_STREAM,uri);share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+     startActivity(Intent.createChooser(share,"Save or share verified dashboard CSV"));
+    }catch(Exception ex){error(new IOException("Could not share monthly CSV: "+ex.getMessage()));}
+   });
+  });
+ }
+ private void exportMemberReceiptsZip(Member member){
+  background(()->{
+   requireImportedLedger();
+   List<Contribution> payments=database.dao().contributions();
+   List<Contribution> matches=new ArrayList<>();
+   for(Contribution p:payments)if(member.id.equals(p.memberId)&&"cash".equals(p.kind)&&p.amount>0)
+    matches.add(p);
+   if(matches.isEmpty())throw new IllegalArgumentException("No recorded cash receipt PDFs for this member");
+   if(matches.size()>400)throw new IllegalArgumentException("Please export a smaller range of receipts");
+   File zip=new File(getCacheDir(),"Member_Receipts_"+member.id.replaceAll("[^A-Za-z0-9_-]","_")+".zip");
+   try(java.util.zip.ZipOutputStream output=new java.util.zip.ZipOutputStream(new FileOutputStream(zip))){
+    int n=0;byte[] buffer=new byte[16384];
+    for(Contribution payment:matches){
+     File pdf=renderCashReceipt(member,payment);
+     if(pdf==null||pdf.length()<100)throw new IOException("Receipt generation failed for "+payment.id);
+     String name=String.format(Locale.ROOT,"%03d_%s_%s.pdf",++n,payment.feeMonth,payment.id.replaceAll("[^A-Za-z0-9_-]","_"));
+     output.putNextEntry(new java.util.zip.ZipEntry(name));
+     try(InputStream input=new FileInputStream(pdf)){
+      int read;while((read=input.read(buffer))!=-1)output.write(buffer,0,read);
+     }
+     output.closeEntry();
+    }
+   }
+   runOnUiThread(()->{
+    try{
+     Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",zip);
+     Intent share=new Intent(Intent.ACTION_SEND);share.setType("application/zip");
+     share.putExtra(Intent.EXTRA_STREAM,uri);share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+     startActivity(Intent.createChooser(share,"Save or share original-status receipt bundle"));
+    }catch(Exception ex){error(new IOException("Could not share receipt ZIP: "+ex.getMessage()));}
+   });
+  });
+ }
+
  private void showReports(){title("Reports","Your club finances, beautifully presented");
     reportTile("▣","v26 EXECUTIVE DASHBOARD","View verified monthly cash, expenses, shuttle usage and unresolved differences",this::showExecutiveDashboard);
     reportTile("◎","MONTHLY FEES & DUES","Configure effective fees, inspect arrears and record audited concessions",this::showFeeCentre);
