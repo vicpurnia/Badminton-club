@@ -1771,9 +1771,12 @@ public final class MainActivity extends Activity {
    List<Contribution> feePayments=dao.contributions();
    List<PremiumV26State.FeePolicy> monthPolicies=PremiumV26State.policies(
     meta.inventoryStockJson,knownMembers());
-   int feeConfigured=0,feeUnknown=0,feeUnpaid=0;
+   int feeConfigured=0,feeUnknown=0,feeUnpaid=0,feeNotDue=0;
    long billedUnpaid=0;
    for(Member member:dao.members()){
+    if(!PremiumV26State.billableMonth(meta.inventoryStockJson,member.id,month)){
+     feeNotDue++;continue;
+    }
     long rate=PremiumV26State.rateFor(monthPolicies,member.id,month);
     if(rate<0){feeUnknown++;continue;}
     feeConfigured++;
@@ -1781,7 +1784,8 @@ public final class MainActivity extends Activity {
      meta.inventoryStockJson,member.id,month,month,feePayments);
     if(dues.arrears>0){feeUnpaid++;billedUnpaid=Math.addExact(billedUnpaid,dues.arrears);}
    }
-   final int configuredCount=feeConfigured,unconfiguredCount=feeUnknown,unpaidMembers=feeUnpaid;
+   final int configuredCount=feeConfigured,unconfiguredCount=feeUnknown,
+    unpaidMembers=feeUnpaid,notDueMembers=feeNotDue;
    final long unpaidAmount=billedUnpaid;
    runOnUiThread(()->{
     Dialog dialog=new Dialog(this);
@@ -1794,8 +1798,8 @@ public final class MainActivity extends Activity {
     body.addView(text("Expenses: "+rupee(summary.expenses),14,DARK,false));gap(body,8);
     body.addView(text("Closing balance: "+rupee(summary.closing),18,GREEN,true));gap(body,10);
     body.addView(text("FEE REGISTER PRE-CLOSE REVIEW",11,GREEN,true));gap(body,6);
-    body.addView(text("Fee rules available for "+configuredCount+" member(s); "+
-      unconfiguredCount+" member(s) have no configured fee.",12,GRAY,false));gap(body,6);
+    body.addView(text("Assessed: "+configuredCount+" member(s) · Not due: "+notDueMembers+
+      " · Fee not configured: "+unconfiguredCount,12,GRAY,false));gap(body,6);
     body.addView(text("Unpaid or partly paid: "+unpaidMembers+" member(s) · "+
       rupee(unpaidAmount)+" in assessed dues. Unpaid dues are NOT cash received.",
       12,unpaidMembers>0?0xFF9F6B18:GRAY,true));gap(body,11);
