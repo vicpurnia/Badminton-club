@@ -1497,6 +1497,112 @@ public final class MainActivity extends Activity {
    });
   });
  }
+
+ private void openMonthEndReview(String chosenMonth){
+  background(()->{
+   requireImportedLedger();
+   String month=MigrationCodec.ym(chosenMonth);
+   LedgerDao dao=database.dao();
+   LedgerMeta meta=dao.meta();
+   ReportMath.Result row=null;
+   for(ReportMath.Result item:ReportMath.monthly(dao,month))if(month.equals(item.month)){row=item;break;}
+   if(row==null)throw new IllegalArgumentException("The month is earlier than ledger opening.");
+   final ReportMath.Result summary=row;
+   final MonthlyCloseV258.MonthState state=MonthlyCloseV258.read(meta.inventoryStockJson).get(month);
+   final boolean closed=state!=null&&state.closed();
+   runOnUiThread(()->{
+    Dialog dialog=new Dialog(this);
+    LinearLayout body=col();body.setBackground(bg(Color.WHITE,24));pad(body,21,20);
+    body.addView(text("Month-end financial review",21,DARK,true));gap(body,7);
+    body.addView(text(month+" · "+(closed?"CLOSED / AUDITED":"OPEN / NOT CLOSED"),13,GREEN,true));gap(body,14);
+    body.addView(text("Opening balance: "+rupee(summary.opening),14,DARK,false));gap(body,8);
+    body.addView(text("Official collections: "+rupee(summary.collections),14,DARK,false));gap(body,8);
+    body.addView(text("Member cash entries: "+rupee(summary.memberEntries),14,DARK,false));gap(body,8);
+    body.addView(text("Expenses: "+rupee(summary.expenses),14,DARK,false));gap(body,8);
+    body.addView(text("Closing balance: "+rupee(summary.closing),18,GREEN,true));gap(body,10);
+    body.addView(text(summary.difference==0?"Official/member sums reconcile.":
+     "UNRESOLVED DIFFERENCE: "+rupee(summary.difference)+
+      ". Closing records this outstanding difference; it does NOT resolve it.",
+     12,summary.difference==0?GRAY:0xFF9F383A,true));gap(body,14);
+    body.addView(button("Share A4 landscape review",()->{
+     dialog.dismiss();
+     sharePdf("Month_End_Review_"+month+".pdf",
+      ()->MonthlyReviewPdfV258.make(this,database.dao(),month));
+    }));gap(body,8);
+    body.addView(button("Save A4 landscape review PDF",()->{
+     dialog.dismiss();
+     savePdf("Month_End_Review_"+month+".pdf",
+      ()->MonthlyReviewPdfV258.make(this,database.dao(),month));
+    }));gap(body,8);
+    String today=new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new Date());
+    if(closed){
+     body.addView(button("Reopen this month with an audit reason",()->{
+      dialog.dismiss();
+      askMonthCloseReason(month,"REOPEN",summary);
+     }));
+    }else if(month.compareTo(today)<0){
+     body.addView(button("Close completed month with audit",()->{
+      dialog.dismiss();
+      askMonthCloseReason(month,"CLOSE",summary);
+     }));
+    }else{
+     body.addView(text("Only completed calendar months may be formally closed. The current month remains open.",12,GRAY,false));
+    }
+    gap(body,10);
+    body.addView(text("Closing prevents new payments, refunds, purchase changes and recorded stock entries for this month until it is reopened. Original ledger history remains intact.",11,GRAY,false));gap(body,14);
+    body.addView(inlineButton("Back to Reports",GREEN,dialog::dismiss));
+    ScrollView scroll=new ScrollView(this);scroll.addView(body);
+    dialog.setContentView(scroll);dialog.show();
+    Window window=dialog.getWindow();
+    if(window!=null){window.setBackgroundDrawableResource(android.R.color.transparent);
+     window.setGravity(Gravity.BOTTOM);
+     window.setLayout(-1,Math.min(dp(730),(int)(getResources().getDisplayMetrics().heightPixels*.90f)));}
+   });
+  });
+ }
+ private void askMonthCloseReason(String month,String action,ReportMath.Result reviewed){
+  EditText note=new EditText(this);note.setMinLines(2);
+  note.setHint("Required: reason, reviewer, unresolved difference if any");
+  new AlertDialog.Builder(this).setTitle("CLOSE".equals(action)?"Confirm monthly closing":"Audited monthly reopening")
+   .setMessage("Month "+month+" · Closing "+rupee(reviewed.closing)+
+     "\nUnresolved difference "+rupee(reviewed.difference)+
+     "\n\nAn audit event will preserve this action and the reviewed totals. Enter a meaningful reason.")
+   .setView(note).setNegativeButton("Cancel",null)
+   .setPositiveButton("Confirm "+action,(d,w)->{
+    String reason=note.getText().toString().trim();
+    if(reason.length()<8||reason.length()>200){
+     error(new IllegalArgumentException("Enter an audit reason of 8-200 characters. No month status changed."));return;
+    }
+    background(()->{
+     database.runInTransaction(()->{
+      LedgerDao dao=database.dao();LedgerMeta live=dao.meta();
+      if(live==null)throw new IllegalStateException("No imported ledger");
+      ReportMath.Result now=null;
+      for(ReportMath.Result item:ReportMath.monthly(dao,month))if(month.equals(item.month)){now=item;break;}
+      if(now==null||now.opening!=reviewed.opening||now.collections!=reviewed.collections||
+         now.memberEntries!=reviewed.memberEntries||now.expenses!=reviewed.expenses||
+         now.closing!=reviewed.closing||now.difference!=reviewed.difference)
+       throw new IllegalStateException("Monthly finances changed during review. Reopen the review to verify fresh totals.");
+      String id="month-close-"+UUID.randomUUID(),at=new Date().toString();
+      String updated=MonthlyCloseV258.record(live.inventoryStockJson,month,action,reason,id,at,now);
+      if(dao.updateInventoryJson(updated)!=1)
+       throw new IllegalStateException("Month-close event could not be stored");
+      AuditEvent audit=new AuditEvent();audit.id=id;audit.createdAt=at;
+      audit.action="Month "+month+" "+action;
+      audit.details="Opening "+now.opening+"; receipts "+now.collections+"; expenditure "+
+       now.expenses+"; closing "+now.closing+"; difference "+now.difference+"; reason "+reason;
+      dao.audit(audit);
+     });
+     BackupGuardian.save(this,database,"month-"+action.toLowerCase(Locale.ROOT),true);
+     warnOnBackupFailure();
+     runOnUiThread(()->{
+      Toast.makeText(this,"Month "+month+" "+("CLOSE".equals(action)?"closed":"reopened"),Toast.LENGTH_LONG).show();
+      openMonthEndReview(month);
+     });
+    });
+   }).show();
+ }
+
  private void showReports(){title("Reports","Your club finances, beautifully presented");
    LinearLayout selector=col();selector.addView(text("REPORTING MONTH",11,GRAY,true));gap(selector,9);
    EditText month=new EditText(this);month.setSingleLine(true);month.setText(reportMonth);
@@ -1506,6 +1612,11 @@ public final class MainActivity extends Activity {
    pressable(month,()->chooseMonth(month.getText().toString(),v->{month.setText(v);reportMonth=v;}));
    selector.addView(month);panel(content,selector);gap(content,13);
    notice("Prevent portrait printouts", "Use Save A4 Landscape PDF or Print A4 Landscape below. Avoid printing a shared PDF through another viewer, which can scale it into portrait.");
+   gap(content,8);
+   sectionHeading("Month-end review","Cashbook, reconciliation, closing and controlled reopening");
+   reportTile("▤","MONTH-END FINANCIAL REVIEW","Review cash balances and generate a one-page A4 landscape PDF; close or reopen with an audit reason",
+    ()->{try{openMonthEndReview(MigrationCodec.ym(month.getText().toString().trim()));}catch(Exception ex){error(ex);}});
+
    notice("Financial correction audit","Previous cash payments can be corrected, canceled or marked refunded only through the Receipt Library. Corrections preserve the original entry, require a reason, and adjust reported balances. Imported 2025 period totals remain protected.");
 
    sectionHeading("Backup & recovery","Protect your ledger before changing phones or reinstalling");
