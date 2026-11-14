@@ -45,7 +45,22 @@ def tap(tab,expected):
     assert adb("shell","pidof",PKG).strip(),f"App process exited after {tab}"
     print(f"POPULATED-SYNTHETIC-NAV PASS: {tab} -> {expected}")
 
-assert "Overview" in labels(dump()),"Signed upgraded Home screen missing"
+home=set()
+for attempt in range(7):
+    home=labels(dump())
+    if "Overview" in home:
+        break
+    # A signed APK update may briefly leave Android's launcher or instrumentation
+    # on top of the activity. Explicit launch is harmless to the persisted ledger.
+    if attempt==1:
+        adb("shell","am","start","-W","-n",
+            PKG+"/com.vinayak.badminton.nativepreview.MainActivity")
+    time.sleep(2)
+else:
+    raise AssertionError(
+        "Signed upgraded Home screen unavailable after retries; UI labels="+
+        repr(sorted(home)[:60]))
+print("SIGNED-UPGRADE POPULATED HOME visible after launch")
 for tab,expected in [
     ("Members","Actual payments, assessed dues and immutable member histories"),
     ("Shuttles","Shuttle desk"),
