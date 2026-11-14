@@ -10,7 +10,13 @@ v24 stable builds can update that same app without repeating the import.
 BEFORE STARTING
 - Use a trusted Windows computer with internet access.
 - Install GitHub CLI: https://cli.github.com/
-- Install Android Studio or a Java 17+ JDK (for keytool).
+- The setup detects Java from JAVA_HOME, PATH, Android Studio, and common JDK folders.
+- If no JDK is installed, it offers an optional guided install of free Eclipse
+  Temurin 17 through Windows Package Manager (winget). You must type INSTALL
+  to approve it. You may instead install a JDK manually from:
+  https://adoptium.net/installation/
+- A new PowerShell window is needed after manual installation if Java was not
+  immediately detected. You do not need to restart the PC.
 - Open your own repository: https://github.com/vicpurnia/Badminton-club
 - Keep v23.2 installed on your Android phone.
 - Export v23.2 -> Reports -> Verified account export JSON.
@@ -18,6 +24,8 @@ BEFORE STARTING
 ONE-TIME SETUP
 1. Extract this ZIP to an ordinary folder on your Windows computer.
 2. Double-click START_HERE_STABLE_SIGNING.bat.
+   If Java is missing, type INSTALL and approve the Temurin JDK installer,
+   or install it yourself and reopen START_HERE_STABLE_SIGNING.bat.
 3. Sign into the GitHub account that controls vicpurnia/Badminton-club.
 4. Type CREATE only if you are setting up a NEW signing certificate.
 5. Enter and confirm a strong permanent password (at least 14 characters).
