@@ -62,9 +62,20 @@ adb shell am force-stop "$PKG" || true
 adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
 sleep 3
 adb shell pidof "$PKG" >/dev/null
-if adb logcat -d -v brief | grep -A 8 'FATAL EXCEPTION' | grep -q "$PKG";then
- echo "Android crash after in-place signed upgrade";exit 1;
+# Both instrumentation invocations above are mandatory pass/fail. The emulator
+# can transiently go offline when taking screenshots at shutdown; diagnostics are
+# best-effort and must not erase two independently passing persistence checks.
+if adb logcat -d -v brief > "$EVIDENCE/post-upgrade-logcat.txt" 2>/dev/null;then
+ if grep -A 8 'FATAL EXCEPTION' "$EVIDENCE/post-upgrade-logcat.txt" | grep -q "$PKG";then
+  echo "Android crash after in-place signed upgrade";exit 1;
+ fi
+else
+ echo "::warning::Emulator logcat unavailable after all persistence checks passed."
+ rm -f "$EVIDENCE/post-upgrade-logcat.txt"
 fi
-adb exec-out screencap -p > "$EVIDENCE/v26-synthetic-post-upgrade.png"
+if ! adb exec-out screencap -p > "$EVIDENCE/v26-synthetic-post-upgrade.png" 2>/dev/null;then
+ rm -f "$EVIDENCE/v26-synthetic-post-upgrade.png"
+ echo "::warning::Emulator screenshot unavailable; data-preservation checks passed."
+fi
 echo "SIGNED v25.9 -> v26.9, same-package in-place synthetic Room persistence PASSED."
 echo "Not a production ledger migration, actual real-phone testing, or restoration acceptance."
