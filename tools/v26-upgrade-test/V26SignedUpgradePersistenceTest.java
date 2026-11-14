@@ -20,6 +20,7 @@ public final class V26SignedUpgradePersistenceTest {
  private static final String DB_NAME="badminton_room_v18.db";
  private static final String MEMBER_ID="ci-upgrade-synthetic-member-20261114";
  private static final String PAYMENT_ID="pay-ci-upgrade-synthetic-20261114";
+ private static final String NONCASH_ID="ci-upgrade-feb-2026-donated-pack";
  private static final String EXPENSE_ID="ci-upgrade-synthetic-expense-20261114";
  private static final String USAGE_ID="ci-upgrade-synthetic-usage-20261114";
  private static final String MONTH="2026-08";
@@ -100,7 +101,7 @@ public final class V26SignedUpgradePersistenceTest {
   String exported=MigrationCodec.exportVerified(db);
   MigrationCodec.Preview preview=MigrationCodec.inspect(exported);
   assertEquals("Only synthetic member must be exported",1,preview.players);
-  assertEquals("Only synthetic payment must be exported",1,preview.payments);
+  assertEquals("Synthetic cash and February noncash pack must both be exported",2,preview.payments);
   assertEquals("Original historical legacy cash+noncash must be exported",2,
    preview.ledger.getJSONArray("legacy").length());
   java.io.File file=new java.io.File(context.getFilesDir(),JSON_FINGERPRINT_FILE);
@@ -175,6 +176,12 @@ public final class V26SignedUpgradePersistenceTest {
    c.receivedDate="2026-08-17";c.kind="cash";c.method="CI-only cash";
    c.amount=1379;c.approximate=false;c.historical=false;
    dao.insertPayment(c);
+   Contribution febDonation=new Contribution();
+   febDonation.id=NONCASH_ID;febDonation.memberId=MEMBER_ID;
+   febDonation.feeMonth="2026-02";febDonation.receivedDate="2026-02-01";
+   febDonation.kind="packs";febDonation.method="CI synthetic donated pack";
+   febDonation.amount=1L;febDonation.approximate=true;febDonation.historical=true;
+   dao.insertPayment(febDonation);
 
    Expense e=new Expense();
    e.id=EXPENSE_ID;e.month=MONTH;e.date="2026-08-19";
@@ -187,7 +194,7 @@ public final class V26SignedUpgradePersistenceTest {
    dao.insertStock(Collections.singletonList(u));
 
    assertEquals(1,dao.members().size());
-   assertEquals(1,dao.contributions().size());
+   assertEquals(2,dao.contributions().size());
    assertEquals(1,dao.expenses().size());
    assertEquals(1,dao.stockUsages().size());
 
@@ -215,7 +222,10 @@ public final class V26SignedUpgradePersistenceTest {
 
    MonthlyControl control=new MonthlyControl();
    control.month=MONTH;control.cash=1379L;control.memberCashAtImport=1379L;
-   dao.insertControls(Collections.singletonList(control));
+   MonthlyControl febDifference=new MonthlyControl();
+   febDifference.month="2026-02";febDifference.cash=1000L;
+   febDifference.memberCashAtImport=0L;
+   dao.insertControls(Arrays.asList(febDifference,control));
 
    LegacyEntry historical=new LegacyEntry();
    historical.key=LEGACY_KEY;historical.memberId=MEMBER_ID;
@@ -233,7 +243,7 @@ public final class V26SignedUpgradePersistenceTest {
    dao.audit(audit);
 
    assertNotNull(dao.meta());
-   assertEquals(1,dao.controls().size());
+   assertEquals(2,dao.controls().size());
    assertEquals(2,dao.legacy().size());
    assertEquals(1,queryCount(db,"audit_events"));
    preserveFingerprint(db);
@@ -253,8 +263,18 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(MEMBER_ID,m.id);
    assertEquals("CI Synthetic Member (no real club data)",m.name);
 
-   assertEquals("Cash row count after in-place signed upgrade",1,dao.contributions().size());
-   Contribution cash=dao.contributions().get(0);
+   assertEquals("Cash and noncash original entries survive",2,dao.contributions().size());
+   Contribution cash=null,donatedFeb=null;
+   for(Contribution entry:dao.contributions()){
+    if(PAYMENT_ID.equals(entry.id))cash=entry;
+    if(NONCASH_ID.equals(entry.id))donatedFeb=entry;
+   }
+   assertNotNull("Cash payment not found after upgrade",cash);
+   assertNotNull("February donated pack not found after upgrade",donatedFeb);
+   assertEquals("packs",donatedFeb.kind);
+   assertEquals("2026-02",donatedFeb.feeMonth);
+   assertEquals(1L,donatedFeb.amount);
+   assertTrue("February exact day is unknown, not invented",donatedFeb.approximate);
    assertEquals(PAYMENT_ID,cash.id);
    assertEquals(MEMBER_ID,cash.memberId);
    assertEquals(MONTH,cash.feeMonth);
@@ -285,10 +305,24 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals("CI Synthetic Badminton Club — no real data",meta.club);
    assertEquals("CI",meta.receiptPrefix);
    assertEquals(META_AUDIT,meta.inventoryStockJson);
-   assertEquals(1,dao.controls().size());
-   assertEquals(MONTH,dao.controls().get(0).month);
-   assertEquals(1379L,dao.controls().get(0).cash);
-   assertEquals(1379L,dao.controls().get(0).memberCashAtImport);
+   assertEquals(2,dao.controls().size());
+   boolean foundFeb=false,foundAug=false;
+   for(MonthlyControl c:dao.controls()){
+    if("2026-02".equals(c.month)){
+     foundFeb=true;
+     assertEquals("Unresolved February historical control must remain",1000L,c.cash);
+     assertEquals("Noncash pack cannot be counted as member cash",0L,c.memberCashAtImport);
+    }
+    if(MONTH.equals(c.month)){
+     foundAug=true;
+     assertEquals(1379L,c.cash);assertEquals(1379L,c.memberCashAtImport);
+    }
+   }
+   assertTrue("Both synthetic control months must survive",foundFeb&&foundAug);
+   MigrationCodec.Preview currentVerified=MigrationCodec.inspect(MigrationCodec.exportVerified(db));
+   assertTrue("The unresolved February INR 1,000 reconciliation must not be erased",
+    currentVerified.differences.containsKey("2026-02")&&
+    Math.abs(currentVerified.differences.get("2026-02"))==1000L);
    assertEquals(2,dao.legacy().size());
    long cashLegacy=0,noncashPacks=0;
    for(LegacyEntry old:dao.legacy()){
