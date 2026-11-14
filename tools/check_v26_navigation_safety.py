@@ -59,5 +59,11 @@ assert "zip.delete(); // Never leave a broken ZIP" in source
 
 recovery = Path("src/premium/v26_9/BackupRecoveryV259.java").read_text(encoding="utf-8")
 assert "MigrationCodec.canonical(allBefore).equals(MigrationCodec.canonical(allAfter))" in recovery
+assert "PremiumV26BackupCompare.compare(current.ledger,result.ledger).summary()" in source
+comparison = Path("src/premium/v26_9/PremiumV26BackupCompare.java").read_text(encoding="utf-8")
+assert "TreeSet<String> names" in comparison
+assert "MigrationCodec.canonical(current)" in comparison
+assert "MigrationCodec.canonical(backup)" in comparison
+assert "No records were changed." in comparison
 
 print("v26 navigation / chronological closing / payment replay / receipt ZIP / full restore-metadata safety: PASS")
