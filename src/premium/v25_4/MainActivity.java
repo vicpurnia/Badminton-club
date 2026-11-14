@@ -458,11 +458,148 @@ public final class MainActivity extends Activity {
   sharePdf("Historical_Statement_"+member.id+"_"+historical.period+".pdf",
    ()->HistoricalReceiptsV253.legacy(this,member,historical,database.dao().meta()));
  }
+
+ private static final class ReceiptIndexLine {
+  final Member member;
+  final Contribution payment;
+  final LegacyEntry historical;
+  ReceiptIndexLine(Member m,Contribution c,LegacyEntry e){
+   member=m;payment=c;historical=e;
+  }
+  boolean isHistorical(){return historical!=null;}
+  String period(){return isHistorical()?(historical.period==null?"Unknown period":historical.period):
+    (payment.feeMonth==null?"Unknown month":payment.feeMonth);}
+  long amount(){return isHistorical()?historical.amount:payment.amount;}
+ }
+ private void showReceiptLibrary(){
+  title("Receipt Library","Search existing cash payments across every month");
+  content.addView(button("‹ Back to Collect",this::showPayments),fill());gap(content,12);
+  notice("Reissue, not a new collection","Sharing or saving a PDF does not add a payment. Imported historical 2025 period totals are shared as statements; missing dates or methods are not invented.");
+  LinearLayout filterCard=col();
+  filterCard.addView(text("SEARCH MEMBER, PERIOD OR AMOUNT",11,GRAY,true));gap(filterCard,9);
+  EditText search=new EditText(this);search.setSingleLine(true);search.setTextSize(15);
+  search.setHint("Member name, 2026-02, FM25, ₹ amount");
+  search.setBackground(border(LIGHT,LINE,12));pad(search,14,12);
+  filterCard.addView(search);gap(filterCard,12);
+  LinearLayout filters=row();
+  filterCard.addView(filters);panel(content,filterCard);
+  TextView count=text("Reading recorded payments…",12,GRAY,false);
+  content.addView(count);gap(content,9);
+  LinearLayout results=col();content.addView(results);
+  background(()->{
+   requireImportedLedger();
+   LedgerDao dao=database.dao();
+   Map<String,Member> members=new HashMap<>();
+   for(Member m:dao.members())members.put(m.id,m);
+   ArrayList<ReceiptIndexLine> all=new ArrayList<>();
+   for(Contribution c:dao.contributions()){
+    Member m=members.get(c.memberId);
+    if(m!=null&&"cash".equals(c.kind)&&c.amount>0)all.add(new ReceiptIndexLine(m,c,null));
+   }
+   for(LegacyEntry item:dao.legacy()){
+    Member m=members.get(item.memberId);
+    if(m!=null&&"cash".equals(item.kind)&&item.amount>0)all.add(new ReceiptIndexLine(m,null,item));
+   }
+   all.sort((a,b)->{
+    if(a.isHistorical()!=b.isHistorical())return a.isHistorical()?1:-1;
+    if(!a.isHistorical()){
+     int byMonth=b.period().compareTo(a.period());
+     if(byMonth!=0)return byMonth;
+     String aDate=a.payment.receivedDate==null?"":a.payment.receivedDate;
+     String bDate=b.payment.receivedDate==null?"":b.payment.receivedDate;
+     return bDate.compareTo(aDate);
+    }
+    return 0; // Preserve original order for archive periods without known calendar dates.
+   });
+   runOnUiThread(()->{
+    final String[] mode={"All"};
+    final int[] shownLimit={25};
+    final Runnable[] repaint=new Runnable[1];
+    repaint[0]=()->{
+     results.removeAllViews();
+     String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);
+     int matches=0,rendered=0,recorded=0,archived=0;
+     for(ReceiptIndexLine item:all){
+      if(item.isHistorical())archived++;else recorded++;
+      if("Recorded".equals(mode[0])&&item.isHistorical())continue;
+      if("Historical".equals(mode[0])&&!item.isHistorical())continue;
+      String haystack=(item.member.name+" "+item.period()+" "+item.amount()+
+       " "+(item.payment==null?"":item.payment.id)).toLowerCase(Locale.ROOT);
+      if(!query.isEmpty()&&!haystack.contains(query))continue;
+      matches++;
+      if(rendered>=shownLimit[0])continue;
+      rendered++;
+      LinearLayout card=col();
+      LinearLayout main=row();
+      main.addView(avatar(item.member.name));
+      LinearLayout labels=col();pad(labels,11,0);
+      labels.addView(text(item.member.name,15,DARK,true));gap(labels,4);
+      String period=item.period();
+      String detail;
+      if(item.isHistorical()){
+       detail="Archived period "+period+" · exact payment date unavailable";
+      }else{
+       Contribution c=item.payment;
+       boolean dateKnown=!c.approximate&&c.receivedDate!=null&&!c.receivedDate.isEmpty();
+       detail="Fee month "+period+" · "+(dateKnown?c.receivedDate:"exact payment date unavailable");
+      }
+      labels.addView(text(detail,11,GRAY,false));
+      main.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+      card.addView(main);gap(card,11);
+      LinearLayout money=row();
+      money.addView(text(item.isHistorical()?"Historical contribution statement":"Previously recorded payment",11,GRAY,false),
+        new LinearLayout.LayoutParams(0,-2,1));
+      money.addView(text(rupee(item.amount()),16,GREEN,true));
+      card.addView(money);gap(card,11);
+      LinearLayout actions=row();
+      if(item.isHistorical()){
+       actions.addView(inlineButton("Share statement",GREEN,()->shareHistoricalStatement(item.member,item.historical)),
+        new LinearLayout.LayoutParams(0,-2,1));
+       actions.addView(inlineButton("Save PDF",GREEN,()->savePdf(
+        "Historical_Statement_"+item.member.id+"_"+item.period()+".pdf",
+        ()->HistoricalReceiptsV253.legacy(this,item.member,item.historical,database.dao().meta()))),
+        new LinearLayout.LayoutParams(0,-2,1));
+      }else{
+       actions.addView(inlineButton("Share receipt",GREEN,()->shareRecordedReceipt(item.member,item.payment)),
+        new LinearLayout.LayoutParams(0,-2,1));
+       actions.addView(inlineButton("Save PDF",GREEN,()->savePdf(
+        "Recorded_Receipt_"+item.payment.id+".pdf",
+        ()->HistoricalReceiptsV253.payment(this,item.member,item.payment,database.dao().meta()))),
+        new LinearLayout.LayoutParams(0,-2,1));
+      }
+      card.addView(actions);panel(results,card);
+     }
+     count.setText("Matching cash records: "+matches+" · Showing "+rendered+
+      " · Recorded entries "+recorded+" · Archived periods "+archived);
+     if(matches==0)panel(results,blockHeader("No matching cash records","Try a member name or period. Donated shuttle packs are intentionally excluded."));
+     if(matches>shownLimit[0]){
+      results.addView(button("Show next 25 receipts",()->{shownLimit[0]+=25;repaint[0].run();}),fill());
+     }
+    };
+    for(String option:new String[]{"All","Recorded","Historical"}){
+     TextView chip=pill(option,GREEN,PALE);
+     filters.addView(chip,new LinearLayout.LayoutParams(0,-2,1));
+     pressable(chip,()->{
+      mode[0]=option;shownLimit[0]=25;repaint[0].run();
+     });
+    }
+    search.addTextChangedListener(new android.text.TextWatcher(){
+     public void beforeTextChanged(CharSequence v,int start,int count,int after){}
+     public void onTextChanged(CharSequence value,int start,int before,int count){
+      shownLimit[0]=25;repaint[0].run();
+     }
+     public void afterTextChanged(android.text.Editable editable){}
+    });
+    repaint[0].run();
+   });
+  });
+ }
+
  private void showPayments(){title("Collect fees","Simple, quick and ready to share");monthPicker();
   LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Collect ₹2,000",()->openPayment(null)));gap(headline,9);
-  headline.addView(button("▤  Share previous paid receipt",()->selectTab("Members")));
+  headline.addView(button("▤  Find or share any past receipt",this::showReceiptLibrary));
   content.addView(headline);gap(content,16);
-  notice("Previously paid?", "Open Members, select the player and share any recorded payment. Imported 2025 periods have Historical Contribution Statements rather than newly dated receipts.");
+  notice("Previously paid?", "Use the Receipt Library to search all recorded months by member and share or save the PDF. Imported 2025 period totals are labeled Historical Contribution Statements.");
   sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));final String viewedMonth=reportMonth;
   background(()->{List<Contribution> rows=database.dao().contributions();Map<String,Member> names=new HashMap<>();for(Member m:database.dao().members())names.put(m.id,m);runOnUiThread(()->{int n=0;for(int i=rows.size()-1;i>=0;i--){Contribution c=rows.get(i);if("packs".equals(c.kind)||!viewedMonth.equals(c.feeMonth))continue;Member m=names.get(c.memberId);if(m==null)continue;
    LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);right.addView(text(rupee(c.amount),15,GREEN,true));gap(right,6);right.addView(inlineButton("Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
