@@ -152,7 +152,7 @@ public final class MainActivity extends Activity {
     LinearLayout header=row();header.addView(text("CLUB BALANCE",11,0xFFD7F3E0,true),new LinearLayout.LayoutParams(0,-2,1));header.addView(pill(dateLabel(display),Color.WHITE,0xFF2C735B));card.addView(header);gap(card,14);
     card.addView(text(rupee(latest.closing),39,Color.WHITE,true));gap(card,7);card.addView(text((latest.closing>=0?"● Credit available":"● Balance in deficit")+"  ·  Offline ledger",12,0xFFD2E7DA,false));gap(card,22);
     View divider=new View(this);divider.setBackgroundColor(0xFF376C5B);card.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));gap(card,16);
-    LinearLayout totals=row();LinearLayout col1=col();col1.addView(text("COLLECTED",10,0xFFB6D4C3,true));gap(col1,7);col1.addView(text(rupee(latest.collections),20,Color.WHITE,true));LinearLayout col2=col();col2.addView(text("EXPENSES",10,0xFFB6D4C3,true));gap(col2,7);col2.addView(text(rupee(latest.expenses),20,Color.WHITE,true));totals.addView(col1,new LinearLayout.LayoutParams(0,-2,1));totals.addView(col2,new LinearLayout.LayoutParams(0,-2,1));card.addView(totals);content.addView(card,fill());gap(content,14);
+    LinearLayout totals=row();LinearLayout col1=col();col1.addView(text("FOR FEE PERIOD",10,0xFFB6D4C3,true));gap(col1,7);col1.addView(text(rupee(latest.collections),20,Color.WHITE,true));LinearLayout col2=col();col2.addView(text("EXPENSES",10,0xFFB6D4C3,true));gap(col2,7);col2.addView(text(rupee(latest.expenses),20,Color.WHITE,true));totals.addView(col1,new LinearLayout.LayoutParams(0,-2,1));totals.addView(col2,new LinearLayout.LayoutParams(0,-2,1));card.addView(totals);content.addView(card,fill());gap(content,14);
     LinearLayout stats=row();LinearLayout a=metric("Players",String.valueOf(members.size()),"♙");LinearLayout b=metric("Receipts",String.valueOf(paymentCount),"▤");LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1);half.setMargins(0,0,dp(6),0);stats.addView(a,half);LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(0,-2,1);other.setMargins(dp(6),0,0,0);stats.addView(b,other);content.addView(stats);gap(content,15);
     sectionHeading("Backup health","Verified copies help protect your records");
     notice("Your backup status",BackupGuardian.status(this));
@@ -2119,8 +2119,8 @@ public final class MainActivity extends Activity {
    runOnUiThread(()->{
     LinearLayout v=col();pad(v,18,17);
     v.addView(text("Executive Dashboard",23,DARK,true));gap(v,9);
-    v.addView(text("Recorded financial and stock movements through "+month,12,GRAY,false));gap(v,11);
-    v.addView(text("Collections "+rupee(recordedIn)+"  ·  Expenses "+rupee(recordedOut)+
+    v.addView(text("Verified amounts assigned to fee periods through "+month+"; cash receipt dates can differ.",12,GRAY,false));gap(v,11);
+    v.addView(text("Recognized contributions "+rupee(recordedIn)+"  ·  Expenses "+rupee(recordedOut)+
      "  ·  Usage "+recordedUsed+" shuttles",13,GREEN,true));gap(v,12);
     v.addView(text(drift,12,drift.startsWith("WARNING")?0xFF9F383A:GREEN,true));gap(v,13);
     int start=Math.max(0,data.size()-12);
@@ -2138,12 +2138,12 @@ public final class MainActivity extends Activity {
        10,GRAY,false));
      panel(v,item);
     }
-    v.addView(text("Green bar = recorded collections; amber = recorded expenditure. Contributors count only members with a positive recognized cash contribution, not attendance.",11,GRAY,false));gap(v,13);
+    v.addView(text("Green = recognized contributions assigned to fee periods; amber = recorded expenditure. Contributor count is not attendance; late payments can have different receipt dates.",11,GRAY,false));gap(v,13);
     v.addView(text("YEARLY FINANCIAL & STOCK SUMMARY",12,GREEN,true));gap(v,8);
     for(PremiumV26Analytics.Year yr:PremiumV26Analytics.annual(data)){
      LinearLayout group=col();
      group.addView(text(yr.year+" · "+yr.reportedMonths+" recorded month(s)",16,DARK,true));gap(group,7);
-     group.addView(text("Cash received "+rupee(yr.received)+
+     group.addView(text("Recognized by fee period "+rupee(yr.received)+
       " · Expenditure "+rupee(yr.spent)+" · Final closing "+rupee(yr.closing),12,GREEN,true));gap(group,6);
      group.addView(text("Unresolved difference "+rupee(yr.unresolved)+
       " · Used "+yr.shuttles+" · Acquired "+yr.acquired+" shuttles",
@@ -2331,7 +2331,7 @@ public final class MainActivity extends Activity {
  }
 
  private void showReports(){title("Reports","Your club finances, beautifully presented");
-    reportTile("▣","v26 EXECUTIVE DASHBOARD","View verified monthly cash, expenses, shuttle usage and unresolved differences",this::showExecutiveDashboard);
+    reportTile("▣","v26 EXECUTIVE DASHBOARD","Review fee-period cash allocations, expenses, stock usage and unresolved differences",this::showExecutiveDashboard);
     reportTile("◎","MONTHLY FEES & DUES","Configure effective fees, inspect arrears and record audited concessions",this::showFeeCentre);
     reportTile("🔒","ENCRYPTED BACKUP · OPTIONAL","Password-protected export for offline transfer to a new phone",this::startEncryptedExport);
     reportTile("✓","TEST / IMPORT ENCRYPTED BACKUP","Decrypt, verify and dry-run first; import only into an empty app",this::chooseEncryptedBackup);
