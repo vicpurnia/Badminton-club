@@ -73,7 +73,7 @@ public final class V26CoreSmoke {
   PremiumV26State.validate(data,known);
 
   // Encryption test uses a synthetic verified ledger and never touches a real database.
-  String json="{\\"verified\\":true,\\"synthetic\\":\\"fee-1\\"}";
+  String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
   String encrypted=PremiumBackupCrypto.encrypt(json,password);
   yes(!encrypted.contains("fee-1"),"Ciphertext must not expose a sample member payment");
@@ -104,7 +104,7 @@ final class MigrationCodec {
  }
  static String canonical(JSONObject j){return j.toString();}
  static Object inspect(String s){
-  if(s==null||!s.contains("\\"verified\\":true"))
+  if(s==null||!s.contains("\"verified\":true"))
    throw new IllegalArgumentException("Synthetic verified JSON required");
   return s;
  }
