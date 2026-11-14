@@ -318,7 +318,12 @@ public final class MainActivity extends Activity {
    MigrationCodec.Preview result=MigrationCodec.inspect(out.toString(StandardCharsets.UTF_8.name()));
    if(database.dao().metaCount()>0)throw new IllegalStateException("The native ledger already contains data. Replacement is blocked for your safety.");pendingImport=result;
    runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Verified ledger ready")
-    .setMessage("SHA-256 verified\n\n"+result.players+" members · "+result.payments+" payments · "+result.expenses+" expenses · "+result.stockUsage+" usage entries\nOpening +rupee(result.openingBalance)+"\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth+"\n\nHistorical differences: "+result.differences.size()+"\n\nImport into this EMPTY app? Your original app will remain unchanged.")
+    .setMessage("SHA-256 verified\n\n"+result.players+" members · "+result.payments+
+      " payments · "+result.expenses+" expenses · "+result.stockUsage+" usage entries"+
+      "\nOpening "+rupee(result.openingBalance)+
+      "\nClosing "+rupee(result.closingBalance)+" through "+result.lastMonth+
+      "\n\nHistorical differences: "+result.differences.size()+
+      "\n\nImport into this EMPTY app? Your original app will remain unchanged.")
     .setNegativeButton("Cancel",(d,w)->pendingImport=null)
     .setPositiveButton("Import securely",(d,w)->importPending()).show());
   });
