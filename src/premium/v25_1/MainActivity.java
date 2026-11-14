@@ -711,6 +711,79 @@ public final class MainActivity extends Activity {
    });
   });
  }
+
+ private void openShuttleUsage(){
+  Dialog dialog=new Dialog(this);
+  LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,22,24);
+  form.addView(text("Record shuttle usage",21,DARK,true));gap(form,8);
+  form.addView(text("Count individual shuttles used, not packs. This does not change club cash balances.",12,GRAY,false));gap(form,17);
+  form.addView(text("MONTH (YYYY-MM)",11,GRAY,true));gap(form,7);
+  EditText month=new EditText(this);month.setText(reportMonth);month.setSingleLine(true);
+  month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);form.addView(month);gap(form,14);
+  form.addView(text("ACTUAL USAGE DATE (OPTIONAL)",11,GRAY,true));gap(form,7);
+  EditText date=new EditText(this);date.setSingleLine(true);
+  date.setHint("YYYY-MM-DD · leave blank if unknown");
+  date.setBackground(border(LIGHT,LINE,12));pad(date,14,12);form.addView(date);gap(form,14);
+  form.addView(text("NUMBER OF INDIVIDUAL SHUTTLES",11,GRAY,true));gap(form,7);
+  EditText count=new EditText(this);count.setInputType(2);count.setText("1");
+  count.setBackground(border(LIGHT,LINE,12));pad(count,14,12);form.addView(count);gap(form,7);
+  LinearLayout shortcuts=row();
+  for(int q:new int[]{1,6,12}){
+   TextView chip=pill(q+" shuttle(s)",GREEN,PALE);
+   shortcuts.addView(chip,new LinearLayout.LayoutParams(0,-2,1));
+   pressable(chip,()->count.setText(String.valueOf(q)));
+  }
+  form.addView(shortcuts);gap(form,14);
+  form.addView(text("OPTIONAL NOTE",11,GRAY,true));gap(form,7);
+  EditText note=new EditText(this);note.setSingleLine(false);note.setMinLines(2);
+  note.setHint("e.g. weekend practice");
+  note.setBackground(border(LIGHT,LINE,12));pad(note,14,12);form.addView(note);gap(form,17);
+  form.addView(button("Review usage entry",()->{
+   try{
+    final String mm=MigrationCodec.ym(month.getText().toString().trim());
+    final String actual=checkedPurchaseDate(date.getText().toString(),mm);
+    final long qty=Long.parseLong(count.getText().toString().trim());
+    if(qty<1||qty>1000)throw new IllegalArgumentException("Enter 1 to 1,000 shuttles.");
+    final String details=note.getText().toString().trim();
+    if(details.length()>200)throw new IllegalArgumentException("Note must be 200 characters or fewer.");
+    String summary=qty+" individual shuttles used in "+mm
+     +"\nActual date: "+(actual.isEmpty()?"not recorded":actual)
+     +"\nNote: "+(details.isEmpty()?"none":details)
+     +"\n\nA new usage entry will be added. Cash balance is not affected.";
+    new AlertDialog.Builder(this).setTitle("Confirm shuttle usage")
+     .setMessage(summary).setNegativeButton("Keep editing",null)
+     .setPositiveButton("Record usage",(d,w)->{
+      dialog.dismiss();
+      background(()->{
+       StockUsage entry=new StockUsage();
+       entry.id="usage-"+UUID.randomUUID();entry.month=mm;
+       entry.date=actual;entry.shuttles=qty;entry.note=details;
+       database.runInTransaction(()->{
+        database.dao().insertStock(Collections.singletonList(entry));
+        AuditEvent audit=new AuditEvent();audit.id="audit-"+UUID.randomUUID();
+        audit.createdAt=new Date().toString();audit.action="Shuttle usage recorded";
+        audit.details=entry.id+" / "+qty+" individual shuttles / "+mm;
+        database.dao().audit(audit);
+       });
+       BackupGuardian.save(this,database,"shuttle-usage",true);
+       warnOnBackupFailure();
+       runOnUiThread(()->{
+        Toast.makeText(this,"Shuttle usage saved",Toast.LENGTH_LONG).show();
+        showExpenses();
+       });
+      });
+     }).show();
+   }catch(Exception ex){
+    error(new IllegalArgumentException("Check month, optional date, quantity (1-1000) and note (up to 200 characters)."));
+   }
+  }));
+  ScrollView scroll=new ScrollView(this);scroll.addView(form);
+  dialog.setContentView(scroll);dialog.show();
+  Window w=dialog.getWindow();
+  if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);
+   w.setGravity(Gravity.BOTTOM);w.setLayout(-1,-2);}
+ }
+
  private static boolean historicalDonationRecorded(LedgerDao dao){
   for(LegacyEntry item:dao.legacy())if("p11".equals(item.memberId)&&"2026-02".equals(item.period)&&"packs".equals(item.kind)&&item.amount>0)return true;
   for(Contribution item:dao.contributions())if("p11".equals(item.memberId)&&"2026-02".equals(item.feeMonth)&&"packs".equals(item.kind)&&item.amount>0)return true;
