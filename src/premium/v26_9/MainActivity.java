@@ -480,7 +480,9 @@ public final class MainActivity extends Activity {
    runOnUiThread(()->{
     LinearLayout body=col();pad(body,20,17);
     LinearLayout head=row();head.addView(avatar(m.name));
-    LinearLayout label=col();pad(label,12,0);label.addView(text(m.name,19,DARK,true));gap(label,5);
+    LinearLayout label=col();pad(label,12,0);String displayName=effectiveName(m,PremiumV26State.profiles(
+     database.dao().meta().inventoryStockJson,knownMembers()));
+    label.addView(text(displayName,19,DARK,true));gap(label,5);
     label.addView(text("Complete recorded member history",12,GRAY,false));
     head.addView(label);body.addView(head);gap(body,18);
     LinearLayout hero=col();hero.setBackground(gradient(GREEN,DARK,18));pad(hero,17,20);
@@ -994,6 +996,7 @@ public final class MainActivity extends Activity {
    InventoryCheckpoint.Config checkpoint=stockMeta==null?null:InventoryCheckpoint.read(stockMeta.inventoryStockJson);
    StockReconciliationV257.Position stockPosition=checkpoint==null?null:
       StockReconciliationV257.calculate(stockMeta.inventoryStockJson,selected,entries,contributions,issued);
+   long reorderAt=stockMeta==null?-1:PremiumV26State.reorderThreshold(stockMeta.inventoryStockJson);
    Map<String,String> names=new HashMap<>();
    for(Member person:database.dao().members())names.put(person.id,person.name);
    long spending=0,purchased=0,donated=0,legacyDonated=0,used=0,lifetimeUsed=0;
@@ -1041,6 +1044,10 @@ public final class MainActivity extends Activity {
      position.addView(metric("Remaining shuttles",remaining,"◉"),new LinearLayout.LayoutParams(0,-2,1));
      position.addView(metric("Pack size",checkpoint.perPack+" each","▤"),new LinearLayout.LayoutParams(0,-2,1));
      content.addView(position);gap(content,10);
+     if(reorderAt>=0&&stockPosition.remainingShuttles<reorderAt)
+      notice("LOW STOCK — PURCHASE REVIEW",
+       "Recorded balance "+stockPosition.remainingShuttles+" shuttles is below the configured reorder threshold of "+
+       reorderAt+". Check the physical stock before ordering; a warning is not an automatic purchase.");
      notice(stockPosition.remainingShuttles<0?"Recorded stock deficit":"Stock calculation",
       "Opening: "+checkpoint.openingShuttles+" individual shuttles"+
       "\nAcquired after count: "+stockPosition.acquiredPacks+" packs / "+stockPosition.acquiredShuttles+" individual shuttles"+
