@@ -502,13 +502,14 @@ public final class MainActivity extends Activity {
   final Member member;
   final Contribution payment;
   final LegacyEntry historical;
-  ReceiptIndexLine(Member m,Contribution c,LegacyEntry e){
-   member=m;payment=c;historical=e;
+  final CashCorrectionsV256.State correction;
+  ReceiptIndexLine(Member m,Contribution c,LegacyEntry e,CashCorrectionsV256.State state){
+   member=m;payment=c;historical=e;correction=state;
   }
   boolean isHistorical(){return historical!=null;}
   String period(){return isHistorical()?(historical.period==null?"Unknown period":historical.period):
     (payment.feeMonth==null?"Unknown month":payment.feeMonth);}
-  long amount(){return isHistorical()?historical.amount:payment.amount;}
+  long amount(){return isHistorical()?historical.amount:correction==null?payment.amount:correction.effective;}
  }
  private void showReceiptLibrary(){
   title("Receipt Library","Search existing cash payments across every month");
@@ -531,13 +532,16 @@ public final class MainActivity extends Activity {
    Map<String,Member> members=new HashMap<>();
    for(Member m:dao.members())members.put(m.id,m);
    ArrayList<ReceiptIndexLine> all=new ArrayList<>();
-   for(Contribution c:dao.contributions()){
+   List<Contribution> recorded=dao.contributions();
+   Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(
+     dao.meta().inventoryStockJson,recorded);
+   for(Contribution c:recorded){
     Member m=members.get(c.memberId);
-    if(m!=null&&"cash".equals(c.kind)&&c.amount>0)all.add(new ReceiptIndexLine(m,c,null));
+    if(m!=null&&"cash".equals(c.kind)&&c.amount>0)all.add(new ReceiptIndexLine(m,c,null,corrections.get(c.id)));
    }
    for(LegacyEntry item:dao.legacy()){
     Member m=members.get(item.memberId);
-    if(m!=null&&"cash".equals(item.kind)&&item.amount>0)all.add(new ReceiptIndexLine(m,null,item));
+    if(m!=null&&"cash".equals(item.kind)&&item.amount>0)all.add(new ReceiptIndexLine(m,null,item,null));
    }
    all.sort((a,b)->{
     if(a.isHistorical()!=b.isHistorical())return a.isHistorical()?1:-1;
@@ -582,15 +586,17 @@ public final class MainActivity extends Activity {
       }else{
        Contribution c=item.payment;
        boolean dateKnown=!c.approximate&&c.receivedDate!=null&&!c.receivedDate.isEmpty();
-       detail="Fee month "+period+" · "+(dateKnown?c.receivedDate:"exact payment date unavailable");
+       detail="Fee month "+period+" · "+(dateKnown?c.receivedDate:"exact payment date unavailable")+
+        (item.correction==null?"":item.correction.effective==0?" · CANCELED":
+          " · ADJUSTED / "+item.correction.action);
       }
       labels.addView(text(detail,11,GRAY,false));
       main.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
       card.addView(main);gap(card,11);
       LinearLayout money=row();
-      money.addView(text(item.isHistorical()?"Historical contribution statement":"Previously recorded payment",11,GRAY,false),
+      money.addView(text(item.isHistorical()?"Historical contribution statement":item.correction==null?"Previously recorded payment":item.amount()==0?"CANCELED record":"Corrected payment",11,GRAY,false),
         new LinearLayout.LayoutParams(0,-2,1));
-      money.addView(text(rupee(item.amount()),16,GREEN,true));
+      money.addView(text(rupee(item.amount()),16,item.amount()==0?GRAY:GREEN,true));
       card.addView(money);gap(card,11);
       LinearLayout actions=row();
       if(item.isHistorical()){
@@ -606,15 +612,20 @@ public final class MainActivity extends Activity {
       }else{
        actions.addView(inlineButton("Share",GREEN,()->shareRecordedReceipt(item.member,item.payment)),
         new LinearLayout.LayoutParams(0,-2,1));
-       actions.addView(inlineButton("Preview",GREEN,()->previewPdf(()->HistoricalReceiptsV253.payment(
-        this,item.member,item.payment,database.dao().meta()))),
+       actions.addView(inlineButton("Preview",GREEN,()->previewPdf(()->renderCashReceipt(item.member,item.payment))),
         new LinearLayout.LayoutParams(0,-2,1));
        actions.addView(inlineButton("Save PDF",GREEN,()->savePdf(
         "Recorded_Receipt_"+item.payment.id+".pdf",
-        ()->HistoricalReceiptsV253.payment(this,item.member,item.payment,database.dao().meta()))),
+        ()->renderCashReceipt(item.member,item.payment))),
         new LinearLayout.LayoutParams(0,-2,1));
       }
-      card.addView(actions);panel(results,card);
+      card.addView(actions);
+      if(!item.isHistorical()&&item.amount()>0){
+       gap(card,8);
+       card.addView(inlineButton("Correct payment / record refund / cancel",GREEN,
+         ()->openCashCorrection(item.member,item.payment)));
+      }
+      panel(results,card);
      }
      count.setText("Matching cash records: "+matches+" · Showing "+rendered+
       " · Recorded entries "+recorded+" · Archived periods "+archived);
