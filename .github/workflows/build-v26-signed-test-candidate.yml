@@ -327,6 +327,9 @@ jobs:
           grep -q 'currentScreen(screen,"Home",period)' src/premium/v26_9/MainActivity.java
           grep -q 'PremiumV26BackupCompare.compare(current.ledger,result.ledger)' src/premium/v26_9/MainActivity.java
           grep -q 'PremiumV26BackupCompare.java' src/premium/v26_9/patch_v26.py
+          grep -q 'sourceAuditPresent=state.has("nativeAuditHistory")' src/premium/v26_9/patch_v26.py
+          grep -q 'if(e.id.startsWith("import-"))continue;' src/premium/v26_9/patch_v26.py
+          grep -q 'PremiumV26BackupCompare.compare(original.ledger,restored.ledger)' src/premium/v26_9/BackupRecoveryV259.java
       - name: Require persistent private signing key
         shell: bash
         env:
