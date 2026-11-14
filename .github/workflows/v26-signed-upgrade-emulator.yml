@@ -13,6 +13,7 @@ on:
     branches: [dev/v26-0-to-26-9-20261114]
     paths:
       - '.github/workflows/v26-signed-upgrade-emulator.yml'
+      - 'tools/v26-upgrade-test/**'
   workflow_dispatch:
 
 permissions:
