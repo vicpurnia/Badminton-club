@@ -52,14 +52,14 @@ function Find-Keytool {
         return $found.Source
     }
     $direct = New-Object 'System.Collections.Generic.List[string]'
-    foreach ($home in @(
+    foreach ($jdkRoot in @(
         $env:JAVA_HOME,
         [Environment]::GetEnvironmentVariable("JAVA_HOME", "Machine"),
         [Environment]::GetEnvironmentVariable("JAVA_HOME", "User"),
         $env:JDK_HOME
     )) {
-        if (-not [string]::IsNullOrWhiteSpace($home)) {
-            $direct.Add((Join-Path $home "bin\keytool.exe"))
+        if (-not [string]::IsNullOrWhiteSpace($jdkRoot)) {
+            $direct.Add((Join-Path $jdkRoot "bin\keytool.exe"))
         }
     }
     $roots = New-Object 'System.Collections.Generic.List[string]'
