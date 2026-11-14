@@ -477,11 +477,12 @@ public final class MainActivity extends Activity {
    });
    ArrayList<LegacyEntry> historical=new ArrayList<>();
    for(LegacyEntry e:database.dao().legacy())if(m.id.equals(e.memberId))historical.add(e);
+   String displayName=effectiveName(m,PremiumV26State.profiles(
+    database.dao().meta().inventoryStockJson,knownMembers()));
    runOnUiThread(()->{
     LinearLayout body=col();pad(body,20,17);
     LinearLayout head=row();head.addView(avatar(m.name));
-    LinearLayout label=col();pad(label,12,0);String displayName=effectiveName(m,PremiumV26State.profiles(
-     database.dao().meta().inventoryStockJson,knownMembers()));
+    LinearLayout label=col();pad(label,12,0);
     label.addView(text(displayName,19,DARK,true));gap(label,5);
     label.addView(text("Complete recorded member history",12,GRAY,false));
     head.addView(label);body.addView(head);gap(body,18);
