@@ -122,8 +122,19 @@ final class PremiumV26State {
     if(!effective.isEmpty())MigrationCodec.ym(effective);
     if(name.isEmpty()||name.length()>100||contact.length()>80||joined.length()>10||notes.length()>400)
      throw new IllegalArgumentException("Profile field length out of bounds");
-    if(!joined.isEmpty()&&!joined.matches("\\d{4}-\\d{2}-\\d{2}"))
-     throw new IllegalArgumentException("Joining date must be YYYY-MM-DD");
+    if(!joined.isEmpty()){
+     if(!joined.matches("\\d{4}-\\d{2}-\\d{2}"))
+      throw new IllegalArgumentException("Joining date must be YYYY-MM-DD");
+     java.text.SimpleDateFormat parser=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT);
+     parser.setLenient(false);
+     try{
+      java.util.Date date=parser.parse(joined);
+      if(date==null||!joined.equals(parser.format(date)))
+       throw new IllegalArgumentException("Joining date must be a valid calendar day");
+     }catch(java.text.ParseException err){
+      throw new IllegalArgumentException("Joining date must be a valid calendar day",err);
+     }
+    }
     result.put(member,new Profile(member,name,contact,joined,notes,e.getBoolean("active"),at));
    }
    return result;
