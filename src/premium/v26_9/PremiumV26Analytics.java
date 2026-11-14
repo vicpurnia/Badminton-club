@@ -92,7 +92,9 @@ final class PremiumV26Analytics {
   c.drawText("Usage and acquisitions are recorded quantities only. Unknown historical quantities are not estimated.",36,561,p);
   c.drawText("Any unresolved reconciliation difference remains visible and is not silently settled.",36,576,p);
   document.finishPage(page);
-  File file=new File(context.getCacheDir(),"Premium_Analytics_"+through+".pdf");
+  File dir=new File(context.getCacheDir(),"pdfs");
+  if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Shared PDF folder unavailable");
+  File file=new File(dir,"Premium_Analytics_"+through+".pdf");
   try(FileOutputStream out=new FileOutputStream(file)){document.writeTo(out);}
   finally{document.close();}
   return file;
