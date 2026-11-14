@@ -327,6 +327,20 @@ jobs:
           print("\\n".join(x.strip() for x in dao.splitlines() if any(
             k in x.lower() for k in ["meta(", "insertmeta", "updateinventoryjson","insertcontrol","insertlegacy"])))
           PY
+      - name: Inspect public-safe verified JSON codec source for complete historical migration tests
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MigrationCodec.java").read_text()
+          needles=["static String exportVerified(", "static Preview inspect(", "static void importChecked(", "static String canonical("]
+          for needle in needles:
+           start=s.find(needle)
+           if start<0:
+            print("NOT FOUND:",needle);continue
+           print("\\nVERIFIED CODEC METHOD:",needle)
+           print(s[start:start+4500])
+          PY
       - name: Regression-test shuttle stock arithmetic
         run: |
           mkdir -p "$RUNNER_TEMP/stock-tests"
