@@ -68,16 +68,16 @@ final class PremiumCashDateAudit {
    correctedCount,undatedOriginal,undatedEffective);
  }
  static String csv(Result review){
-  StringBuilder s=new StringBuilder("Receipt_Date_Month,Original_Recorded_Cash_INR,Currently_Recognized_Cash_INR,Exact_Dated_Payment_Entries,Corrected_Entries,Scope\\r\\n");
+  StringBuilder s=new StringBuilder("Receipt_Date_Month,Original_Recorded_Cash_INR,Currently_Recognized_Cash_INR,Exact_Dated_Payment_Entries,Corrected_Entries,Scope\r\n");
   for(Month row:review.months){
    s.append(row.month).append(',').append(row.originallyRecorded).append(',')
     .append(row.effectiveRecognized).append(',').append(row.entries)
-    .append(',').append(row.corrected).append(",RECORDED_DATE\\r\\n");
+    .append(',').append(row.corrected).append(",RECORDED_DATE\r\n");
   }
   s.append("DATE_UNAVAILABLE,").append(review.unknownOriginal).append(',')
    .append(review.unknownEffective).append(',').append(review.unknownDateEntries)
-   .append(",0,NOT_DISTRIBUTED_TO_MONTH\\r\\n");
-  s.append("NOTE,,,,,Current recognized values may reflect later corrections; this is not dated refund cash flow or a bank statement.\\r\\n");
+   .append(",0,NOT_DISTRIBUTED_TO_MONTH\r\n");
+  s.append("NOTE,,,,,Current recognized values may reflect later corrections; this is not dated refund cash flow or a bank statement.\r\n");
   return s.toString();
  }
 }
