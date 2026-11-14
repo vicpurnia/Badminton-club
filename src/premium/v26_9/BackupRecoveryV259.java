@@ -37,8 +37,13 @@ final class BackupRecoveryV259 {
    JSONObject after=restored.ledger.optJSONObject("inventoryStock");
    String beforeRaw=before==null?"{}":before.toString();
    String afterRaw=after==null?"{}":after.toString();
-   PremiumV26State.validate(beforeRaw,null);
-   PremiumV26State.validate(afterRaw,null);
+   Set<String> knownMembers=new HashSet<>();
+   for(Member member:dao.members()){
+    if(member.id==null||member.id.trim().isEmpty()||!knownMembers.add(member.id))
+     throw new IllegalStateException("Verified recovery contains invalid member identities");
+   }
+   PremiumV26State.validate(beforeRaw,knownMembers);
+   PremiumV26State.validate(afterRaw,knownMembers);
    String[] protectedKeys={
     "vinayakCashCorrectionsV1","vinayakPhysicalCountsV1","vinayakMonthlyCloseEventsV1",
     "vinayakFeePoliciesV26","vinayakFeeWaiversV26","vinayakMemberProfilesV26",
