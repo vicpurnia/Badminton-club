@@ -896,7 +896,7 @@ public final class MainActivity extends Activity {
  }
 
  private void showPayments(){title("Collect fees","Simple, quick and ready to share");monthPicker();
-  LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Collect ₹2,000",()->openPayment(null)));gap(headline,9);
+  LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Record cash actually received",()->openPayment(null)));gap(headline,9);
   headline.addView(button("▤  Find or share any past receipt",this::showReceiptLibrary));
   content.addView(headline);gap(content,16);
   notice("Previously paid?", "Use the Receipt Library to search all recorded months by member and share or save the PDF. Imported 2025 period totals are labeled Historical Contribution Statements.");
@@ -921,7 +921,7 @@ public final class MainActivity extends Activity {
    LinearLayout cap=row();LinearLayout headline=col();headline.addView(text("New contribution",22,DARK,true));gap(headline,5);headline.addView(text("Securely record and share",12,GRAY,false));cap.addView(headline,new LinearLayout.LayoutParams(0,-2,1));TextView close=inlineButton("✕",GRAY,dialog::dismiss);cap.addView(close);form.addView(cap);gap(form,25);
    form.addView(text("PLAYER",11,GRAY,true));gap(form,9);AutoCompleteTextView who=new AutoCompleteTextView(this);who.setSingleLine(true);who.setTextSize(15);who.setThreshold(1);String[] options=new String[members.size()];for(int i=0;i<members.size();i++)options[i]=effectiveName(members.get(i),profiles);
    who.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,options));who.setHint("Search player name");who.setBackground(border(LIGHT,LINE,12));pad(who,14,12);if(chosen!=null)for(Member m:members)if(m.id.equals(chosen))who.setText(effectiveName(m,profiles),false);form.addView(who);gap(form,16);
-   form.addView(text("AMOUNT RECEIVED",11,GRAY,true));gap(form,9);EditText amount=new EditText(this);amount.setSingleLine(true);amount.setText("2000");amount.setTextSize(23);amount.setTypeface(Typeface.DEFAULT,Typeface.BOLD);amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);amount.setBackground(border(LIGHT,LINE,12));pad(amount,14,11);form.addView(amount);gap(form,9);
+   form.addView(text("AMOUNT RECEIVED",11,GRAY,true));gap(form,9);EditText amount=new EditText(this);amount.setSingleLine(true);amount.setHint("Actual payment amount (₹)");amount.setText("");amount.setTextSize(23);amount.setTypeface(Typeface.DEFAULT,Typeface.BOLD);amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);amount.setBackground(border(LIGHT,LINE,12));pad(amount,14,11);form.addView(amount);gap(form,9);
    LinearLayout presets=row();for(int a:new int[]{500,1000,2000,4000}){TextView c=pill("₹"+a,GREEN,PALE);LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(0,-2,1);cp.setMargins(dp(3),0,dp(3),0);presets.addView(c,cp);pressable(c,()->amount.setText(String.valueOf(a)));}form.addView(presets);gap(form,16);
    form.addView(text("CONTRIBUTION MONTH",11,GRAY,true));gap(form,9);
    EditText month=new EditText(this);month.setSingleLine(true);month.setText(reportMonth);
@@ -939,7 +939,7 @@ public final class MainActivity extends Activity {
        .setNegativeButton("Keep editing",null).setPositiveButton("Add payment",(d,w)->{dialog.dismiss();savePayment(m,fee,value,method);}).show();
      else {dialog.dismiss();savePayment(m,fee,value,method);}
     });});
-   });form.addView(save);gap(form,9);TextView disclaimer=text("Existing payments are checked before saving.",11,GRAY,false);disclaimer.setGravity(Gravity.CENTER);form.addView(disclaimer);
+   });form.addView(save);gap(form,9);TextView disclaimer=text("Enter cash actually received. A monthly fee obligation is not proof of collection. Existing payments are checked before saving.",11,GRAY,false);disclaimer.setGravity(Gravity.CENTER);form.addView(disclaimer);
    ScrollView scroll=new ScrollView(this);scroll.addView(form);dialog.setContentView(scroll);dialog.show();Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setGravity(Gravity.BOTTOM);w.setLayout(-1,Math.min(dp(740),(int)(getResources().getDisplayMetrics().heightPixels*.91f)));}who.clearFocus();
   });});
  }
@@ -1340,7 +1340,7 @@ public final class MainActivity extends Activity {
   packSize.setHint("Actual size 1–60; blank uses confirmed base size");
   packSize.setBackground(border(LIGHT,LINE,12));pad(packSize,14,12);form.addView(packSize);gap(form,15);
   form.addView(text("PRICE PER PACK",11,GRAY,true));gap(form,7);
-  EditText price=new EditText(this);price.setInputType(2);price.setText("4000");
+  EditText price=new EditText(this);price.setInputType(2);price.setHint("Actual price paid per pack");
   price.setBackground(border(LIGHT,LINE,12));pad(price,14,12);form.addView(price);gap(form,8);
   LinearLayout presets=row();
   for(int q:new int[]{3200,3500,4000}){
