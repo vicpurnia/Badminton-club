@@ -1,0 +1,39 @@
+name: Inspect public Android base schema
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-android-schema.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Extract public source archive and verify hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat src/archive/*.b64 > /tmp/badminton-src.b64
+          echo '086180d2fedb7a9084986ab65fd00c9d4098d821f22cbf5aee1dc197eae908a7  /tmp/badminton-src.b64' | sha256sum -c -
+          base64 -d /tmp/badminton-src.b64 > /tmp/badminton-src.tar.xz
+          echo '7dceec606199c51815e7b56ff7500843a4d696c9c14cba167fac6b73c4ef40bd  /tmp/badminton-src.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-src.tar.xz
+          base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/badminton-v20-ui.tar.xz
+          echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/badminton-v20-ui.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-v20-ui.tar.xz
+          find app/src/main/java -type f -name '*.java' -print
+      - name: Package public schema and export code
+        uses: actions/upload-artifact@v4
+        with:
+          name: Badminton-Public-Source-Schema
+          path: |
+            app/src/main/java/**/*.java
+            tools/run_java_regression.sh
+            app/build.gradle
+          if-no-files-found: error
