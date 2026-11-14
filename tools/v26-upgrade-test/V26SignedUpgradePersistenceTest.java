@@ -126,9 +126,25 @@ public final class V26SignedUpgradePersistenceTest {
   assertTrue("Expected tested historical fixture in verified export",
    verified.ledger.has("legacy")&&verified.ledger.getJSONArray("legacy").length()==2);
  }
+ private static void assertShareablePdf(java.io.File file,String category)throws Exception{
+  assertNotNull(category+" PDF missing",file);
+  assertTrue(category+" PDF must be nonempty",file.isFile()&&file.length()>300);
+  Context ctx=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  android.net.Uri uri=androidx.core.content.FileProvider.getUriForFile(
+   ctx,ctx.getPackageName()+".files",file);
+  assertEquals("content",uri.getScheme());
+  try(java.io.InputStream in=ctx.getContentResolver().openInputStream(uri)){
+   assertNotNull("FileProvider failed to open "+category+" for Android sharing",in);
+   byte[] bytes=new byte[5];
+   assertEquals(5,in.read(bytes));
+   assertEquals("Share must expose an original PDF, not a blank or broken file",
+    "%PDF-",new String(bytes,java.nio.charset.StandardCharsets.US_ASCII));
+  }
+ }
  private static void assertA4LandscapePdf(java.io.File file,String category)throws Exception{
   assertNotNull(category+" PDF not generated",file);
   assertTrue(category+" PDF must contain content",file.isFile()&&file.length()>300);
+  assertShareablePdf(file,category);
   try(java.io.FileInputStream in=new java.io.FileInputStream(file)){
    byte[] signature=new byte[5];
    assertEquals(5,in.read(signature));
@@ -363,6 +379,9 @@ public final class V26SignedUpgradePersistenceTest {
     Context printContext=InstrumentationRegistry.getInstrumentation().getTargetContext();
     assertA4LandscapePdf(ClassicLedgerV231.master(printContext,dao,MONTH),"Classic Master");
     assertA4LandscapePdf(MonthlyReviewPdfV258.make(printContext,dao,MONTH),"Month-end review");
+    java.io.File receipt=HistoricalReceiptsV253.payment(printContext,m,cash,dao.meta());
+    try{assertShareablePdf(receipt,"Recorded member receipt");}
+    finally{if(receipt!=null)receipt.delete();}
     assertEquals("PDF generation and rehearsal must leave financial Room rows unmodified",
      intactBefore,fullRoomDigest(db));
    }finally{
