@@ -23,6 +23,9 @@ public final class V26SignedUpgradePersistenceTest {
  private static final String EXPENSE_ID="ci-upgrade-synthetic-expense-20261114";
  private static final String USAGE_ID="ci-upgrade-synthetic-usage-20261114";
  private static final String MONTH="2026-08";
+ private static final String META_AUDIT="{\"ciUnknownMetadata\":{\"member\":\"synthetic\",\"shuttles\":24}}";
+ private static final String LEGACY_KEY="ci-upgrade-legacy-2025-12";
+ private static final String DONATED_KEY="ci-upgrade-legacy-pack-2025-12";
 
  private LedgerDatabase open() {
   Context target=InstrumentationRegistry.getInstrumentation().getTargetContext();
@@ -30,6 +33,11 @@ public final class V26SignedUpgradePersistenceTest {
     .allowMainThreadQueries().build();
  }
 
+ private static long queryCount(LedgerDatabase db,String table){
+  try(android.database.Cursor cursor=db.getOpenHelper().getReadableDatabase().query("SELECT COUNT(*) FROM "+table)){
+   assertTrue(cursor.moveToFirst());return cursor.getLong(0);
+  }
+ }
  private static void assertRoomOne(LedgerDatabase db){
   assertEquals("Room schema must retain version 1",1,
     db.getOpenHelper().getReadableDatabase().getVersion());
@@ -44,6 +52,9 @@ public final class V26SignedUpgradePersistenceTest {
    assertTrue("The test phone must have no original payments",dao.contributions().isEmpty());
    assertTrue("The test phone must have no original expenses",dao.expenses().isEmpty());
    assertTrue("The test phone must have no original usage",dao.stockUsages().isEmpty());
+   assertNull("No full ledger metadata must exist before CI seed",dao.meta());
+   assertTrue("No historical legacy records must exist before CI seed",dao.legacy().isEmpty());
+   assertTrue("No historical controls must exist before CI seed",dao.controls().isEmpty());
 
    Member m=new Member();
    m.id=MEMBER_ID;m.name="CI Synthetic Member (no real club data)";
@@ -69,7 +80,40 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(1,dao.contributions().size());
    assertEquals(1,dao.expenses().size());
    assertEquals(1,dao.stockUsages().size());
-   System.out.println("SYNTHETIC_V25_SEED_PASSED exact member/payment/expense/stock rows; no production data");
+
+   LedgerMeta meta=new LedgerMeta();
+   meta.club="CI Synthetic Badminton Club — no real data";
+   meta.openingMonth="2026-01";
+   meta.openingBalance=17890L;
+   meta.receiptPrefix="CI";
+   meta.inventoryStockJson=META_AUDIT; // Unknown original v25 JSON key must survive.
+   dao.insertMeta(meta);
+
+   MonthlyControl control=new MonthlyControl();
+   control.month=MONTH;control.cash=1379L;control.memberCashAtImport=1379L;
+   dao.insertControls(Collections.singletonList(control));
+
+   LegacyEntry historical=new LegacyEntry();
+   historical.key=LEGACY_KEY;historical.memberId=MEMBER_ID;
+   historical.period="2025-12";historical.kind="cash";historical.amount=489L;
+   LegacyEntry donated=new LegacyEntry();
+   donated.key=DONATED_KEY;donated.memberId=MEMBER_ID;
+   donated.period="2025-12";donated.kind="packs";donated.amount=1L;
+   dao.insertLegacy(Arrays.asList(historical,donated));
+
+   AuditEvent audit=new AuditEvent();
+   audit.id="ci-upgrade-audit-20261114";
+   audit.action="CI original synthetic audit event";
+   audit.createdAt="2026-08-21T12:00:00";
+   audit.details="Owner-signed upgrade preservation fixture; not a real transaction";
+   dao.audit(audit);
+
+   assertNotNull(dao.meta());
+   assertEquals(1,dao.controls().size());
+   assertEquals(2,dao.legacy().size());
+   assertEquals(1,queryCount(db,"audit_events"));
+
+   System.out.println("SYNTHETIC_V25_SEED_PASSED: member, cash, expense, usage, opening meta, controls, legacy, noncash pack and audit");
   }finally{db.close();}
  }
 
@@ -108,8 +152,32 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(MONTH,u.month);
    assertEquals(7L,u.shuttles);
 
-   assertNull("Synthetic test intentionally does not create full ledger metadata",dao.meta());
-   System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-month cash, expense and shuttle usage; Room v1");
+   LedgerMeta meta=dao.meta();
+   assertNotNull("Original synthetic opening ledger metadata disappeared",meta);
+   assertEquals("2026-01",meta.openingMonth);
+   assertEquals(17890L,meta.openingBalance);
+   assertEquals("CI Synthetic Badminton Club — no real data",meta.club);
+   assertEquals("CI",meta.receiptPrefix);
+   assertEquals(META_AUDIT,meta.inventoryStockJson);
+   assertEquals(1,dao.controls().size());
+   assertEquals(MONTH,dao.controls().get(0).month);
+   assertEquals(1379L,dao.controls().get(0).cash);
+   assertEquals(1379L,dao.controls().get(0).memberCashAtImport);
+   assertEquals(2,dao.legacy().size());
+   long cashLegacy=0,noncashPacks=0;
+   for(LegacyEntry old:dao.legacy()){
+    if(LEGACY_KEY.equals(old.key)){
+     assertEquals("cash",old.kind);assertEquals("2025-12",old.period);
+     cashLegacy=old.amount;
+    }
+    if(DONATED_KEY.equals(old.key)){
+     assertEquals("packs",old.kind);noncashPacks=old.amount;
+    }
+   }
+   assertEquals(489L,cashLegacy);
+   assertEquals(1L,noncashPacks);
+   assertEquals(1L,queryCount(db,"audit_events"));
+   System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
   }finally{db.close();}
  }
 }
