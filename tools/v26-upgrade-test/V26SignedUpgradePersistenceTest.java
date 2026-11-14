@@ -287,6 +287,21 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(1L,queryCount(db,"audit_events"));
    assertFingerprintUnchanged(db);
    assertVerifiedLedgerDigestUnchanged(db);
+   // Real v26 production recovery code is exercised with a complete synthetic
+   // verified export. Temporary in-memory Room is discarded after comparison.
+   String source=MigrationCodec.exportVerified(db);
+   char[] privateTestPassword="ci-synthetic-strong-password-only".toCharArray();
+   try{
+    String sealed=PremiumBackupCrypto.encrypt(source,privateTestPassword);
+    String recovered=PremiumBackupCrypto.decrypt(sealed,privateTestPassword);
+    assertEquals("Encrypted backup must preserve verified JSON bytes",source,recovered);
+    String rehearsal=BackupRecoveryV259.dryRun(
+     InstrumentationRegistry.getInstrumentation().getTargetContext(),recovered);
+    assertTrue("Entire synthetic migration must pass exact temporary restore",
+     rehearsal.contains("RESTORE DRY-RUN PASSED"));
+   }finally{
+    Arrays.fill(privateTestPassword,'\\u0000');
+   }
    System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
   }finally{db.close();}
  }
