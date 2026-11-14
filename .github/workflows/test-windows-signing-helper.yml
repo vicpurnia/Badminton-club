@@ -61,6 +61,43 @@ jobs:
             $env:PATH = $oldPath
             $env:JAVA_HOME = $oldJavaHome
           }
+      - name: Test GitHub browser login completes without git.exe
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "mock-gh-no-git"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $scriptPath = Join-Path (Get-Location) 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'
+          $mock = Join-Path $root 'gh.cmd'
+          $flag = Join-Path $root 'authorized.flag'
+          $batch = @'
+          @echo off
+          if "%1"=="auth" if "%2"=="status" (
+            if exist "%BADMINTON_MOCK_GH_FLAG%" exit /b 0
+            echo not authenticated 1>&2
+            exit /b 1
+          )
+          if "%1"=="auth" if "%2"=="login" (
+            echo approved>"%BADMINTON_MOCK_GH_FLAG%"
+            echo unable to find git executable in PATH 1>&2
+            exit /b 1
+          )
+          exit /b 99
+          '@
+          [IO.File]::WriteAllText($mock, $batch.Replace([char]10,[string]([char]13)+[char]10), [Text.Encoding]::ASCII)
+          $oldPath = $env:PATH
+          try {
+            $env:PATH = "$root;$oldPath"
+            $env:BADMINTON_MOCK_GH_FLAG = $flag
+            & $scriptPath -CheckGithubOnly
+            if (-not (Test-Path $flag)) {
+              throw "Mock login did not run"
+            }
+            Write-Host "GitHub browser login fallback validated; git.exe not required"
+          } finally {
+            $env:PATH = $oldPath
+            Remove-Item Env:\BADMINTON_MOCK_GH_FLAG -ErrorAction SilentlyContinue
+          }
       - name: Parse Windows setup PowerShell without executing it
         shell: pwsh
         run: |
