@@ -70,3 +70,15 @@ Prefer a spare Android phone with a verified restored **copy** of the ledger for
 - [ ] Only after these checks, label a **separately built and accepted** production v26.9 release. Keep the PR draft if any test is incomplete.
 
 **Never declare stable merely because GitHub Actions says the APK compiled and passed synthetic tests.**
+
+
+## Additional v26.9 hardening — closing roll-forward and duplicate payment
+
+The following checks have been implemented in the draft source and synthetic regression suite, but still require physical-device acceptance:
+
+- **Forward protected closing:** If March is CLOSED, a cash adjustment, expense, donation or shuttle usage entered for February is blocked even when February itself appears OPEN. The later month must be reopened with a recorded audit before any earlier month can modify its opening/closing balance. Verify on a test replica, not by creating fictitious transactions on the real club ledger.
+- **Payment form replay:** Saving a cash payment uses a stable ID for that form. Repeat the same confirmation callback and verify there is one original cash entry, one audit event and no extra collection. A genuinely separate payment form receives a fresh ID and remains permitted.
+- **Receipt ZIP storage:** Export a member's historical recorded receipt bundle on a low-storage test device; failed/oversize ZIP exports must not be shared as complete, and temporary individual generated PDFs must be deleted.
+- **All inventory metadata:** In-memory restore now checks canonical equality of the *entire* inventory/audit metadata object, including opening physical checkpoint and any future extension keys, instead of relying only on a fixed list.
+
+These improvements are **not** evidence of installed-phone data continuity. The production release gate remains open.
