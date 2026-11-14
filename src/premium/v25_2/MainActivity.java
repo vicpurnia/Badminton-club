@@ -498,15 +498,20 @@ public final class MainActivity extends Activity {
   hero.addView(text("Cash spending and noncash donations are always recorded separately.",12,0xFFD6EBDD,false));gap(hero,15);
   hero.addView(button("＋ Record shuttle purchase",this::openExpense));gap(hero,9);
   hero.addView(button("＋ Record donated shuttle pack",this::openShuttleDonation));gap(hero,9);
-  hero.addView(button("− Record shuttle usage",this::openShuttleUsage));
+  hero.addView(button("− Record shuttle usage",this::openShuttleUsage));gap(hero,9);
+  hero.addView(button("◉ Configure confirmed opening stock",this::openInventoryCheckpoint));
   content.addView(hero);gap(content,16);
-  notice("Stock tracking","Usage is recorded in individual shuttles, while acquisitions are recorded in packs. A remaining-stock calculation needs confirmed opening stock and pack size; neither is assumed.");
+  notice("Stock accounting basis","Configure stock at the START of a chosen month, before that month's purchases, donations or usage. Enter the physically verified opening count and shuttles per pack. No historical quantity is guessed.");
   final String selected=reportMonth;
   background(()->{
    List<Expense> entries=database.dao().expenses();
    List<Contribution> contributions=database.dao().contributions();
    List<LegacyEntry> legacy=database.dao().legacy();
    List<StockUsage> issued=database.dao().stockUsages();
+   LedgerMeta stockMeta=database.dao().meta();
+   InventoryCheckpoint.Config checkpoint=stockMeta==null?null:InventoryCheckpoint.read(stockMeta.inventoryStockJson);
+   InventoryCheckpoint.Position stockPosition=checkpoint==null?null:
+      InventoryCheckpoint.calculate(checkpoint,selected,entries,contributions,issued);
    Map<String,String> names=new HashMap<>();
    for(Member person:database.dao().members())names.put(person.id,person.name);
    long spending=0,purchased=0,donated=0,legacyDonated=0,used=0,lifetimeUsed=0;
@@ -543,6 +548,25 @@ public final class MainActivity extends Activity {
    final long fSpent=spending,fBought=purchased,fGiven=donated,fLegacyGiven=legacyDonated,
     fUsed=used,fLifetimeUsed=lifetimeUsed;
    runOnUiThread(()->{
+    if(checkpoint==null)notice("Stock balance not yet available",
+     "No confirmed start-of-month opening stock and pack size. Purchased packs and consumed shuttles remain visible, but remaining stock is intentionally not calculated.");
+    else if(stockPosition==null)notice("Stock checkpoint starts in "+checkpoint.month,
+     "Choose a month from "+checkpoint.month+" onward to view the stock balance.");
+    else{
+     sectionHeading("Stock position from confirmed baseline","Starting "+checkpoint.month+" · through "+selected);
+     String remaining=String.valueOf(stockPosition.remainingShuttles);
+     LinearLayout position=row();
+     position.addView(metric("Remaining shuttles",remaining,"◉"),new LinearLayout.LayoutParams(0,-2,1));
+     position.addView(metric("Pack size",checkpoint.perPack+" each","▤"),new LinearLayout.LayoutParams(0,-2,1));
+     content.addView(position);gap(content,10);
+     notice(stockPosition.remainingShuttles<0?"Recorded stock deficit":"Stock calculation",
+      "Opening: "+checkpoint.openingShuttles+" individual shuttles"+
+      "\nAcquired since checkpoint: "+stockPosition.acquiredPacks+" packs × "+checkpoint.perPack+" shuttles"+
+      "\nUsed since checkpoint: "+stockPosition.usedShuttles+" individual shuttles"+
+      "\nCalculated balance: "+stockPosition.remainingShuttles+" individual shuttles."+
+      "\nThis is calculated from recorded events, not independently measured current stock.");
+    }
+    gap(content,15);
     sectionHeading("Selected-month summary",dateLabel(selected));
     LinearLayout stats=row();
     stats.addView(metric("Shuttle spending",rupee(fSpent),"◈"),new LinearLayout.LayoutParams(0,-2,1));
