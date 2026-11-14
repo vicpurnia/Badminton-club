@@ -48,10 +48,10 @@ public final class V26SignedUpgradePersistenceTest {
   assertTrue("Expected multiple user ledger tables",tables.size()>=6);
   for(String name:tables){
    assertTrue("Untrusted SQLite table identifier",name.matches("[A-Za-z0-9_]+"));
-   md.update(("TABLE:"+name+"\\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+   md.update(("TABLE:"+name+"\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
    try(Cursor c=sql.query("SELECT * FROM \""+name+"\" ORDER BY rowid")){
     String[] keys=c.getColumnNames();
-    md.update(("COLUMNS:"+String.join("|",keys)+"\\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    md.update(("COLUMNS:"+String.join("|",keys)+"\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
     while(c.moveToNext()){
      for(int i=0;i<keys.length;i++){
       String token;
@@ -67,7 +67,7 @@ public final class V26SignedUpgradePersistenceTest {
       md.update(java.nio.ByteBuffer.allocate(4).putInt(utf8.length).array());
       md.update(utf8);
      }
-     md.update((byte)'\\n');
+     md.update((byte)'\n');
     }
    }
   }
