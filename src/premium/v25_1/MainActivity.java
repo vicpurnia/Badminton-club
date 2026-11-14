@@ -42,6 +42,10 @@ public final class MainActivity extends Activity {
  @Override protected void onDestroy(){io.shutdown();super.onDestroy();}
  @FunctionalInterface interface CheckedJob {void run() throws Exception;}
  private void background(CheckedJob job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}
+ private void requireImportedLedger(){
+  if(database.dao().meta()==null)
+   throw new IllegalStateException("Import your verified club ledger before recording new entries. No data was changed.");
+ }
  private void error(Exception e){new AlertDialog.Builder(this).setTitle("Action not completed").setMessage(e.getMessage()).setPositiveButton("OK",null).show();}
  private GradientDrawable bg(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
  private GradientDrawable border(int color,int stroke,int radius){GradientDrawable d=bg(color,radius);d.setStroke(dp(1),stroke);return d;}
@@ -406,7 +410,7 @@ public final class MainActivity extends Activity {
   });
  }
  private Dialog memberDialog;
- private void addMember(){EditText e=new EditText(this);e.setHint("Full player name");new AlertDialog.Builder(this).setTitle("New player").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Add",(d,w)->background(()->{String n=e.getText().toString().trim();if(n.isEmpty())throw new IllegalArgumentException("Name required");Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();runOnUiThread(this::showMembers);})).show();}
+ private void addMember(){EditText e=new EditText(this);e.setHint("Full player name");new AlertDialog.Builder(this).setTitle("New player").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Add",(d,w)->background(()->{String n=e.getText().toString().trim();if(n.isEmpty())throw new IllegalArgumentException("Name required");requireImportedLedger();Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();runOnUiThread(this::showMembers);})).show();}
  private void showPayments(){title("Collect fees","Simple, quick and ready to share");monthPicker();
   LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Collect ₹2,000",()->openPayment(null)));content.addView(headline);gap(content,22);
   sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));final String viewedMonth=reportMonth;
@@ -414,7 +418,7 @@ public final class MainActivity extends Activity {
    LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);right.addView(text(rupee(c.amount),15,GREEN,true));gap(right,6);right.addView(inlineButton("Receipt ▤",GREEN,()->sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()))));card.addView(right);panel(content,card);if(++n==16)break;}
    if(n==0)notice("No receipts this month","Choose another month above or collect a contribution.");});});
  }
- private void openPayment(String chosen){background(()->{List<Member> members=database.dao().members();runOnUiThread(()->{
+ private void openPayment(String chosen){background(()->{requireImportedLedger();List<Member> members=database.dao().members();runOnUiThread(()->{
    if(members.isEmpty()){error(new IllegalStateException("Import your verified ledger first"));return;}
    Dialog dialog=new Dialog(this);LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,21,23);
    LinearLayout cap=row();LinearLayout headline=col();headline.addView(text("New contribution",22,DARK,true));gap(headline,5);headline.addView(text("Securely record and share",12,GRAY,false));cap.addView(headline,new LinearLayout.LayoutParams(0,-2,1));TextView close=inlineButton("✕",GRAY,dialog::dismiss);cap.addView(close);form.addView(cap);gap(form,25);
@@ -456,7 +460,7 @@ public final class MainActivity extends Activity {
  }
  private void persistPayment(Member m,String fee,long amount,String method){background(()->{
   Contribution c=new Contribution();c.id="pay-"+UUID.randomUUID();c.memberId=m.id;c.feeMonth=fee;c.receivedDate=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date());c.amount=amount;c.kind="cash";c.method=method;
-  database.runInTransaction(()->{database.dao().insertPayment(c);AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();a.createdAt=new Date().toString();a.action="Contribution added";a.details=c.id+" / "+rupee(amount);database.dao().audit(a);});
+  database.runInTransaction(()->{requireImportedLedger();database.dao().insertPayment(c);AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();a.createdAt=new Date().toString();a.action="Contribution added";a.details=c.id+" / "+rupee(amount);database.dao().audit(a);});
   BackupGuardian.save(this,database,"payment",true);
   warnOnBackupFailure();
   runOnUiThread(()->{Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();showPayments();sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));});
@@ -590,6 +594,12 @@ public final class MainActivity extends Activity {
   });
  }
  private void openExpense(){
+  background(()->{
+   requireImportedLedger();
+   runOnUiThread(this::openExpenseForm);
+  });
+ }
+ private void openExpenseForm(){
   Dialog dialog=new Dialog(this);LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,22,24);
   form.addView(text("New shuttle purchase",22,DARK,true));gap(form,7);
   form.addView(text("Records a cash expense and the number of packs purchased.",12,GRAY,false));gap(form,18);
@@ -650,6 +660,7 @@ public final class MainActivity extends Activity {
  }
  private void openShuttleDonation(){
   background(()->{
+   requireImportedLedger();
    List<Member> players=database.dao().members();
    runOnUiThread(()->{
     if(players.isEmpty()){error(new IllegalStateException("Import or add members before recording a donation."));return;}
@@ -715,6 +726,12 @@ public final class MainActivity extends Activity {
  }
 
  private void openShuttleUsage(){
+  background(()->{
+   requireImportedLedger();
+   runOnUiThread(this::openShuttleUsageForm);
+  });
+ }
+ private void openShuttleUsageForm(){
   Dialog dialog=new Dialog(this);
   LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,22,24);
   form.addView(text("Record shuttle usage",21,DARK,true));gap(form,8);
@@ -761,6 +778,7 @@ public final class MainActivity extends Activity {
        entry.id="usage-"+UUID.randomUUID();entry.month=mm;
        entry.date=actual;entry.shuttles=qty;entry.note=details;
        database.runInTransaction(()->{
+        requireImportedLedger();
         database.dao().insertStock(Collections.singletonList(entry));
         AuditEvent audit=new AuditEvent();audit.id="audit-"+UUID.randomUUID();
         audit.createdAt=new Date().toString();audit.action="Shuttle usage recorded";
