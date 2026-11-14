@@ -2328,16 +2328,61 @@ public final class MainActivity extends Activity {
    File file=renderer.make();
    if(file==null||!file.isFile()||file.length()<100)
     throw new IOException("The selected receipt could not be generated.");
-   runOnUiThread(()->{
-    try{
-     Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",file);
-     Intent open=new Intent(Intent.ACTION_VIEW);
-     open.setDataAndType(uri,"application/pdf");
-     open.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-     startActivity(Intent.createChooser(open,"Preview recorded PDF"));
-    }catch(Exception exception){
-     error(new IOException("No PDF viewer is available. Use Share or Save PDF instead."));
+   final Bitmap bitmap;
+   final int pages;
+   try(ParcelFileDescriptor descriptor=ParcelFileDescriptor.open(file,ParcelFileDescriptor.MODE_READ_ONLY);
+       android.graphics.pdf.PdfRenderer pdf=new android.graphics.pdf.PdfRenderer(descriptor)){
+    pages=pdf.getPageCount();
+    if(pages<1)throw new IOException("Receipt PDF has no pages");
+    try(android.graphics.pdf.PdfRenderer.Page firstPage=pdf.openPage(0)){
+     float multiplier=Math.min(2.5f,2000f/Math.max(firstPage.getWidth(),firstPage.getHeight()));
+     int width=Math.max(1,Math.round(firstPage.getWidth()*multiplier));
+     int height=Math.max(1,Math.round(firstPage.getHeight()*multiplier));
+     bitmap=Bitmap.createBitmap(width,height,Bitmap.Config.ARGB_8888);
+     bitmap.eraseColor(Color.WHITE);
+     firstPage.render(bitmap,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);
     }
+   }
+   runOnUiThread(()->{
+    final Dialog viewer=new Dialog(this,android.R.style.Theme_Material_Light_NoActionBar_Fullscreen);
+    LinearLayout frame=col();frame.setBackgroundColor(Color.WHITE);pad(frame,10,9);
+    LinearLayout toolbar=row();
+    LinearLayout captions=col();
+    captions.addView(text("Receipt preview",20,DARK,true));gap(captions,3);
+    captions.addView(text(pages==1?"Full-screen · one verified PDF page":
+       "Displaying first of "+pages+" PDF pages",11,GRAY,false));
+    toolbar.addView(captions,new LinearLayout.LayoutParams(0,-2,1));
+    toolbar.addView(inlineButton("Close",GREEN,viewer::dismiss));
+    frame.addView(toolbar);gap(frame,10);
+    ImageView image=new ImageView(this);
+    image.setImageBitmap(bitmap);image.setAdjustViewBounds(true);
+    image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+    int available=Math.max(dp(260),getResources().getDisplayMetrics().widthPixels-dp(36));
+    image.setLayoutParams(new LinearLayout.LayoutParams(available,-2));
+    android.widget.HorizontalScrollView horizontal=new android.widget.HorizontalScrollView(this);
+    horizontal.setFillViewport(true);horizontal.addView(image);
+    ScrollView vertical=new ScrollView(this);vertical.setFillViewport(true);
+    vertical.addView(horizontal);
+    frame.addView(vertical,new LinearLayout.LayoutParams(-1,0,1));gap(frame,7);
+    LinearLayout controls=row();
+    controls.addView(inlineButton("Fit width",GREEN,()->{
+     image.getLayoutParams().width=available;image.requestLayout();
+     horizontal.smoothScrollTo(0,0);
+    }),new LinearLayout.LayoutParams(0,-2,1));
+    controls.addView(inlineButton("Zoom 2×",GREEN,()->{
+     image.getLayoutParams().width=Math.min(available*2,bitmap.getWidth()*2);
+     image.requestLayout();
+    }),new LinearLayout.LayoutParams(0,-2,1));
+    frame.addView(controls);
+    viewer.setContentView(frame);
+    viewer.setOnDismissListener(d->{
+     image.setImageDrawable(null);
+     if(!bitmap.isRecycled())bitmap.recycle();
+     file.delete();
+    });
+    viewer.show();
+    Window window=viewer.getWindow();
+    if(window!=null)window.setLayout(-1,-1);
    });
   });
  }
