@@ -18,7 +18,31 @@ new=old+"""
     PremiumV26State.validate(inventory.toString(),v26KnownMembers);"""
 if s.count(old)!=1:
  raise RuntimeError(f"v26 verified JSON validator anchor count {s.count(old)} != 1")
-codec.write_text(s.replace(old,new,1))
+s=s.replace(old,new,1)
+# Source-backed historical native audit events already live in sourceLedgerJson;
+# do not drop them on each export. Import itself is a device-local operation and
+# must not invent an extra ledger history item in a read-only recovery rehearsal.
+audit_old='JSONArray audit=new JSONArray();for(AuditEvent e:dao.auditEvents()){'
+audit_new="""JSONArray audit=state.optJSONArray("nativeAuditHistory");
+     boolean sourceAuditPresent=state.has("nativeAuditHistory");
+     if(sourceAuditPresent&&audit==null)
+      throw new IllegalArgumentException("Source audit history is not an array");
+     if(audit==null)audit=new JSONArray();
+     for(AuditEvent e:dao.auditEvents()){"""
+if s.count(audit_old)!=1:
+ raise RuntimeError(f"v26 audit export source anchor count {s.count(audit_old)} != 1")
+s=s.replace(audit_old,audit_new,1)
+audit_filter='if(e.id.startsWith("original-history-")||e.id.startsWith("original-migrationHistory-")||e.id.startsWith("original-nativeAuditHistory-"))continue;'
+audit_replacement=audit_filter+'\\n     if(e.id.startsWith("import-"))continue; // import provenance is local, not a new club financial event'
+if s.count(audit_filter)!=1:
+ raise RuntimeError(f"v26 historical audit dedup anchor count {s.count(audit_filter)} != 1")
+s=s.replace(audit_filter,audit_replacement,1)
+audit_put='state.put("nativeAuditHistory",audit);'
+audit_put_new='if(sourceAuditPresent||audit.length()>0)state.put("nativeAuditHistory",audit);'
+if s.count(audit_put)!=1:
+ raise RuntimeError(f"v26 historical audit write anchor count {s.count(audit_put)} != 1")
+s=s.replace(audit_put,audit_put_new,1)
+codec.write_text(s)
 for filename in ["PremiumV26State.java","PremiumV26Analytics.java","PremiumBackupCrypto.java","CashCorrectionsV256.java","BackupRecoveryV259.java","PremiumV26StockGuard.java","PremiumCashDateAudit.java","PremiumV26ClosingGuard.java","PremiumV26PaymentOnce.java","PremiumV26BackupCompare.java"]:
  p=Path("src/premium/v26_9")/filename
  if not p.is_file(): raise RuntimeError(f"Missing v26 module {p}")
