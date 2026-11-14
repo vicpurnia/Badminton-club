@@ -33,6 +33,16 @@ final class BackupRecoveryV259 {
      !restored.openingMonth.equals(original.openingMonth)||
      !restored.differences.equals(original.differences))
     throw new IllegalStateException("Restored balances or record counts differ from the verified backup");
+   // A restored ledger can retain all displayed sums while losing a legacy
+   // entry, original source field, date, note or audit-related JSON property.
+   // Do not certify a restore unless the complete verified ledger is equal.
+   PremiumV26BackupCompare.Comparison complete=
+    PremiumV26BackupCompare.compare(original.ledger,restored.ledger);
+   if(!complete.exact)
+    throw new IllegalStateException(
+     "Restore rehearsal did NOT preserve every verified ledger field: "+
+     String.join(", ",complete.differences)+
+     ". The installed ledger has not been modified. Do not import this backup.");
    JSONObject before=original.ledger.optJSONObject("inventoryStock");
    JSONObject after=restored.ledger.optJSONObject("inventoryStock");
    String beforeRaw=before==null?"{}":before.toString();
