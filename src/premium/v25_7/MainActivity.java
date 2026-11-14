@@ -976,6 +976,102 @@ public final class MainActivity extends Activity {
   });
  }
 
+
+ private void openPhysicalStockCount(){
+  background(()->{
+   requireImportedLedger();
+   LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
+   final InventoryCheckpoint.Config base=InventoryCheckpoint.read(meta.inventoryStockJson);
+   if(base==null)throw new IllegalStateException("Confirm starting opening stock before recording a physical reconciliation.");
+   final List<StockReconciliationV257.Count> old=StockReconciliationV257.read(meta.inventoryStockJson);
+   runOnUiThread(()->{
+    Dialog dialog=new Dialog(this);
+    LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,20,21);
+    form.addView(text("Physical stock reconciliation",21,DARK,true));gap(form,8);
+    form.addView(text("Record a genuine count of individual shuttles at the END of a COMPLETED calendar month. No historical stock figure is generated or assumed.",12,GRAY,false));gap(form,15);
+    if(!old.isEmpty()){
+     StockReconciliationV257.Count last=old.get(old.size()-1);
+     form.addView(text("Last physical count: "+last.month+" · "+last.physical+" shuttles. Next reconciliation must be a later month.",12,GREEN,true));gap(form,12);
+    }
+    form.addView(text("COMPLETED MONTH (YYYY-MM)",11,GRAY,true));gap(form,7);
+    EditText month=new EditText(this);month.setSingleLine(true);
+    String thisMonth=new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new Date());
+    month.setText(ReportMath.previousMonth(thisMonth));
+    month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);form.addView(month);gap(form,13);
+    form.addView(text("PHYSICALLY COUNTED INDIVIDUAL SHUTTLES",11,GRAY,true));gap(form,7);
+    EditText physical=new EditText(this);physical.setSingleLine(true);
+    physical.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    physical.setHint("Enter actual counted quantity, not packs");
+    physical.setBackground(border(LIGHT,LINE,12));pad(physical,14,12);form.addView(physical);gap(form,13);
+    form.addView(text("COUNT EVIDENCE / REASON (REQUIRED)",11,GRAY,true));gap(form,7);
+    EditText note=new EditText(this);note.setMinLines(2);
+    note.setHint("Who counted the physical stock, and why it differs if applicable");
+    note.setBackground(border(LIGHT,LINE,12));pad(note,14,12);form.addView(note);gap(form,15);
+    form.addView(button("Review reconciliation",()->{
+     try{
+      final String mm=MigrationCodec.ym(month.getText().toString().trim());
+      String now=new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new Date());
+      if(mm.compareTo(now)>=0)
+       throw new IllegalArgumentException("Only COMPLETED months can be reconciled; the current month has not ended.");
+      if(mm.compareTo(base.month)<0)throw new IllegalArgumentException("Reconciliation predates the opening-stock checkpoint.");
+      if(!old.isEmpty()&&mm.compareTo(old.get(old.size()-1).month)<=0)
+       throw new IllegalArgumentException("Earlier physical reconciliations are immutable. Choose a later completed month.");
+      final long quantity=Long.parseLong(physical.getText().toString().trim());
+      if(quantity<0||quantity>100000000L)throw new IllegalArgumentException("Enter a physical count between zero and 100 million.");
+      final String reason=note.getText().toString().trim();
+      if(reason.length()<8||reason.length()>200)throw new IllegalArgumentException("Explain the physical count in 8-200 characters.");
+      background(()->{
+       LedgerDao current=database.dao();
+       StockReconciliationV257.Position expected=StockReconciliationV257.calculate(
+        current.meta().inventoryStockJson,mm,current.expenses(),current.contributions(),current.stockUsages());
+       if(expected==null)throw new IllegalStateException("No opening count available for the selected month");
+       final long estimated=expected.remainingShuttles;
+       final long difference=Math.subtractExact(quantity,estimated);
+       runOnUiThread(()->new AlertDialog.Builder(this)
+        .setTitle("Confirm actual month-end stock")
+        .setMessage("Month: "+mm+"\nCalculated from recorded history: "+estimated+
+         " individual shuttles\nPHYSICALLY COUNTED: "+quantity+
+         " individual shuttles\nStock reconciliation difference: "+difference+
+         "\nReason: "+reason+
+         "\n\nThis becomes the physical stock basis for later months. No past expenses, donations, usage or cash payments are rewritten.")
+        .setNegativeButton("Keep editing",null)
+        .setPositiveButton("Record audited physical count",(d,w)->{
+         dialog.dismiss();
+         background(()->{
+          database.runInTransaction(()->{
+           LedgerDao live=database.dao();LedgerMeta active=live.meta();
+           if(active==null)throw new IllegalStateException("No ledger");
+           String event="physical-count-"+UUID.randomUUID();
+           String at=new Date().toString();
+           String json=StockReconciliationV257.append(active.inventoryStockJson,mm,
+            quantity,reason,estimated,event,at,live.expenses(),live.contributions(),live.stockUsages());
+           if(live.updateInventoryJson(json)!=1)throw new IllegalStateException("Stock count was not stored");
+           AuditEvent audit=new AuditEvent();
+           audit.id=event;audit.createdAt=at;audit.action="Month-end physical stock reconciled";
+           audit.details=mm+"; expected "+estimated+"; counted "+quantity+
+            "; difference "+difference+"; evidence "+reason;
+           live.audit(audit);
+          });
+          BackupGuardian.save(this,database,"physical-reconciliation",true);
+          warnOnBackupFailure();
+          runOnUiThread(()->{Toast.makeText(this,"Physical count saved",Toast.LENGTH_LONG).show();showExpenses();});
+         });
+        }).show());
+      });
+     }catch(Exception ex){
+      error(new IllegalArgumentException(ex.getMessage()==null?"Check physical-stock values.":ex.getMessage()));
+     }
+    }));
+    ScrollView scroll=new ScrollView(this);scroll.addView(form);
+    dialog.setContentView(scroll);dialog.show();
+    Window window=dialog.getWindow();if(window!=null){
+     window.setBackgroundDrawableResource(android.R.color.transparent);window.setGravity(Gravity.BOTTOM);
+     window.setLayout(-1,Math.min(dp(760),(int)(getResources().getDisplayMetrics().heightPixels*.91f)));
+    }
+   });
+  });
+ }
+
  private void openInventoryCheckpoint(){
   background(()->{
    requireImportedLedger();
