@@ -1,0 +1,335 @@
+name: Badminton v26 Android Emulator Runtime Smoke (NOT device acceptance)
+
+on:
+  push:
+    branches: [dev/v26-0-to-26-9-20261114]
+    paths:
+      - '.github/workflows/v26-android-emulator-smoke.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Restore verified public-safe source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat src/archive/*.b64 > /tmp/badminton-src.b64
+          echo '086180d2fedb7a9084986ab65fd00c9d4098d821f22cbf5aee1dc197eae908a7  /tmp/badminton-src.b64' | sha256sum -c -
+          base64 -d /tmp/badminton-src.b64 > /tmp/badminton-src.tar.xz
+          echo '7dceec606199c51815e7b56ff7500843a4d696c9c14cba167fac6b73c4ef40bd  /tmp/badminton-src.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-src.tar.xz
+          test -f app/build.gradle && test -f settings.gradle
+      - name: Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Check accounting regressions
+        run: bash tools/run_java_regression.sh
+      - name: Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: 'platform-tools'
+      - name: Android 36
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Apply existing Android compilation fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
+          s=p.read_text()
+          a='onActivityResult(int req,int result,Intent data){super.onActivityResult(req,result,data);'
+          b='onActivityResult(int req,int resultCode,Intent data){super.onActivityResult(req,resultCode,data);'
+          assert a in s
+          s=s.replace(a,b,1)
+          s=s.replace('if(result!=RESULT_OK||data==null','if(resultCode!=RESULT_OK||data==null',1)
+          s=s.replace('if(req!=PICK_LEDGER||result!=RESULT_OK','if(req!=PICK_LEDGER||resultCode!=RESULT_OK',1)
+          a='private void background(Runnable job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}'
+          b='@FunctionalInterface interface CheckedJob{void run() throws Exception;}\n  private void background(CheckedJob job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}'
+          assert a in s
+          s=s.replace(a,b,1)
+          p.write_text(s)
+          PY
+      - name: Restore premium base
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 -d src/premium/v20-overlay.tar.xz.base64 > /tmp/badminton-v20-ui.tar.xz
+          echo '8569d3b987eda3d48ffb41e58c1b8b8b70fe347309a93ae6b4aa99455349f3c9  /tmp/badminton-v20-ui.tar.xz' | sha256sum -c -
+          tar -xJf /tmp/badminton-v20-ui.tar.xz
+      - name: Apply v24.1 stable update with unchanged package and database
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
+          p.write_text(Path("src/premium/v26_9/MainActivity.java").read_text())
+          receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
+          assert receipt.exists()
+          receiptSource=receipt.read_text()
+          assert "Not available in imported history" in receiptSource
+          assert "Exact payment date not recorded" in receiptSource
+          assert "Only an existing positive cash payment" in receiptSource
+          assert "Only positive historical cash records" in receiptSource
+          assert "This copy does not record a new payment" in receiptSource
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/HistoricalReceiptsV253.java").write_text(receiptSource)
+          recovery=Path("src/premium/v25_9/BackupRecoveryV259.java").read_text()
+          assert "Room.inMemoryDatabaseBuilder" in recovery
+          assert "temporary.close()" in recovery
+          assert "MigrationCodec.exportVerified(temporary)" in recovery
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupRecoveryV259.java").write_text(recovery)
+          cash=Path("src/premium/v25_6/CashCorrectionsV256.java").read_text()
+          correctionPdf=Path("src/premium/v25_6/CashCorrectionPdfV256.java").read_text()
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/CashCorrectionsV256.java").write_text(cash)
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/CashCorrectionPdfV256.java").write_text(correctionPdf)
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v25_9/BackupGuardian.java").read_text())
+          pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
+          assert pdf.exists()
+          pdfsource=pdf.read_text()
+          assert "new PdfDocument.PageInfo.Builder(842,595,1)" in pdfsource
+          assert "purchaseDetails" in pdfsource
+          assert "2026-02" in pdfsource
+          assert "pdf.finishPage(page)" in pdfsource
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/ClassicLedgerV231.java").write_text(pdf.read_text())
+          s=p.read_text()
+          assert "SAVE CLASSIC PDF · A4 LANDSCAPE" in s
+          assert "monthPicker()" in s
+          assert "if(req==SAVE_PDF)" in s
+          assert "chooseMonth(" in s
+          assert "Monthly receipts" in s
+          assert "restoreHistoricalPack" in s
+          assert "historicalDonationRecorded" in s
+          assert "verifyClassicPdf" in s
+          assert "BackupGuardian.save" in s
+          assert "CHOOSE EXTERNAL BACKUP FOLDER" in s
+          assert "PICK_BACKUP_TREE" in s
+          guardian=Path("src/premium/v25_9/BackupGuardian.java").read_text()
+          assert "lastError(Context context)" in guardian
+          assert "verifySavedCopy(Context context,Uri document,File original)" in guardian
+          assert "verifyLatestExternal(Context context)" in guardian
+          assert "MigrationCodec.inspect(new String(data,StandardCharsets.UTF_8))" in guardian
+          assert "static String recoveryReadiness(Context context)" in guardian
+          assert "static final int MAX_BACKUP_BYTES=12_000_000" in guardian
+          assert "Backup health" in s
+          assert "BackupGuardian.MAX_BACKUP_BYTES" in s
+          assert "Recovery readiness" in s
+          assert "v26.9 DEVELOPMENT CANDIDATE" in s
+          assert "verifyLatestExternal(this)" in s
+          assert "TEST RESTORE WITHOUT CHANGING DATA" in s
+          assert "BackupRecoveryV259.dryRun(this" in s
+          assert "TEST_RESTORE=2006" in s
+          assert "openMonthEndReview(" in s
+          assert "askMonthCloseReason(" in s
+          assert "MonthlyCloseV258.record" in s
+          assert "requireOpenMonth(mm)" in s
+          assert "MonthlyReviewPdfV258.make" in s
+          assert "openPhysicalStockCount()" in s
+          assert "StockReconciliationV257.calculate" in s
+          assert "StockReconciliationV257.append" in s
+          assert "StockReconciliationV257.packNote" in s
+          assert "Reconcile completed-month physical stock" in s
+          assert "openCashCorrection(" in s
+          assert "Commit audited correction" in s
+          assert "CashCorrectionsV256.append" in s
+          assert "renderCashReceipt(" in s
+          assert "CANCELED record" in s
+          assert "private void previewPdf" in s
+          assert "Receipt preview" in s
+          assert "PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY" in s
+          assert "private void showReceiptLibrary()" in s
+          assert "Find or share any past receipt" in s
+          assert "RECEIPT LIBRARY · ALL MONTHS" in s
+          assert "SEARCH MEMBER, PERIOD OR AMOUNT" in s
+          assert "Show next 25 receipts" in s
+          assert "Save PDF" in s
+          assert "HistoricalReceiptsV253.legacy(this,item.member,item.historical" in s
+          assert "renderCashReceipt(item.member,item.payment)" in s
+          assert '"cash".equals(c.kind)&&c.amount>0' in s
+          assert '"cash".equals(item.kind)&&item.amount>0' in s
+          assert "Find or share any past receipt" in s
+          assert "Share receipt" in s
+          assert "Share statement" in s
+          assert "renderCashReceipt(member,payment)" in s
+          assert "HistoricalReceiptsV253.legacy(this,member,historical" in s
+          assert "Stock position from confirmed baseline" in s
+          assert "openInventoryCheckpoint()" in s
+          assert "StockReconciliationV257.calculate" in s
+          assert "InventoryCheckpoint.updatedJson" in s
+          assert "dao.updateInventoryJson(updated)" in s
+          assert "checkpointSummary" in s
+          assert "Record shuttle usage" in s
+          assert "openShuttleUsageForm()" in s
+          assert "Shuttles used this month" in s
+          assert "Shuttles used all-time" in s
+          assert "List<StockUsage> issued=database.dao().stockUsages()" in s
+          assert "insertStock(Collections.singletonList(entry))" in s
+          assert 'BackupGuardian.save(this,database,"shuttle-usage",true)' in s
+          assert "requireImportedLedger()" in s
+          assert "result.stockUsage" in s
+          assert "current.stockUsage" in s
+          assert "Complete recorded member history" in s
+          assert "Imported historical periods" in s
+          assert "openShuttleDonation()" in s
+          assert "Total packs acquired" in s
+          assert "Stock accounting basis" in s
+          assert "checkedPurchaseDate" in s
+          records=Path("app/src/main/java/com/vinayak/badminton/nativepreview/Records.java").read_text()
+          dao=Path("app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDao.java").read_text()
+          codec=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MigrationCodec.java").read_text()
+          assert '@Entity(tableName="stock_usage"' in records
+          assert "void insertStock(List<StockUsage> rows)" in dao
+          assert '"stockUsage",stock' in codec
+          assert 'x.shuttles=v.getLong("shuttles")' in codec
+          assert 'e.category="Shuttle pack"' in s
+          assert 'c.kind="packs"' in s
+          assert "6_000_000" not in s
+          assert "warnOnBackupFailure()" in s
+          assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
+          assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
+          assert "MigrationCodec.inspect(json)" in s
+          assert "This v24 preview" not in s
+          assert "unsigned preview" not in s
+          assert "MigrationCodec.inspect(json)" in guardian
+          assert "takePersistableUriPermission" in guardian
+          assert "ClassicLedgerV231.master" in s
+          assert 'PRINT CLASSIC · A4 LANDSCAPE' in s
+          assert 'setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())' in s
+          assert 'new FileOutputStream(destination.getFileDescriptor())' in s
+          assert 'callback.onLayoutFailed("Please select A4 landscape instead of portrait")' in s
+          p=Path("app/build.gradle")
+          s=p.read_text()
+          assert "premiumv20" in s, "Unknown v20 application identity"
+          s=s.replace("premiumv20","premiumv24")
+          import os
+          s=s.replace("versionCode 20","versionCode "+str(27000+int(os.environ["GITHUB_RUN_NUMBER"])))
+          s += '\nandroid { defaultConfig { versionName "26.9-dev.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
+          p.write_text(s)
+          manifest=Path("app/src/main/AndroidManifest.xml")
+          text=manifest.read_text()
+          import re
+          text,n=re.subn(r'android:label="[^"]+"','android:label="Badminton Premium"',text,count=1)
+          assert n==1
+          manifest.write_text(text)
+          PY
+
+      - name: Patch existing Room inventory column and verified JSON export
+        run: |
+          python3 src/premium/v25_2/patch_inventory.py
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          dao=(app/"LedgerDao.java").read_text()
+          codec=(app/"MigrationCodec.java").read_text()
+          model=(app/"LedgerDatabase.java").read_text()
+          assert "int updateInventoryJson(String json)" in dao
+          assert 'state.put("inventoryStock",new JSONObject(meta.inventoryStockJson))' in codec
+          assert 'InventoryCheckpoint.read(inventory.toString())' in codec
+          assert "version=1" in model
+          assert (app/"InventoryCheckpoint.java").exists()
+          assert (app/"ShuttleInventoryMath.java").exists()
+          PY
+      - name: Integrate immutable cash corrections and verify accounting paths
+        run: |
+          python3 src/premium/v25_6/patch_cash_corrections.py
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          codec=(root/"MigrationCodec.java").read_text()
+          math=(root/"ReportMath.java").read_text()
+          classic=(root/"ClassicLedgerV231.java").read_text()
+          pdf=(root/"PdfReports.java").read_text()
+          assert "cashCorrectionDeltas=CashCorrectionsV256.monthDeltas(ledger)" in codec
+          assert "importedCorrectionDeltas=CashCorrectionsV256.monthDeltas(d)" in codec
+          assert "CashCorrectionsV256.monthDeltas(meta.inventoryStockJson,payments)" in math
+          assert "CashCorrectionsV256.states(meta.inventoryStockJson,contributions)" in classic
+          assert "reported==0?\"VOID\"" in pdf
+          assert "version=1" in (root/"LedgerDatabase.java").read_text()
+          PY
+      - name: Validate physical stock count verification without Room migration
+        run: |
+          python3 src/premium/v25_7/patch_stock_reconciliation.py
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          assert "StockReconciliationV257.read(inventory.toString())" in (app/"MigrationCodec.java").read_text()
+          assert "vinayakPhysicalCountsV1" in (app/"StockReconciliationV257.java").read_text()
+          assert "PACK_SIZE=" in (app/"StockReconciliationV257.java").read_text()
+          assert "version=1" in (app/"LedgerDatabase.java").read_text()
+          PY
+      - name: Verify audited month-end close and independent A4 review PDF
+        run: |
+          python3 src/premium/v25_8/patch_month_close.py
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          assert "MonthlyCloseV258.read(inventory.toString())" in (root/"MigrationCodec.java").read_text()
+          assert "vinayakMonthlyCloseEventsV1" in (root/"MonthlyCloseV258.java").read_text()
+          assert "new PdfDocument.PageInfo.Builder(842,595,1)" in (root/"MonthlyReviewPdfV258.java").read_text()
+          assert "version=1" in (root/"LedgerDatabase.java").read_text()
+          PY
+      - name: Integrate additive v26 modules and validate JSON preservation
+        run: |
+          python3 src/premium/v26_9/patch_v26.py
+          grep -q 'PremiumV26State.validate' app/src/main/java/com/vinayak/badminton/nativepreview/MigrationCodec.java
+          grep -q 'version=1' app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDatabase.java
+      - name: Verify changed source rules
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          src=Path("src/premium/v26_9/MainActivity.java").read_text()
+          model=Path("src/premium/v26_9/PremiumV26State.java").read_text()
+          crypto=Path("src/premium/v26_9/PremiumBackupCrypto.java").read_text()
+          assert "requireOpenMonth(original.feeMonth)" in src
+          assert "database.runInTransaction" in src
+          assert "Math.addExact" in model
+          assert "vinayakFeePoliciesV26" in model
+          assert "vinayakMemberProfilesV26" in model
+          assert "vinayakStockThresholdsV26" in model
+          assert "PBKDF2WithHmacSHA256" in crypto and "AES/GCM/NoPadding" in crypto
+          assert "MigrationCodec.inspect" in crypto
+          assert "version=1" in Path("app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDatabase.java").read_text()
+          PY
+      - name: Regression-test shuttle stock arithmetic
+        run: |
+          mkdir -p "$RUNNER_TEMP/stock-tests"
+          javac -d "$RUNNER_TEMP/stock-tests" src/premium/v25_2/ShuttleInventoryMath.java src/premium/v25_2/InventoryMathSmoke.java
+          java -cp "$RUNNER_TEMP/stock-tests" com.vinayak.badminton.nativepreview.InventoryMathSmoke
+      - name: Execute v26 synthetic financial / AES-GCM regression suite
+        run: bash tools/run_v26_core_smoke.sh
+      - name: Compile unsigned debug candidate
+        run: gradle --no-daemon :app:assembleDebug
+      - name: Verify v26 development APK package ID and upgrade version
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 26.9-dev.
+      - name: Enable Android emulator hardware acceleration
+        shell: bash
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Launch real Android emulator and navigate all five tabs
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_5
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash tools/run_v26_emulator_smoke.sh
+      - name: Preserve synthetic-only emulator log and screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Badminton-v26.9-Emulator-Smoke-Evidence-No-Private-Ledger
+          path: ${{ runner.temp }}/v26-emulator-evidence/
+          if-no-files-found: warn
