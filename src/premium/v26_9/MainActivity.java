@@ -49,7 +49,7 @@ public final class MainActivity extends Activity {
  private void requireOpenMonth(String month){
   LedgerMeta meta=database.dao().meta();
   if(meta==null)throw new IllegalStateException("Import the verified ledger before changes.");
-  MonthlyCloseV258.requireOpen(meta.inventoryStockJson,MigrationCodec.ym(month));
+  PremiumV26ClosingGuard.requireWritable(meta.inventoryStockJson,MigrationCodec.ym(month));
  }
  private void requireEditableStockMonth(String month){
   LedgerMeta meta=database.dao().meta();
