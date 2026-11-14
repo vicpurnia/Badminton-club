@@ -145,8 +145,8 @@ jobs:
           assert "renderCashReceipt(" in s
           assert "CANCELED record" in s
           assert "private void previewPdf" in s
-          assert "Preview recorded PDF" in s
-          assert "No PDF viewer is available" in s
+          assert "Receipt preview" in s
+          assert "PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY" in s
           assert "private void showReceiptLibrary()" in s
           assert "Find or share any past receipt" in s
           assert "RECEIPT LIBRARY · ALL MONTHS" in s
