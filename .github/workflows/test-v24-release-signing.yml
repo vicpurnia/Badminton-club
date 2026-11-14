@@ -150,7 +150,7 @@ jobs:
           assert "HistoricalReceiptsV253.legacy(this,member,historical" in s
           assert "Stock position from confirmed baseline" in s
           assert "openInventoryCheckpoint()" in s
-          assert "InventoryCheckpoint.calculate" in s
+          assert "StockReconciliationV257.calculate" in s
           assert "InventoryCheckpoint.updatedJson" in s
           assert "dao.updateInventoryJson(updated)" in s
           assert "checkpointSummary" in s
