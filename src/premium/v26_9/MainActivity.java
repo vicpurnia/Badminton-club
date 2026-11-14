@@ -439,7 +439,7 @@ public final class MainActivity extends Activity {
  private void importPending(){MigrationCodec.Preview preview=pendingImport;pendingImport=null;if(preview==null)return;
   background(()->{MigrationCodec.importChecked(database,preview);BackupGuardian.save(this,database,"import",true);warnOnBackupFailure();runOnUiThread(()->{Toast.makeText(this,"Ledger imported. Review backups in Reports.",Toast.LENGTH_LONG).show();showHome();});});}
 
- private int memberRenderGeneration=0;
+ private volatile int memberRenderGeneration=0;
  private static final class MemberCardData {
   final Member member;
   final String name,status,detail;
@@ -680,10 +680,18 @@ public final class MainActivity extends Activity {
      for(Member other:database.dao().members())if(
       effectiveName(other,profiles).trim().toLowerCase(Locale.ROOT).replaceAll("\\s+"," ").equals(normal))
       throw new IllegalArgumentException("Possible duplicate member: "+n+"; original ID protected");
-     Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);
+     LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
+     Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;dao.insertMember(m);
+     String createdMonth=new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new Date());
+     String at=new Date().toString();
+     String updated=PremiumV26State.addNewMemberOrigin(meta.inventoryStockJson,
+       m.id,n,createdMonth,"origin-"+UUID.randomUUID(),at,knownMembers());
+     if(dao.updateInventoryJson(updated)!=1)
+      throw new IllegalStateException("New member billing origin could not be recorded");
      AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
-     a.createdAt=new Date().toString();a.action="New member";
-     a.details="Created member "+m.id+" with display name "+n;database.dao().audit(a);
+     a.createdAt=at;a.action="New member";
+     a.details="Created member "+m.id+" / billing starts "+createdMonth+
+      " / original receipts and prior members unchanged";dao.audit(a);
     });
     BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();
     runOnUiThread(this::showMembers);
