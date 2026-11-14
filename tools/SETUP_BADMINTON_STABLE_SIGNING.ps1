@@ -5,7 +5,8 @@
 param(
     [string]$Repository = "vicpurnia/Badminton-club",
     [string]$KeystorePath = "",
-    [switch]$CheckJavaOnly
+    [switch]$CheckJavaOnly,
+    [switch]$CheckGithubOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -176,6 +177,9 @@ if (-not (Test-GitHubAuthorization)) {
     }
 }
 Write-Host "GitHub CLI authentication verified." -ForegroundColor Green
+
+# Internal CI-only test: no GitHub mutations or signing material.
+if ($CheckGithubOnly) { return }
 
 # Fail closed if the repository already pins a different signing identity.
 $variablesJson = & $gh variable list -R $Repository --json name,value
