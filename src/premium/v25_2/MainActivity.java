@@ -180,6 +180,12 @@ public final class MainActivity extends Activity {
     .setPositiveButton("OK",null).show());
   });
  }
+
+ private static String checkpointSummary(String raw){
+  InventoryCheckpoint.Config config=InventoryCheckpoint.read(raw);
+  if(config==null)return "not configured";
+  return config.month+" / "+config.openingShuttles+" shuttles / "+config.perPack+" per pack";
+ }
  private void chooseBackupToVerify(){
   Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
   pick.addCategory(Intent.CATEGORY_OPENABLE);
@@ -240,6 +246,9 @@ public final class MainActivity extends Activity {
       +"\nContributions: "+current.payments+" vs "+result.payments
       +"\nExpenses: "+current.expenses+" vs "+result.expenses
       +"\nShuttle usage entries: "+current.stockUsage+" vs "+result.stockUsage
+      +"\nConfirmed stock checkpoint: "+
+      checkpointSummary(database.dao().meta().inventoryStockJson)+" vs "+
+      checkpointSummary(result.ledger.optJSONObject("inventoryStock")==null?"":result.ledger.optJSONObject("inventoryStock").toString())
       +"\nLast month: "+current.lastMonth+" vs "+result.lastMonth
       +"\nClosing balance: "+rupee(current.closingBalance)+" vs "+rupee(result.closingBalance)
       +"\nThese are summary checks; matching totals alone do not prove every entry is identical.";
