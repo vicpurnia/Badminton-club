@@ -305,6 +305,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/stock-tests"
           javac -d "$RUNNER_TEMP/stock-tests" src/premium/v25_2/ShuttleInventoryMath.java src/premium/v25_2/InventoryMathSmoke.java
           java -cp "$RUNNER_TEMP/stock-tests" com.vinayak.badminton.nativepreview.InventoryMathSmoke
+      - name: Execute v26 synthetic financial / AES-GCM regression suite
+        run: bash tools/run_v26_core_smoke.sh
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Upload non-release v26 candidate debug APK
