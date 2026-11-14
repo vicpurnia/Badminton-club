@@ -59,6 +59,8 @@ public final class V26CoreSmoke {
    "profile-1","2026-11-14",known);
   yes(!PremiumV26State.profiles(data,known).get("synthetic-A").active,
    "Archiving must retain immutable member identity");
+  yes(PremiumV26State.billableMonth(data,"synthetic-A","2026-03"),"Earlier owed months must survive archiving");
+  yes(!PremiumV26State.billableMonth(data,"synthetic-A","2027-02"),"Future months must not bill archived members");
   final String completed=data;
   reject(()->PremiumV26State.addPolicy(completed,"synthetic-unknown","2026-12",500,
    "Unknown member blocked","fee-3","2026-11-14",known),"Unknown member");
