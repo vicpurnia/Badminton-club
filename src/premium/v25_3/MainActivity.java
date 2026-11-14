@@ -396,20 +396,36 @@ public final class MainActivity extends Activity {
      String type="packs".equals(c.kind)?"Donated shuttle pack · noncash":"Cash contribution";
      info.addView(text(type+" · "+date,10,GRAY,false));
      item.addView(info,new LinearLayout.LayoutParams(0,-2,1));
-     item.addView(text("packs".equals(c.kind)?"+"+c.amount+" pk":rupee(c.amount),13,GREEN,true));
-     body.addView(item);gap(body,11);
+     LinearLayout right=col();right.setGravity(Gravity.END);
+     right.addView(text("packs".equals(c.kind)?"+"+c.amount+" pk":rupee(c.amount),13,GREEN,true));
+     if("cash".equals(c.kind)&&c.amount>0){
+      gap(right,5);
+      right.addView(inlineButton("Share receipt",GREEN,()->{
+       memberDialog.dismiss();
+       shareRecordedReceipt(m,c);
+      }));
+     }
+     item.addView(right);body.addView(item);gap(body,11);
     }
     if(entries.isEmpty())body.addView(text("No separate monthly entries yet.",12,GRAY,false));
     gap(body,12);
     body.addView(text("Imported historical periods ("+historical.size()+")",16,DARK,true));gap(body,9);
-    body.addView(text("Original 2025 ledger period codes are preserved; donated packs are never treated as cash.",11,GRAY,false));gap(body,10);
+    body.addView(text("Original 2025 period codes are preserved. Share Statement provides a historical cash record, not a newly dated receipt. Donated packs are never treated as cash.",11,GRAY,false));gap(body,10);
     for(LegacyEntry e:historical){
      LinearLayout item=row();LinearLayout info=col();
      info.addView(text(e.period==null?"Historical period":e.period,13,DARK,true));gap(info,3);
      info.addView(text("packs".equals(e.kind)?"Donated shuttle pack · historical":"Cash contribution · historical",10,GRAY,false));
      item.addView(info,new LinearLayout.LayoutParams(0,-2,1));
-     item.addView(text("packs".equals(e.kind)?"+"+e.amount+" pk":rupee(e.amount),13,GREEN,true));
-     body.addView(item);gap(body,11);
+     LinearLayout right=col();right.setGravity(Gravity.END);
+     right.addView(text("packs".equals(e.kind)?"+"+e.amount+" pk":rupee(e.amount),13,GREEN,true));
+     if("cash".equals(e.kind)&&e.amount>0){
+      gap(right,5);
+      right.addView(inlineButton("Share statement",GREEN,()->{
+       memberDialog.dismiss();
+       shareHistoricalStatement(m,e);
+      }));
+     }
+     item.addView(right);body.addView(item);gap(body,11);
     }
     if(historical.isEmpty())body.addView(text("No imported historical entries.",12,GRAY,false));
     gap(body,16);
@@ -425,11 +441,31 @@ public final class MainActivity extends Activity {
  }
  private Dialog memberDialog;
  private void addMember(){EditText e=new EditText(this);e.setHint("Full player name");new AlertDialog.Builder(this).setTitle("New player").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Add",(d,w)->background(()->{String n=e.getText().toString().trim();if(n.isEmpty())throw new IllegalArgumentException("Name required");requireImportedLedger();Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();runOnUiThread(this::showMembers);})).show();}
+
+ private void shareRecordedReceipt(Member member,Contribution payment){
+  if(member==null||payment==null||!"cash".equals(payment.kind)||payment.amount<=0){
+   error(new IllegalArgumentException("Only an already-recorded cash contribution can be shared."));
+   return;
+  }
+  sharePdf("Recorded_Receipt_"+payment.id+".pdf",
+   ()->HistoricalReceiptsV253.payment(this,member,payment,database.dao().meta()));
+ }
+ private void shareHistoricalStatement(Member member,LegacyEntry historical){
+  if(member==null||historical==null||!"cash".equals(historical.kind)||historical.amount<=0){
+   error(new IllegalArgumentException("Only a positive historical cash contribution can be shared."));
+   return;
+  }
+  sharePdf("Historical_Statement_"+member.id+"_"+historical.period+".pdf",
+   ()->HistoricalReceiptsV253.legacy(this,member,historical,database.dao().meta()));
+ }
  private void showPayments(){title("Collect fees","Simple, quick and ready to share");monthPicker();
-  LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Collect ₹2,000",()->openPayment(null)));content.addView(headline);gap(content,22);
+  LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Collect ₹2,000",()->openPayment(null)));gap(headline,9);
+  headline.addView(button("▤  Share previous paid receipt",()->selectTab("Members")));
+  content.addView(headline);gap(content,16);
+  notice("Previously paid?", "Open Members, select the player and share any recorded payment. Imported 2025 periods have Historical Contribution Statements rather than newly dated receipts.");
   sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));final String viewedMonth=reportMonth;
   background(()->{List<Contribution> rows=database.dao().contributions();Map<String,Member> names=new HashMap<>();for(Member m:database.dao().members())names.put(m.id,m);runOnUiThread(()->{int n=0;for(int i=rows.size()-1;i>=0;i--){Contribution c=rows.get(i);if("packs".equals(c.kind)||!viewedMonth.equals(c.feeMonth))continue;Member m=names.get(c.memberId);if(m==null)continue;
-   LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);right.addView(text(rupee(c.amount),15,GREEN,true));gap(right,6);right.addView(inlineButton("Receipt ▤",GREEN,()->sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()))));card.addView(right);panel(content,card);if(++n==16)break;}
+   LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);right.addView(text(rupee(c.amount),15,GREEN,true));gap(right,6);right.addView(inlineButton("Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
    if(n==0)notice("No receipts this month","Choose another month above or collect a contribution.");});});
  }
  private void openPayment(String chosen){background(()->{requireImportedLedger();List<Member> members=database.dao().members();runOnUiThread(()->{
