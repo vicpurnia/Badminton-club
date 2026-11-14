@@ -459,25 +459,226 @@ public final class MainActivity extends Activity {
   warnOnBackupFailure();
   runOnUiThread(()->{Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();showPayments();sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));});
  });}
- private void showExpenses(){title("Shuttle desk","Purchases, spending and stock records");monthPicker();
-  LinearLayout hero=col();hero.setBackground(gradient(GREEN,DARK,22));pad(hero,20,22);hero.addView(text("SHUTTLE EXPENDITURE",11,0xFFD6EBDD,true));gap(hero,12);hero.addView(text("Keep every pack accounted for",21,Color.WHITE,true));gap(hero,15);hero.addView(button("＋  Record purchase",this::openExpense));content.addView(hero);gap(content,20);
-  background(()->{List<Expense> entries=database.dao().expenses();long amount=0,packs=0;for(Expense e:entries)if(reportMonth.equals(e.month)){amount+=e.amount;if(e.category.equalsIgnoreCase("Shuttle pack"))packs+=e.quantity;}long total=amount,qty=packs;
-   runOnUiThread(()->{LinearLayout stats=row();stats.addView(metric("Spent this month",rupee(total),"◈"),new LinearLayout.LayoutParams(0,-2,1));stats.addView(metric("Packs purchased",String.valueOf(qty),"▥"),new LinearLayout.LayoutParams(0,-2,1));content.addView(stats);gap(content,24);sectionHeading("Recent purchases","Records from the club ledger");int n=0;
-    for(int i=entries.size()-1;i>=0;i--){Expense e=entries.get(i);LinearLayout card=row();TextView badge=avatar("Shuttle");card.addView(badge);LinearLayout labels=col();pad(labels,12,0);labels.addView(text(e.category,14,DARK,true));gap(labels,5);labels.addView(text(dateLabel(e.month)+(e.date.isEmpty()?" · Exact date not recorded":" · "+e.date),11,GRAY,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));LinearLayout v=col();v.setGravity(Gravity.END);v.addView(text("−"+rupee(e.amount),14,DARK,true));gap(v,5);v.addView(text(e.quantity+" pack(s)",11,GRAY,false));card.addView(v);panel(content,card);if(++n>=15)break;}
-   });
-  });}
- private void openExpense(){Dialog dialog=new Dialog(this);LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,22,24);form.addView(text("New shuttle purchase",22,DARK,true));gap(form,5);form.addView(text("Update expenses and running balance",12,GRAY,false));gap(form,24);
-  form.addView(text("MONTH (YYYY-MM)",11,GRAY,true));gap(form,8);EditText month=new EditText(this);month.setText(reportMonth);month.setSingleLine(true);month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);form.addView(month);gap(form,17);
-  form.addView(text("NUMBER OF PACKS",11,GRAY,true));gap(form,8);EditText count=new EditText(this);count.setInputType(2);count.setText("1");count.setBackground(border(LIGHT,LINE,12));pad(count,14,12);form.addView(count);gap(form,17);
-  form.addView(text("PRICE PER PACK",11,GRAY,true));gap(form,8);EditText price=new EditText(this);price.setInputType(2);price.setText("4000");price.setBackground(border(LIGHT,LINE,12));pad(price,14,12);form.addView(price);gap(form,8);
-  LinearLayout presets=row();for(int q:new int[]{3200,3500,4000}){TextView chip=pill("₹"+q,GREEN,PALE);presets.addView(chip,new LinearLayout.LayoutParams(0,-2,1));pressable(chip,()->price.setText(String.valueOf(q)));}form.addView(presets);gap(form,20);
-  form.addView(button("Save purchase  →",()->{
-   try{String mm=MigrationCodec.ym(month.getText().toString().trim());long qty=Long.parseLong(count.getText().toString()),unit=Long.parseLong(price.getText().toString());if(qty<=0||unit<=0)throw new NumberFormatException();long total=Math.multiplyExact(qty,unit);dialog.dismiss();
-    background(()->{Expense e=new Expense();e.id="expense-"+UUID.randomUUID();e.month=mm;e.quantity=qty;e.amount=total;database.dao().insertExpense(e);BackupGuardian.save(this,database,"shuttle-purchase",true);warnOnBackupFailure();runOnUiThread(()->{Toast.makeText(this,"Purchase recorded",Toast.LENGTH_LONG).show();showExpenses();});});
-   }catch(Exception ex){error(new IllegalArgumentException("Enter a valid month, quantity and price"));}
-  }));ScrollView sv=new ScrollView(this);sv.addView(form);dialog.setContentView(sv);dialog.show();Window w=dialog.getWindow();if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setGravity(Gravity.BOTTOM);w.setLayout(-1,-2);}
- }
 
+ private static boolean isShuttlePurchase(Expense e){
+  return e!=null&&e.category!=null&&e.category.toLowerCase(Locale.ROOT).contains("shuttle");
+ }
+ private static String checkedPurchaseDate(String input,String month){
+  String value=input==null?"":input.trim();
+  if(value.isEmpty())return "";
+  if(value.length()!=10||!value.startsWith(month+"-"))
+   throw new IllegalArgumentException("Purchase/donation date must use YYYY-MM-DD within the chosen month.");
+  java.text.SimpleDateFormat dateParser=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT);
+  dateParser.setLenient(false);
+  try {
+   Date parsed=dateParser.parse(value);
+   if(parsed==null||!value.equals(dateParser.format(parsed)))
+    throw new IllegalArgumentException("Enter a real calendar date.");
+  }catch(java.text.ParseException ex){
+   throw new IllegalArgumentException("Enter a real calendar date in YYYY-MM-DD format.");
+  }
+  return value;
+ }
+ private void showExpenses(){
+  title("Shuttle desk","Purchases, donated packs and acquisition history");monthPicker();
+  LinearLayout hero=col();hero.setBackground(gradient(GREEN,DARK,22));pad(hero,20,22);
+  hero.addView(text("SHUTTLE ACTIVITY",11,0xFFD6EBDD,true));gap(hero,10);
+  hero.addView(text("Purchases & donations",21,Color.WHITE,true));gap(hero,9);
+  hero.addView(text("Cash spending and noncash donations are always recorded separately.",12,0xFFD6EBDD,false));gap(hero,15);
+  hero.addView(button("＋ Record shuttle purchase",this::openExpense));gap(hero,9);
+  hero.addView(button("＋ Record donated shuttle pack",this::openShuttleDonation));
+  content.addView(hero);gap(content,16);
+  notice("Inventory limitation","Acquired packs are not the same as remaining stock. Shuttle usage is not yet logged, so the app does not calculate or invent a stock balance.");
+  final String selected=reportMonth;
+  background(()->{
+   List<Expense> entries=database.dao().expenses();
+   List<Contribution> contributions=database.dao().contributions();
+   List<LegacyEntry> legacy=database.dao().legacy();
+   Map<String,String> names=new HashMap<>();
+   for(Member person:database.dao().members())names.put(person.id,person.name);
+   long spending=0,purchased=0,donated=0,legacyDonated=0;
+   ArrayList<Expense> purchases=new ArrayList<>();
+   ArrayList<Contribution> donations=new ArrayList<>();
+   for(Expense e:entries)if(selected.equals(e.month)){
+    spending+=e.amount;
+    if(isShuttlePurchase(e)){purchased+=Math.max(0,e.quantity);purchases.add(e);}
+   }
+   for(Contribution c:contributions)if(selected.equals(c.feeMonth)&&"packs".equals(c.kind)){
+    donated+=Math.max(0,c.amount);donations.add(c);
+   }
+   for(LegacyEntry e:legacy)if("packs".equals(e.kind))legacyDonated+=Math.max(0,e.amount);
+   purchases.sort((a,b)->{
+    String ad=a.date==null?"":a.date,bd=b.date==null?"":b.date;
+    return bd.compareTo(ad);
+   });
+   donations.sort((a,b)->{
+    String ad=a.receivedDate==null?"":a.receivedDate,bd=b.receivedDate==null?"":b.receivedDate;
+    return bd.compareTo(ad);
+   });
+   final long fSpent=spending,fBought=purchased,fGiven=donated,fLegacyGiven=legacyDonated;
+   runOnUiThread(()->{
+    sectionHeading("Selected-month summary",dateLabel(selected));
+    LinearLayout stats=row();
+    stats.addView(metric("Shuttle spending",rupee(fSpent),"◈"),new LinearLayout.LayoutParams(0,-2,1));
+    stats.addView(metric("Packs purchased",String.valueOf(fBought),"▥"),new LinearLayout.LayoutParams(0,-2,1));
+    content.addView(stats);gap(content,9);
+    LinearLayout supply=row();
+    supply.addView(metric("Packs donated",String.valueOf(fGiven),"＋"),new LinearLayout.LayoutParams(0,-2,1));
+    supply.addView(metric("Total packs acquired",String.valueOf(fBought+fGiven),"▤"),new LinearLayout.LayoutParams(0,-2,1));
+    content.addView(supply);gap(content,9);
+    notice("Imported 2025 donations","The historic ledger also contains "+fLegacyGiven+" donated pack(s) across its original 2025 periods. These are not added to the selected month's total.");
+    gap(content,14);
+    sectionHeading("Shuttle purchases ("+purchases.size()+")","Selected month · recorded prices and dates");
+    if(purchases.isEmpty())notice("No shuttle purchases this month","Choose another month or record a purchase.");
+    for(Expense e:purchases){
+     LinearLayout card=row();card.addView(avatar("Shuttle"));
+     LinearLayout labels=col();pad(labels,12,0);
+     String recorded=(e.date==null||e.date.isEmpty())?"Exact date not recorded":e.date;
+     labels.addView(text(recorded,13,DARK,true));gap(labels,5);
+     String unit=e.quantity>0?" · approx. "+rupee(e.amount/e.quantity)+"/pack":"";
+     labels.addView(text(e.quantity+" pack(s)"+unit,11,GRAY,false));
+     card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+     card.addView(text(rupee(e.amount),14,GREEN,true));panel(content,card);
+    }
+    gap(content,15);
+    sectionHeading("Donated packs ("+donations.size()+")","Noncash · selected month");
+    if(donations.isEmpty())notice("No pack donations this month","You can record donated packs without affecting cash balances.");
+    for(Contribution c:donations){
+     LinearLayout card=row();card.addView(avatar(names.getOrDefault(c.memberId,"?")));
+     LinearLayout info=col();pad(info,12,0);
+     info.addView(text(names.getOrDefault(c.memberId,"Member"),13,DARK,true));gap(info,5);
+     String when=c.approximate||c.receivedDate==null||c.receivedDate.isEmpty()?"Exact date not recorded":c.receivedDate;
+     info.addView(text(when+" · noncash",11,GRAY,false));
+     card.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+     card.addView(text("+"+c.amount+" pk",13,GREEN,true));panel(content,card);
+    }
+   });
+  });
+ }
+ private void openExpense(){
+  Dialog dialog=new Dialog(this);LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,22,24);
+  form.addView(text("New shuttle purchase",22,DARK,true));gap(form,7);
+  form.addView(text("Records a cash expense and the number of packs purchased.",12,GRAY,false));gap(form,18);
+  form.addView(text("MONTH (YYYY-MM)",11,GRAY,true));gap(form,7);
+  EditText month=new EditText(this);month.setText(reportMonth);month.setSingleLine(true);
+  month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);form.addView(month);gap(form,15);
+  form.addView(text("DATE (OPTIONAL)",11,GRAY,true));gap(form,7);
+  EditText day=new EditText(this);day.setHint("YYYY-MM-DD · leave blank if unknown");
+  day.setSingleLine(true);day.setBackground(border(LIGHT,LINE,12));pad(day,14,12);form.addView(day);gap(form,14);
+  form.addView(text("NUMBER OF PACKS",11,GRAY,true));gap(form,7);
+  EditText count=new EditText(this);count.setInputType(2);count.setText("1");
+  count.setBackground(border(LIGHT,LINE,12));pad(count,14,12);form.addView(count);gap(form,15);
+  form.addView(text("PRICE PER PACK",11,GRAY,true));gap(form,7);
+  EditText price=new EditText(this);price.setInputType(2);price.setText("4000");
+  price.setBackground(border(LIGHT,LINE,12));pad(price,14,12);form.addView(price);gap(form,8);
+  LinearLayout presets=row();
+  for(int q:new int[]{3200,3500,4000}){
+   TextView chip=pill("₹"+q,GREEN,PALE);presets.addView(chip,new LinearLayout.LayoutParams(0,-2,1));
+   pressable(chip,()->price.setText(String.valueOf(q)));
+  }
+  form.addView(presets);gap(form,17);
+  form.addView(button("Review purchase",()->{
+   try{
+    final String mm=MigrationCodec.ym(month.getText().toString().trim());
+    final String dd=checkedPurchaseDate(day.getText().toString(),mm);
+    final long qty=Long.parseLong(count.getText().toString().trim());
+    final long unit=Long.parseLong(price.getText().toString().trim());
+    if(qty<=0||unit<=0)throw new NumberFormatException();
+    final long total=Math.multiplyExact(qty,unit);
+    String summary="Record "+qty+" pack(s) at "+rupee(unit)+" each in "+mm+
+     "\nTotal cash expense: "+rupee(total)+
+     "\nPurchase date: "+(dd.isEmpty()?"not recorded":dd)+
+     "\n\nConfirm this new purchase? Existing expenses are not replaced.";
+    new AlertDialog.Builder(this).setTitle("Confirm shuttle purchase")
+     .setMessage(summary).setNegativeButton("Keep editing",null)
+     .setPositiveButton("Record purchase",(d,w)->{
+      dialog.dismiss();
+      background(()->{
+       Expense e=new Expense();e.id="expense-"+UUID.randomUUID();e.month=mm;
+       e.category="Shuttle pack";e.date=dd;e.quantity=qty;e.amount=total;
+       database.runInTransaction(()->{
+        database.dao().insertExpense(e);
+        AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
+        a.createdAt=new Date().toString();a.action="Shuttle purchase recorded";
+        a.details=e.id+" / "+qty+" pack(s) / "+rupee(total)+" / "+mm;
+        database.dao().audit(a);
+       });
+       BackupGuardian.save(this,database,"shuttle-purchase",true);
+       warnOnBackupFailure();
+       runOnUiThread(()->{Toast.makeText(this,"Shuttle purchase recorded",Toast.LENGTH_LONG).show();showExpenses();});
+      });
+     }).show();
+   }catch(Exception ex){error(new IllegalArgumentException("Check the month, optional date, pack quantity and positive unit price."));}
+  }));
+  ScrollView sv=new ScrollView(this);sv.addView(form);dialog.setContentView(sv);dialog.show();
+  Window w=dialog.getWindow();
+  if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setGravity(Gravity.BOTTOM);w.setLayout(-1,-2);}
+ }
+ private void openShuttleDonation(){
+  background(()->{
+   List<Member> players=database.dao().members();
+   runOnUiThread(()->{
+    if(players.isEmpty()){error(new IllegalStateException("Import or add members before recording a donation."));return;}
+    Dialog dialog=new Dialog(this);LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,22,24);
+    form.addView(text("Record donated shuttle packs",21,DARK,true));gap(form,8);
+    form.addView(text("A noncash entry. No collection, expenditure or closing balance is changed.",12,GRAY,false));gap(form,16);
+    form.addView(text("MEMBER",11,GRAY,true));gap(form,7);
+    AutoCompleteTextView who=new AutoCompleteTextView(this);who.setSingleLine(true);who.setThreshold(1);
+    String[] options=new String[players.size()];for(int i=0;i<players.size();i++)options[i]=players.get(i).name;
+    who.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_dropdown_item_1line,options));
+    who.setHint("Select contributing member");who.setBackground(border(LIGHT,LINE,12));pad(who,14,12);form.addView(who);gap(form,15);
+    form.addView(text("MONTH (YYYY-MM)",11,GRAY,true));gap(form,7);
+    EditText month=new EditText(this);month.setText(reportMonth);month.setSingleLine(true);
+    month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);form.addView(month);gap(form,14);
+    form.addView(text("DONATED PACKS",11,GRAY,true));gap(form,7);
+    EditText quantity=new EditText(this);quantity.setText("1");quantity.setInputType(2);
+    quantity.setBackground(border(LIGHT,LINE,12));pad(quantity,14,12);form.addView(quantity);gap(form,14);
+    form.addView(text("DATE (OPTIONAL)",11,GRAY,true));gap(form,7);
+    EditText day=new EditText(this);day.setHint("YYYY-MM-DD · leave blank if unknown");day.setSingleLine(true);
+    day.setBackground(border(LIGHT,LINE,12));pad(day,14,12);form.addView(day);gap(form,16);
+    form.addView(button("Review noncash donation",()->{
+     try{
+      String entered=who.getText().toString().trim();
+      Member chosen=null;for(Member person:players)if(person.name.equalsIgnoreCase(entered)){chosen=person;break;}
+      if(chosen==null){who.setError("Choose an existing member");return;}
+      final Member donor=chosen;
+      final String mm=MigrationCodec.ym(month.getText().toString().trim());
+      final String dd=checkedPurchaseDate(day.getText().toString(),mm);
+      final long qty=Long.parseLong(quantity.getText().toString().trim());
+      if(qty<=0||qty>100)throw new IllegalArgumentException("Enter 1–100 donated packs.");
+      new AlertDialog.Builder(this).setTitle("Confirm noncash donation")
+       .setMessage(donor.name+" · "+qty+" donated pack(s) · "+mm+
+        "\nDate: "+(dd.isEmpty()?"not recorded":dd)+
+        "\n\nCash collection and balance remain unchanged. This is a new entry, not a correction of earlier donations.")
+       .setNegativeButton("Keep editing",null)
+       .setPositiveButton("Record donated packs",(d,w)->{
+        dialog.dismiss();
+        background(()->{
+         Contribution c=new Contribution();
+         c.id="donated-pack-"+UUID.randomUUID();c.memberId=donor.id;c.feeMonth=mm;
+         c.receivedDate=dd.isEmpty()?mm+"-01":dd;c.approximate=dd.isEmpty();
+         c.historical=false;c.kind="packs";c.amount=qty;
+         c.method="Donated shuttle packs";
+         c.note=dd.isEmpty()?"Month-only donated packs; exact day unknown.":"Member donated packs on recorded day.";
+         database.runInTransaction(()->{
+          database.dao().insertPayment(c);
+          AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
+          a.createdAt=new Date().toString();a.action="Noncash shuttle donation recorded";
+          a.details=c.id+" / "+donor.name+" / "+qty+" donated pack(s) / "+mm+" / no cash adjustment";
+          database.dao().audit(a);
+         });
+         BackupGuardian.save(this,database,"shuttle-donation",true);warnOnBackupFailure();
+         runOnUiThread(()->{Toast.makeText(this,"Noncash shuttle donation recorded",Toast.LENGTH_LONG).show();showExpenses();});
+        });
+       }).show();
+     }catch(Exception ex){error(new IllegalArgumentException("Check member, month, donated-pack quantity and optional date."));}
+    }));
+    ScrollView scroll=new ScrollView(this);scroll.addView(form);dialog.setContentView(scroll);dialog.show();
+    Window w=dialog.getWindow();
+    if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);w.setGravity(Gravity.BOTTOM);w.setLayout(-1,-2);}
+   });
+  });
+ }
  private static boolean historicalDonationRecorded(LedgerDao dao){
   for(LegacyEntry item:dao.legacy())if("p11".equals(item.memberId)&&"2026-02".equals(item.period)&&"packs".equals(item.kind)&&item.amount>0)return true;
   for(Contribution item:dao.contributions())if("p11".equals(item.memberId)&&"2026-02".equals(item.feeMonth)&&"packs".equals(item.kind)&&item.amount>0)return true;
