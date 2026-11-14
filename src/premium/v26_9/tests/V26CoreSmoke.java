@@ -74,6 +74,25 @@ public final class V26CoreSmoke {
   yes(PremiumV26State.reorderThreshold(data)==12,"Inventory threshold preserved");
   PremiumV26State.validate(data,known);
 
+  // A physical stock anchor cannot be retroactively invalidated by newly inserted
+  // purchase, donated pack, shuttle usage or arbitrary opening-checkpoint edits.
+  String physicallyCounted=new JSONObject().put(PremiumV26StockGuard.COUNT_KEY,
+   new JSONArray().put(new JSONObject().put("id","count-1").put("month","2026-05"))).toString();
+  PremiumV26StockGuard.requireEditableStockMonth(physicallyCounted,"2026-06");
+  final String protectedCounts=physicallyCounted;
+  reject(()->PremiumV26StockGuard.requireEditableStockMonth(protectedCounts,"2026-05"),
+   "Counted month cannot accept backdated stock changes");
+  reject(()->PremiumV26StockGuard.requireEditableStockMonth(protectedCounts,"2026-04"),
+   "Previous period cannot accept backdated stock changes");
+  reject(()->PremiumV26StockGuard.requireEditableOpeningCheckpoint(protectedCounts),
+   "Confirmed physical count prevents changing opening checkpoint");
+  PremiumV26StockGuard.requireEditableOpeningCheckpoint("{}");
+  reject(()->PremiumV26StockGuard.countMonths(
+   new JSONObject().put(PremiumV26StockGuard.COUNT_KEY,
+    new JSONArray().put(new JSONObject().put("id","c").put("month","2026-07"))
+                   .put(new JSONObject().put("id","c").put("month","2026-08"))).toString()),
+   "Duplicated physical count event ID must fail closed");
+
   // Encryption test uses a synthetic verified ledger and never touches a real database.
   String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
