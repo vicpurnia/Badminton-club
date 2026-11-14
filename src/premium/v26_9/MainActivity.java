@@ -1766,7 +1766,7 @@ public final class MainActivity extends Activity {
   background(()->{
    requireImportedLedger();
    LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
-   List<Member> members=dao.members(),payments=dao.contributions();
+   List<Member> members=dao.members();List<Contribution> payments=dao.contributions();
    List<PremiumV26State.FeePolicy> rules=PremiumV26State.policies(meta.inventoryStockJson,knownMembers());
    List<PremiumV26State.Waiver> waivers=PremiumV26State.waivers(meta.inventoryStockJson,knownMembers());
    String month=reportMonth;
