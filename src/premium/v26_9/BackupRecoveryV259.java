@@ -59,6 +59,15 @@ final class BackupRecoveryV259 {
     if(!left.equals(right))
      throw new IllegalStateException("Audited history differs after in-memory restore: "+key);
    }
+   // The named-history checks above give precise failure messages; this final
+   // comparison protects *all* existing and future inventory metadata fields,
+   // including the opening checkpoint, pack factor and unknown extension keys.
+   JSONObject allBefore=before==null?new JSONObject():before;
+   JSONObject allAfter=after==null?new JSONObject():after;
+   if(!MigrationCodec.canonical(allBefore).equals(MigrationCodec.canonical(allAfter)))
+    throw new IllegalStateException(
+     "Complete inventory / audit metadata differs after temporary-memory restore. "+
+     "Recovery is not certified; the installed ledger remains untouched.");
    List<Contribution> entries=dao.contributions();
    Map<String,CashCorrectionsV256.State> corrected=CashCorrectionsV256.states(
      meta.inventoryStockJson,entries);
