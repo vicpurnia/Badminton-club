@@ -1925,7 +1925,7 @@ public final class MainActivity extends Activity {
     v.addView(text("CONTACT",11,GRAY,true));v.addView(contact);
     v.addView(text("JOINED",11,GRAY,true));v.addView(joined);
     v.addView(text("NOTES",11,GRAY,true));v.addView(notes);v.addView(active);
-    v.addView(text("The historical member ID and original receipts remain immutable. Archiving hides the member from new collection choices.",12,GRAY,false));
+    v.addView(text("Historical member ID and original receipts remain immutable. Archiving takes effect this calendar month; earlier assessed fees stay recorded. Archived members are excluded from new collection choices.",12,GRAY,false));
     new AlertDialog.Builder(this).setTitle("Member profile · audited")
      .setView(v).setNegativeButton("Cancel",null).setPositiveButton("Review",(d,w)->{
       String display=name.getText().toString().trim(),phone=contact.getText().toString().trim(),
