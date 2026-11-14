@@ -1,5 +1,8 @@
 # Authorized owner-only signed Android TEST candidate. Not a stable release.
 # Triggered by adding this workflow or an explicit Actions > Run workflow.
+# Acceptance gate: https://github.com/vicpurnia/Badminton-club/issues/2
+# This build includes the latest audited fee-waiver and physical stock-count fixes.
+# Never merge to main, auto-install, or mark STABLE on CI success alone.
 # The private signing key remains in GitHub Actions secrets and never enters this source.
 # A signed APK may be used for supervised in-place upgrade acceptance only after
 # saving and verifying an external ledger backup. Do not auto-install or publish.
@@ -351,18 +354,18 @@ jobs:
             }
           }
           GRADLE
-      - name: Compile stable signed APK
+      - name: Compile owner-signed v26.9 TEST APK
         env:
           BADMINTON_KEYSTORE_PASSWORD: ${{ secrets.BADMINTON_KEYSTORE_PASSWORD }}
           BADMINTON_KEY_ALIAS: ${{ secrets.BADMINTON_KEY_ALIAS }}
           BADMINTON_KEY_PASSWORD: ${{ secrets.BADMINTON_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
-      - name: Verify stable APK signature against permanent release certificate
+      - name: Verify TEST APK signature matches original owner's permanent certificate
         env:
           EXPECTED_CERT_SHA256: ${{ vars.BADMINTON_EXPECTED_CERT_SHA256 }}
         shell: bash
         run: bash tools/check-stable-signature.sh app/build/outputs/apk/release/app-release.apk "$EXPECTED_CERT_SHA256"
-      - name: Upload signed stable APK
+      - name: Upload signed TEST candidate (not a stable release)
         uses: actions/upload-artifact@v4
         with:
           name: Badminton-Premium-v26.9-SIGNED-TEST-CANDIDATE_NOT-PRODUCTION
