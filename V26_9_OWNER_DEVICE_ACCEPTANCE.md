@@ -120,3 +120,19 @@ The expanded synthetic-only Room fixture additionally verified preservation of:
 Both on-device instrumentation methods passed, and the upgraded application launched. This closes the **automated synthetic Room row-persistence** subtest; it does not assert that the full real imported club ledger, its Form/backup envelope or physical-device actions are validated. The v25.9 production branch is not changed.
 
 **Latest separate signed development TEST artifact including exact backup comparison:** [build 43620891575](https://github.com/vicpurnia/Badminton-club/actions/runs/43620891575), with permanent certificate matching and a higher versionCode. It is NOT approved as stable.
+
+
+## Advanced automated acceptance — signed in-place upgrade + full JSON + recovery
+
+The following tests have **passed** in the Android 35 emulator with original owner-signed v25.9 and same-certificate signed v26.9 development TEST APKs:
+
+- [x] **Every application Room table and field:** SHA-256 snapshot persisted in private app storage before upgrade and exactly matched after the in-place APK replacement, with no uninstall or data clearing — [run 43623251338](https://github.com/vicpurnia/Badminton-club/actions/runs/43623251338)
+- [x] **Entire verified ledger JSON:** canonical hash of the verified ledger contents matched before and after signed update, independently of raw SQLite records — same run
+- [x] **Encrypted backup + in-memory rehearsal:** optional AES-256-GCM encrypted export, decryption with the original test password, complete verified-ledger parity and successful temporary in-memory restore without overwriting the installed synthetic ledger — [run 43623572126](https://github.com/vicpurnia/Badminton-club/actions/runs/43623572126)
+- [x] **Five-tab native navigation with a populated synthetic ledger:** Home, Collect, Shuttles, Members and Reports all opened correctly after the signed update — [run 43623995530](https://github.com/vicpurnia/Badminton-club/actions/runs/43623995530)
+
+An audit-export defect was found during the deeper source audit and patched in v26.9 candidate source: the old verified `nativeAuditHistory` is retained during re-export, and the temporary import's own bookkeeping event is not appended as if it were a new club transaction. The full synthetic restore rehearsal passed after this correction.
+
+The suite is additionally being expanded for a **synthetic February INR 1,000 unreconciled difference, a distinct donated noncash pack, one-page A4 PDF output and FileProvider-based receipt sharing**. Those tests must be recorded as passed only when their specific workflows succeed.
+
+**Real-phone sign-off remains pending** for the actual 15-member financial ledger, Kanishk's authentic historical donation, the genuine February INR 1,000 difference, protected backups, receipt sharing and cross-phone migration. These synthetic results must not be interpreted as permission to promote v26.9 to stable automatically.
