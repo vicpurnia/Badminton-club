@@ -2274,18 +2274,36 @@ public final class MainActivity extends Activity {
    if(matches.isEmpty())throw new IllegalArgumentException("No recorded cash receipt PDFs for this member");
    if(matches.size()>400)throw new IllegalArgumentException("Please export a smaller range of receipts");
    File zip=new File(shareCacheDir(),"Member_Receipts_"+member.id.replaceAll("[^A-Za-z0-9_-]","_")+".zip");
+   long uncompressedBytes=0L;
    try(java.util.zip.ZipOutputStream output=new java.util.zip.ZipOutputStream(new FileOutputStream(zip))){
     int n=0;byte[] buffer=new byte[16384];
     for(Contribution payment:matches){
-     File pdf=renderCashReceipt(member,payment);
-     if(pdf==null||pdf.length()<100)throw new IOException("Receipt generation failed for "+payment.id);
-     String name=String.format(Locale.ROOT,"%03d_%s_%s.pdf",++n,payment.feeMonth,payment.id.replaceAll("[^A-Za-z0-9_-]","_"));
-     output.putNextEntry(new java.util.zip.ZipEntry(name));
-     try(InputStream input=new FileInputStream(pdf)){
-      int read;while((read=input.read(buffer))!=-1)output.write(buffer,0,read);
+     File pdf=null;
+     try{
+      pdf=renderCashReceipt(member,payment);
+      if(pdf==null||pdf.length()<100)throw new IOException("Receipt generation failed for "+payment.id);
+      uncompressedBytes=Math.addExact(uncompressedBytes,pdf.length());
+      if(uncompressedBytes>35_000_000L)
+       throw new IOException("Receipt bundle exceeds 35 MB; export fewer payments");
+      String name=String.format(Locale.ROOT,"%03d_%s_%s.pdf",++n,payment.feeMonth,payment.id.replaceAll("[^A-Za-z0-9_-]","_"));
+      output.putNextEntry(new java.util.zip.ZipEntry(name));
+      try(InputStream input=new FileInputStream(pdf)){
+       int read;while((read=input.read(buffer))!=-1)output.write(buffer,0,read);
+      }
+      output.closeEntry();
+     }finally{
+      // These are freshly rendered copies. Never accumulate 400 stray PDF files
+      // in app-private cache after exporting a member's historical receipts.
+      if(pdf!=null)pdf.delete();
      }
-     output.closeEntry();
     }
+   }catch(Exception exception){
+    zip.delete(); // Never leave a broken ZIP masquerading as a successful export.
+    throw exception;
+   }
+   if(!zip.isFile()||zip.length()<100||zip.length()>35_000_000L){
+    zip.delete();
+    throw new IOException("Member receipt ZIP could not be safely verified");
    }
    runOnUiThread(()->{
     try{
