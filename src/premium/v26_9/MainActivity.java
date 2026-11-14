@@ -31,6 +31,10 @@ public final class MainActivity extends Activity {
  private LedgerDatabase database;
  private final ExecutorService io=Executors.newSingleThreadExecutor();
  private LinearLayout root,content,nav,header;private String tab="Home",reportMonth="2026-11",memberFilter="All";private String searchText="";
+ private volatile int screenEpoch=0;
+ private boolean currentScreen(int epoch,String expectedTab,String month){
+  return screenEpoch==epoch&&expectedTab.equals(tab)&&month.equals(reportMonth);
+ }
  private MigrationCodec.Preview pendingImport;
  private File pendingExport,pendingReportPdf;
  private final int dp(float x){return (int)(x*getResources().getDisplayMetrics().density+.5f);}
@@ -135,19 +139,28 @@ public final class MainActivity extends Activity {
    TextView caption=text(item,10,center?Color.WHITE:active?GREEN:GRAY,active||center);caption.setGravity(Gravity.CENTER);tile.addView(caption);
    LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-1,1);params.setMargins(dp(2),0,dp(2),0);nav.addView(tile,params);pressable(tile,()->selectTab(item));
   }}
- private void selectTab(String name){tab=name;drawNav();switch(name){case "Home":showHome();break;case "Collect":showPayments();break;case "Shuttles":showExpenses();break;case "Members":showMembers();break;default:showReports();}}
+ private void selectTab(String name){screenEpoch++;tab=name;drawNav();switch(name){case "Home":showHome();break;case "Collect":showPayments();break;case "Shuttles":showExpenses();break;case "Members":showMembers();break;default:showReports();}}
  private void title(String heading,String sub){content.removeAllViews();content.addView(text(heading,26,DARK,true));gap(content,5);content.addView(text(sub,13,GRAY,false));gap(content,19);}
  private void notice(String header,String details){LinearLayout p=col();p.addView(text(header,15,DARK,true));gap(p,7);p.addView(text(details,12,GRAY,false));panel(content,p);}
- private void showHome(){title("Overview","Your club at a glance");monthPicker();background(()->{
+ private void showHome(){
+  final int screen=screenEpoch;
+  final String period=reportMonth;
+  title("Overview","Your club at a glance");monthPicker();
+  background(()->{
    LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();if(meta==null){runOnUiThread(()->{
+    if(!currentScreen(screen,"Home",period))return;
     LinearLayout welcome=col();welcome.setBackground(gradient(GREEN,DARK,22));pad(welcome,20,22);welcome.addView(text("WELCOME TO THE CLUB",11,GOLD,true));gap(welcome,12);welcome.addView(text("Your accounts, beautifully organised.",27,Color.WHITE,true));gap(welcome,10);welcome.addView(text("Welcome to Badminton Premium Stable. If this is your first stable installation, import a verified JSON backup from your previous Badminton app. Later stable updates signed with the same permanent key can preserve these accounts automatically.",13,0xFFD6F0E1,false));gap(welcome,20);welcome.addView(button("Import verified ledger",this::pickMigration));content.addView(welcome,fill());gap(content,16);
     notice("Keep your existing Badminton app","Before importing, save a verified JSON export from your previous app. Keep that app and its records until all balances are confirmed here. Existing stable installs should update without reimporting.");});return;}
-   String display=reportMonth;List<ReportMath.Result> summaries=ReportMath.monthly(dao,display);if(summaries.isEmpty()){runOnUiThread(()->notice("No closing data","This month is before the opening-balance period."));return;}ReportMath.Result latest=summaries.get(summaries.size()-1);
+   String display=period;List<ReportMath.Result> summaries=ReportMath.monthly(dao,display);if(summaries.isEmpty()){
+    runOnUiThread(()->{
+     if(currentScreen(screen,"Home",period))notice("No closing data","This month is before the opening-balance period.");
+    });return;}ReportMath.Result latest=summaries.get(summaries.size()-1);
    List<Member> members=dao.members();List<Contribution> payments=dao.contributions();
    Map<String,CashCorrectionsV256.State> effective=CashCorrectionsV256.states(meta.inventoryStockJson,payments);
    int count=0;for(Contribution c:payments)if(display.equals(c.feeMonth)&&!"packs".equals(c.kind)&&
     (!effective.containsKey(c.id)||effective.get(c.id).effective>0))count++;
    final int paymentCount=count;runOnUiThread(()->{
+    if(!currentScreen(screen,"Home",period))return;
     LinearLayout card=col();card.setBackground(gradient(0xFF165E4A,0xFF07352D,24));pad(card,22,24);
     LinearLayout header=row();header.addView(text("CLUB BALANCE",11,0xFFD7F3E0,true),new LinearLayout.LayoutParams(0,-2,1));header.addView(pill(dateLabel(display),Color.WHITE,0xFF2C735B));card.addView(header);gap(card,14);
     card.addView(text(rupee(latest.closing),39,Color.WHITE,true));gap(card,7);card.addView(text((latest.closing>=0?"● Credit available":"● Balance in deficit")+"  ·  Offline ledger",12,0xFFD2E7DA,false));gap(card,22);
@@ -452,6 +465,7 @@ public final class MainActivity extends Activity {
   }
  }
  private void showMembers(){
+  final int screen=screenEpoch;
   title("Members","Actual payments, assessed dues and immutable member histories");
   monthPicker();
   final String viewedMonth=reportMonth;
@@ -489,7 +503,7 @@ public final class MainActivity extends Activity {
     LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
     if(meta==null){
      runOnUiThread(()->{
-      if(generation==memberRenderGeneration)notice("No verified ledger","Import your saved club ledger first.");
+      if(generation==memberRenderGeneration&&currentScreen(screen,"Members",viewedMonth))notice("No verified ledger","Import your saved club ledger first.");
      });return;
     }
     List<Member> members=dao.members();
@@ -540,7 +554,7 @@ public final class MainActivity extends Activity {
        totals[0],totals[1],totals[2],active));
     }
     runOnUiThread(()->{
-     if(generation!=memberRenderGeneration||!"Members".equals(tab))return;
+     if(generation!=memberRenderGeneration||!currentScreen(screen,"Members",viewedMonth))return;
      results.removeAllViews();
      for(MemberCardData item:rows){
       LinearLayout card=row();
@@ -1003,15 +1017,19 @@ public final class MainActivity extends Activity {
   });
  }
 
- private void showPayments(){title("Collect fees","Simple, quick and ready to share");monthPicker();
+ private void showPayments(){
+  final int screen=screenEpoch;
+  title("Collect fees","Simple, quick and ready to share");monthPicker();
   LinearLayout headline=col();headline.setBackground(gradient(GREEN,DARK,22));pad(headline,20,22);headline.addView(text("ONE-TAP COLLECTION",11,GOLD,true));gap(headline,10);headline.addView(text("Record a contribution",22,Color.WHITE,true));gap(headline,8);headline.addView(text("Choose a player, confirm the amount, then share a professional PDF receipt.",12,0xFFE1F1E9,false));gap(headline,15);headline.addView(button("＋  Record cash actually received",()->openPayment(null)));gap(headline,9);
   headline.addView(button("▤  Find or share any past receipt",this::showReceiptLibrary));
   content.addView(headline);gap(content,16);
   notice("Previously paid?", "Use the Receipt Library to search all recorded months by member and share or save the PDF. Imported 2025 period totals are labeled Historical Contribution Statements.");
   sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));final String viewedMonth=reportMonth;
-  background(()->{List<Contribution> rows=database.dao().contributions();
-  Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(database.dao().meta().inventoryStockJson,rows);
-  Map<String,Member> names=new HashMap<>();for(Member m:database.dao().members())names.put(m.id,m);runOnUiThread(()->{int n=0;for(int i=rows.size()-1;i>=0;i--){Contribution c=rows.get(i);if("packs".equals(c.kind)||!viewedMonth.equals(c.feeMonth))continue;Member m=names.get(c.memberId);if(m==null)continue;
+  background(()->{LedgerMeta meta=database.dao().meta();
+  if(meta==null)return;
+  List<Contribution> rows=database.dao().contributions();
+  Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(meta.inventoryStockJson,rows);
+  Map<String,Member> names=new HashMap<>();for(Member m:database.dao().members())names.put(m.id,m);runOnUiThread(()->{if(!currentScreen(screen,"Collect",viewedMonth))return;int n=0;for(int i=rows.size()-1;i>=0;i--){Contribution c=rows.get(i);if("packs".equals(c.kind)||!viewedMonth.equals(c.feeMonth))continue;Member m=names.get(c.memberId);if(m==null)continue;
    LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);long net=corrections.containsKey(c.id)?corrections.get(c.id).effective:c.amount;
    right.addView(text(net==0?"VOID":rupee(net),15,net==0?GRAY:GREEN,true));gap(right,6);
    right.addView(inlineButton(net==0?"Void record":"Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
@@ -1091,6 +1109,7 @@ public final class MainActivity extends Activity {
   return value;
  }
  private void showExpenses(){
+  final int screen=screenEpoch;
   title("Shuttle desk","Purchases, donated packs and acquisition history");monthPicker();
   LinearLayout hero=col();hero.setBackground(gradient(GREEN,DARK,22));pad(hero,20,22);
   hero.addView(text("SHUTTLE ACTIVITY",11,0xFFD6EBDD,true));gap(hero,10);
@@ -1151,6 +1170,7 @@ public final class MainActivity extends Activity {
    final long fSpent=spending,fBought=purchased,fGiven=donated,fLegacyGiven=legacyDonated,
     fUsed=used,fLifetimeUsed=lifetimeUsed;
    runOnUiThread(()->{
+    if(!currentScreen(screen,"Shuttles",selected))return;
     if(checkpoint==null)notice("Stock balance not yet available",
      "No confirmed start-of-month opening stock and pack size. Purchased packs and consumed shuttles remain visible, but remaining stock is intentionally not calculated.");
     else if(stockPosition==null)notice("Stock checkpoint starts in "+checkpoint.month,
