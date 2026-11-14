@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v24/**'
+      - 'src/premium/v24_1/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,8 +75,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v24/MainActivity.java").read_text())
-          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24/BackupGuardian.java").read_text())
+          p.write_text(Path("src/premium/v24_1/MainActivity.java").read_text())
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_1/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
           pdfsource=pdf.read_text()
@@ -95,11 +95,15 @@ jobs:
           assert "historicalDonationRecorded" in s
           assert "verifyClassicPdf" in s
           assert "BackupGuardian.save" in s
+          assert "Backup health" in s
+          assert "warnOnBackupFailure()" in s
+          assert "This v24 preview" not in s
           assert "CHOOSE EXTERNAL BACKUP FOLDER" in s
           assert "PICK_BACKUP_TREE" in s
-          guardian=Path("src/premium/v24/BackupGuardian.java").read_text()
+          guardian=Path("src/premium/v24_1/BackupGuardian.java").read_text()
           assert "MigrationCodec.inspect(json)" in guardian
           assert "takePersistableUriPermission" in guardian
+          assert "lastError(Context context)" in guardian
           assert "ClassicLedgerV231.master" in s
           assert 'PRINT CLASSIC · A4 LANDSCAPE' in s
           assert 'setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())' in s
