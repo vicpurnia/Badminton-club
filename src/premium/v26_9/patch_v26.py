@@ -5,7 +5,17 @@ root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
 codec=root/"MigrationCodec.java"
 s=codec.read_text()
 old="    MonthlyCloseV258.read(inventory.toString());"
-new=old+"\n    PremiumV26State.validate(inventory.toString(),null);"
+new=old+"""
+    // Validate every fee and profile reference against the immutable imported roster.
+    // A structurally valid metadata array referring to a nonexistent member is not safe.
+    org.json.JSONArray v26Players=ledger.getJSONArray("players");
+    java.util.Set<String> v26KnownMembers=new java.util.HashSet<>();
+    for(int v26i=0;v26i<v26Players.length();v26i++){
+     String v26id=v26Players.getJSONObject(v26i).getString("id");
+     if(v26id.trim().isEmpty()||!v26KnownMembers.add(v26id))
+      throw new IllegalArgumentException("Invalid or duplicate member in verified ledger");
+    }
+    PremiumV26State.validate(inventory.toString(),v26KnownMembers);"""
 if s.count(old)!=1:
  raise RuntimeError(f"v26 verified JSON validator anchor count {s.count(old)} != 1")
 codec.write_text(s.replace(old,new,1))
