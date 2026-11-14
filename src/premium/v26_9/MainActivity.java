@@ -438,42 +438,137 @@ public final class MainActivity extends Activity {
  }
  private void importPending(){MigrationCodec.Preview preview=pendingImport;pendingImport=null;if(preview==null)return;
   background(()->{MigrationCodec.importChecked(database,preview);BackupGuardian.save(this,database,"import",true);warnOnBackupFailure();runOnUiThread(()->{Toast.makeText(this,"Ledger imported. Review backups in Reports.",Toast.LENGTH_LONG).show();showHome();});});}
- private void showMembers(){title("Members","Your club, one player at a time");monthPicker();
-  LinearLayout searchPanel=col();EditText search=new EditText(this);search.setSingleLine(true);search.setTextSize(14);search.setHint("Search all players");search.setCompoundDrawablePadding(dp(10));search.setBackground(border(Color.WHITE,LINE,14));pad(search,15,13);search.setText(searchText);searchPanel.addView(search);content.addView(searchPanel);gap(content,13);
-  LinearLayout filters=row();for(String option:new String[]{"All","Received","Partial","No entry","Unconfigured"}){
-   TextView c=pill(option,option.equals(memberFilter)?Color.WHITE:GREEN,option.equals(memberFilter)?GREEN:PALE);
-   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1);lp.setMargins(dp(2),0,dp(2),0);filters.addView(c,lp);pressable(c,()->{memberFilter=option;searchText=search.getText().toString();showMembers();});}
-  content.addView(filters);gap(content,14);
-   content.addView(button("Monthly fee rules, dues & concessions",this::showFeeCentre));gap(content,13);
-  LinearLayout results=col();content.addView(results);gap(content,10);content.addView(button("＋  Add new player",this::addMember),fill());
-  Runnable render=()->background(()->{
-   List<Member> members=database.dao().members();List<Contribution> payments=database.dao().contributions();
-   String v26meta=database.dao().meta().inventoryStockJson;
-   Map<String,CashCorrectionsV256.State> correct=CashCorrectionsV256.states(v26meta,payments);
-   Map<String,PremiumV26State.Profile> profiles=PremiumV26State.profiles(v26meta,knownMembers());
-   List<PremiumV26State.FeePolicy> policies=PremiumV26State.policies(v26meta,knownMembers());
-   List<LegacyEntry> legacy=database.dao().legacy();
-   runOnUiThread(()->{results.removeAllViews();int shown=0;for(Member member:members){String displayName=effectiveName(member,profiles);
-    if(!displayName.toLowerCase(Locale.ROOT).contains(search.getText().toString().trim().toLowerCase(Locale.ROOT)))continue;
-    long current=0,lifetime=0,donated=0;for(Contribution c:payments)if(member.id.equals(c.memberId)){if("packs".equals(c.kind))donated+=c.amount;else {
-     long effective=correct.containsKey(c.id)?correct.get(c.id).effective:c.amount;
-     lifetime=Math.addExact(lifetime,effective);
-     if(reportMonth.equals(c.feeMonth))current=Math.addExact(current,effective);
-    }}
-    for(LegacyEntry e:legacy)if(member.id.equals(e.memberId)){
-      if("cash".equals(e.kind))lifetime+=e.amount;
-      else if("packs".equals(e.kind))donated+=e.amount;
-    }
-    long due=PremiumV26State.rateFor(policies,member.id,reportMonth);
-    String status=due<0?"Unconfigured":(due==0||current>=due)?"Received":current>0?"Partial":"No entry";
-    if(!memberFilter.equals("All")&&!status.equals(memberFilter))continue;
-    final long cTotal=current,lTotal=lifetime,dPacks=donated;LinearLayout card=row();card.addView(avatar(displayName));LinearLayout labels=col();pad(labels,11,0);labels.addView(text(displayName+(profiles.containsKey(member.id)&&!profiles.get(member.id).active?"  ·  Archived":""),14,DARK,true));gap(labels,5);labels.addView(text(reportMonth+" · Collected "+rupee(current)+" · "+(due<0?"Fee not set":"Due "+rupee(due)),11,GRAY,false));card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
-    TextView bubble=pill(status,status.equals("Received")?GREEN:status.equals("Partial")?0xFF9B6B18:GRAY,status.equals("Received")?PALE:status.equals("Partial")?0xFFFFF2D7:0xFFF1F3F1);
-    card.addView(bubble);pressable(card,()->memberWallet(member,cTotal,lTotal,dPacks));panel(results,card);shown++;}
-    if(shown==0){LinearLayout n=blockHeader("No matching members","Try another name or filter.");panel(results,n);}
+
+ private int memberRenderGeneration=0;
+ private static final class MemberCardData {
+  final Member member;
+  final String name,status,detail;
+  final long monthly,lifetime,donated;
+  final boolean active;
+  MemberCardData(Member person,String display,String state,String caption,
+                 long cash,long allCash,long packs,boolean enabled){
+   member=person;name=display;status=state;detail=caption;
+   monthly=cash;lifetime=allCash;donated=packs;active=enabled;
+  }
+ }
+ private void showMembers(){
+  title("Members","Actual payments, assessed dues and immutable member histories");
+  monthPicker();
+  final String viewedMonth=reportMonth;
+  EditText search=new EditText(this);
+  search.setSingleLine(true);search.setTextSize(14);search.setHint("Search members by name");
+  search.setBackground(border(Color.WHITE,LINE,14));pad(search,15,13);
+  search.setText(searchText);content.addView(search);gap(content,12);
+
+  // Six or more filters must scroll, not compress into unreadable tiny chips.
+  LinearLayout filters=row();
+  for(String option:new String[]{"All","Paid","Partial","Unpaid","Settled","Not due","Unconfigured"}){
+   TextView chip=pill(option,option.equals(memberFilter)?Color.WHITE:GREEN,
+     option.equals(memberFilter)?GREEN:PALE);
+   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);
+   lp.setMargins(dp(3),0,dp(5),0);
+   filters.addView(chip,lp);
+   pressable(chip,()->{
+    memberFilter=option;searchText=search.getText().toString();showMembers();
    });
+  }
+  HorizontalScrollView strip=new HorizontalScrollView(this);
+  strip.setHorizontalScrollBarEnabled(false);strip.addView(filters);
+  content.addView(strip);gap(content,14);
+  content.addView(button("Monthly fee rules, dues & concessions",this::showFeeCentre));
+  gap(content,13);
+  LinearLayout results=col();content.addView(results);gap(content,10);
+  content.addView(button("＋ Add new player",this::addMember),fill());
+
+  Runnable refresh=()->{
+   final String query=search.getText().toString().trim().toLowerCase(Locale.ROOT);
+   final String filter=memberFilter;
+   final int generation=++memberRenderGeneration;
+   background(()->{
+    if(generation!=memberRenderGeneration)return;
+    LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
+    if(meta==null){
+     runOnUiThread(()->{
+      if(generation==memberRenderGeneration)notice("No verified ledger","Import your saved club ledger first.");
+     });return;
+    }
+    List<Member> members=dao.members();
+    List<Contribution> payments=dao.contributions();
+    List<LegacyEntry> legacy=dao.legacy();
+    HashSet<String> known=new HashSet<>();
+    for(Member member:members)known.add(member.id);
+    String raw=meta.inventoryStockJson;
+    Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(raw,payments);
+    Map<String,PremiumV26State.Profile> profiles=PremiumV26State.profiles(raw,known);
+    // All financial arithmetic is done on the worker before constructing Android views.
+    Map<String,long[]> sums=new HashMap<>();
+    for(Member member:members)sums.put(member.id,new long[3]); // month, lifetime cash, donated packs
+    for(Contribution item:payments){
+     long[] amount=sums.get(item.memberId);
+     if(amount==null)continue;
+     if("packs".equals(item.kind))amount[2]=Math.addExact(amount[2],item.amount);
+     else if("cash".equals(item.kind)){
+      long effective=corrections.containsKey(item.id)?corrections.get(item.id).effective:item.amount;
+      amount[1]=Math.addExact(amount[1],effective);
+      if(viewedMonth.equals(item.feeMonth))amount[0]=Math.addExact(amount[0],effective);
+     }
+    }
+    for(LegacyEntry old:legacy){
+     long[] total=sums.get(old.memberId);
+     if(total==null)continue;
+     if("cash".equals(old.kind))total[1]=Math.addExact(total[1],old.amount);
+     else if("packs".equals(old.kind))total[2]=Math.addExact(total[2],old.amount);
+    }
+    ArrayList<MemberCardData> rows=new ArrayList<>();
+    for(Member member:members){
+     String name=effectiveName(member,profiles);
+     if(!name.toLowerCase(Locale.ROOT).contains(query))continue;
+     long[] totals=sums.get(member.id);
+     boolean active=!profiles.containsKey(member.id)||profiles.get(member.id).active;
+     boolean billable=PremiumV26State.billableMonth(raw,member.id,viewedMonth);
+     PremiumV26State.FeeSummary assessment=PremiumV26State.feeSummary(
+       raw,member.id,viewedMonth,viewedMonth,payments);
+     String status=PremiumV26State.monthStatus(assessment,billable);
+     if(!"All".equals(filter)&&!filter.equals(status))continue;
+     long assessed=Math.subtractExact(assessment.billed,assessment.waived);
+     String detail="Cash "+rupee(totals[0])+
+       (status.equals("Unconfigured")?" · Fee not configured":
+        status.equals("Not due")?" · No fee assessed":
+        " · Assessed "+rupee(assessed)+(assessment.waived>0?
+           " · Concession "+rupee(assessment.waived):""));
+     rows.add(new MemberCardData(member,name,status,detail,
+       totals[0],totals[1],totals[2],active));
+    }
+    runOnUiThread(()->{
+     if(generation!=memberRenderGeneration||!"Members".equals(tab))return;
+     results.removeAllViews();
+     for(MemberCardData item:rows){
+      LinearLayout card=row();
+      card.addView(avatar(item.name));
+      LinearLayout labels=col();pad(labels,11,0);
+      labels.addView(text(item.name+(item.active?"":" · Archived"),14,DARK,true));gap(labels,5);
+      labels.addView(text(viewedMonth+" · "+item.detail,11,GRAY,false));
+      card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+      boolean settled="Paid".equals(item.status)||"Settled".equals(item.status);
+      boolean partial="Partial".equals(item.status);
+      card.addView(pill(item.status,settled?GREEN:partial?0xFF9B6B18:GRAY,
+        settled?PALE:partial?0xFFFFF2D7:0xFFF1F3F1));
+      pressable(card,()->memberWallet(item.member,item.monthly,item.lifetime,item.donated));
+      panel(results,card);
+     }
+     if(rows.isEmpty())panel(results,blockHeader("No matching members",
+       "Choose another payment status or try another name."));
+    });
+   });
+  };
+  refresh.run();
+  search.addTextChangedListener(new android.text.TextWatcher(){
+   public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+   public void onTextChanged(CharSequence value,int start,int before,int count){
+    searchText=value.toString();refresh.run();
+   }
+   public void afterTextChanged(android.text.Editable ignored){}
   });
-  render.run();search.addTextChangedListener(new android.text.TextWatcher(){public void beforeTextChanged(CharSequence v,int st,int c,int a){}public void onTextChanged(CharSequence v,int st,int b,int c){searchText=v.toString();render.run();}public void afterTextChanged(android.text.Editable e){}});
  }
 
  private void memberWallet(Member m,long monthly,long lifetime,long donated){
