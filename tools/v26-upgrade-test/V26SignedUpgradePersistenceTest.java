@@ -33,6 +33,67 @@ public final class V26SignedUpgradePersistenceTest {
     .allowMainThreadQueries().build();
  }
 
+ private static final String SNAPSHOT_FILE="ci-synthetic-all-room-records.sha256";
+ private static String fullRoomDigest(LedgerDatabase db)throws Exception{
+  // Include every user table and field, even ones not anticipated by explicit
+  // transaction assertions. Ignore SQLite/Room internal implementation tables.
+  java.security.MessageDigest md=java.security.MessageDigest.getInstance("SHA-256");
+  androidx.sqlite.db.SupportSQLiteDatabase sql=db.getOpenHelper().getReadableDatabase();
+  TreeSet<String> tables=new TreeSet<>();
+  try(Cursor c=sql.query("SELECT name FROM sqlite_master WHERE type='table' "+
+       "AND name NOT LIKE 'sqlite_%' AND name NOT IN "+
+       "('room_master_table','room_table_modification_log','android_metadata')")){
+   while(c.moveToNext())tables.add(c.getString(0));
+  }
+  assertTrue("Expected multiple user ledger tables",tables.size()>=6);
+  for(String name:tables){
+   assertTrue("Untrusted SQLite table identifier",name.matches("[A-Za-z0-9_]+"));
+   md.update(("TABLE:"+name+"\\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+   try(Cursor c=sql.query("SELECT * FROM \""+name+"\" ORDER BY rowid")){
+    String[] keys=c.getColumnNames();
+    md.update(("COLUMNS:"+String.join("|",keys)+"\\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    while(c.moveToNext()){
+     for(int i=0;i<keys.length;i++){
+      String token;
+      switch(c.getType(i)){
+       case Cursor.FIELD_TYPE_NULL:token="NULL";break;
+       case Cursor.FIELD_TYPE_INTEGER:token="INT:"+c.getLong(i);break;
+       case Cursor.FIELD_TYPE_FLOAT:token="FLOAT:"+Double.toString(c.getDouble(i));break;
+       case Cursor.FIELD_TYPE_BLOB:
+        token="BLOB:"+android.util.Base64.encodeToString(c.getBlob(i),android.util.Base64.NO_WRAP);break;
+       default:token="TEXT:"+c.getString(i);break;
+      }
+      byte[] utf8=token.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+      md.update(java.nio.ByteBuffer.allocate(4).putInt(utf8.length).array());
+      md.update(utf8);
+     }
+     md.update((byte)'\\n');
+    }
+   }
+  }
+  StringBuilder out=new StringBuilder();
+  for(byte value:md.digest())out.append(String.format(Locale.ROOT,"%02x",value&0xff));
+  return out.toString();
+ }
+ private static void preserveFingerprint(LedgerDatabase db)throws Exception{
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  String fingerprint=fullRoomDigest(db);
+  java.io.File file=new java.io.File(context.getFilesDir(),SNAPSHOT_FILE);
+  try(java.io.FileOutputStream stream=new java.io.FileOutputStream(file)){
+   stream.write(fingerprint.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+   stream.getFD().sync(); // Ensure baseline is actually persisted before APK replacement
+  }
+  assertTrue("Baseline fingerprint must be persisted",file.isFile()&&file.length()==64);
+ }
+ private static void assertFingerprintUnchanged(LedgerDatabase db)throws Exception{
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  java.io.File baseline=new java.io.File(context.getFilesDir(),SNAPSHOT_FILE);
+  assertTrue("Upgrade must preserve original private baseline evidence",baseline.isFile());
+  byte[] bytes=java.nio.file.Files.readAllBytes(baseline.toPath());
+  String old=new String(bytes,java.nio.charset.StandardCharsets.UTF_8);
+  assertEquals("All user-table fields must be byte-equivalent after signed in-place upgrade",
+   old,fullRoomDigest(db));
+ }
  private static long queryCount(LedgerDatabase db,String table){
   try(android.database.Cursor cursor=db.getOpenHelper().getReadableDatabase().query("SELECT COUNT(*) FROM "+table)){
    assertTrue(cursor.moveToFirst());return cursor.getLong(0);
@@ -112,6 +173,7 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(1,dao.controls().size());
    assertEquals(2,dao.legacy().size());
    assertEquals(1,queryCount(db,"audit_events"));
+   preserveFingerprint(db);
 
    System.out.println("SYNTHETIC_V25_SEED_PASSED: member, cash, expense, usage, opening meta, controls, legacy, noncash pack and audit");
   }finally{db.close();}
@@ -177,6 +239,7 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(489L,cashLegacy);
    assertEquals(1L,noncashPacks);
    assertEquals(1L,queryCount(db,"audit_events"));
+   assertFingerprintUnchanged(db);
    System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
   }finally{db.close();}
  }
