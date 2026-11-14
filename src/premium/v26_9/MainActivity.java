@@ -62,10 +62,19 @@ public final class MainActivity extends Activity {
  private LinearLayout.LayoutParams fill(){return new LinearLayout.LayoutParams(-1,-2);}
  private void gap(LinearLayout p,int h){View v=new View(this);p.addView(v,new LinearLayout.LayoutParams(1,dp(h)));}
  private void panel(LinearLayout parent,View child){LinearLayout wrap=col();wrap.setBackground(border(Color.WHITE,LINE,18));pad(wrap,17,16);wrap.setElevation(dp(1));wrap.addView(child);parent.addView(wrap,fill());gap(parent,12);}
- private Button button(String s,Runnable task){Button b=new Button(this);b.setAllCaps(false);b.setText(s);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));b.setMinHeight(dp(50));b.setBackground(gradient(GREEN,0xFF0A513F,14));b.setOnClickListener(v->task.run());return b;}
- private TextView inlineButton(String s,int color,Runnable run){TextView b=text(s,12,color,true);pad(b,12,9);b.setGravity(Gravity.CENTER);b.setBackground(border(PALE,LINE,10));b.setOnClickListener(v->run.run());return b;}
+ private Button button(String s,Runnable task){Button b=new Button(this);b.setAllCaps(false);b.setText(s);b.setTextColor(Color.WHITE);b.setTextSize(14);b.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));b.setMinHeight(dp(50));b.setBackground(gradient(GREEN,0xFF0A513F,14));bindGuardedClick(b,task);return b;}
+ private void bindGuardedClick(View view,Runnable task){
+  final long[] last={0L};
+  view.setOnClickListener(v->{
+   long now=android.os.SystemClock.elapsedRealtime();
+   if(now-last[0]<700L)return;
+   last[0]=now;
+   task.run();
+  });
+ }
+ private TextView inlineButton(String s,int color,Runnable run){TextView b=text(s,12,color,true);pad(b,12,9);b.setGravity(Gravity.CENTER);b.setBackground(border(PALE,LINE,10));bindGuardedClick(b,run);return b;}
  private TextView pill(String label,int fg,int bgc){TextView t=text(label,11,fg,true);t.setGravity(Gravity.CENTER);pad(t,12,8);t.setBackground(bg(bgc,100));return t;}
- private void pressable(View v,Runnable action){v.setOnClickListener(x->action.run());}
+ private void pressable(View v,Runnable action){bindGuardedClick(v,action);}
  private LinearLayout blockHeader(String head,String sub){LinearLayout c=col();c.addView(text(head,18,DARK,true));gap(c,4);c.addView(text(sub,12,GRAY,false));return c;}
  private void sectionHeading(String head,String subtitle){LinearLayout r=row();r.addView(blockHeader(head,subtitle),new LinearLayout.LayoutParams(0,-2,1));content.addView(r);gap(content,13);}
  private LinearLayout infoRow(String lead,String caption,String value,int accent){LinearLayout r=row();TextView badge=text(lead,15,accent,true);badge.setGravity(Gravity.CENTER);badge.setBackground(bg(PALE,14));r.addView(badge,new LinearLayout.LayoutParams(dp(45),dp(45)));LinearLayout l=col();pad(l,12,0);l.addView(text(caption,13,DARK,true));r.addView(l,new LinearLayout.LayoutParams(0,-2,1));r.addView(text(value,12,accent,true));return r;}
@@ -1958,7 +1967,8 @@ public final class MainActivity extends Activity {
    requireImportedLedger();
    LedgerDao dao=database.dao();String month=reportMonth;
    List<PremiumV26Analytics.Month> data=PremiumV26Analytics.timeline(dao,month);
-   String drift=PremiumV26State.closedMonthDrift(dao.meta().inventoryStockJson,ReportMath.monthly(dao,month));
+   String drift=PremiumV26State.closedMonthDrift(dao.meta().inventoryStockJson,
+    ReportMath.monthly(dao,ReportMath.lastMonth(dao)));
    long max=0,collections=0,expenses=0,usage=0;
    for(PremiumV26Analytics.Month record:data){
     max=Math.max(max,Math.max(record.collections,record.expenses));
