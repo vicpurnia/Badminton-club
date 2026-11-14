@@ -2017,12 +2017,25 @@ public final class MainActivity extends Activity {
      b.setMax(1000);b.setProgress((int)Math.min(1000,r.expenses*1000.0/scale));b.setProgressTintList(android.content.res.ColorStateList.valueOf(0xFFC58E50));
      item.addView(b,fill());gap(item,3);
      item.addView(text("Closing "+rupee(r.closing)+" · Difference "+rupee(r.difference)+
-       " · Used "+r.usage+" / acquired "+r.acquired+" shuttles",10,GRAY,false));
+       " · Used "+r.usage+" / acquired "+r.acquired+" shuttles · Contributors "+r.contributingMembers,
+       10,GRAY,false));
      panel(v,item);
     }
-    v.addView(text("Green bar = recorded collections; amber = recorded expenditure. Zero is not imputed when data are missing.",11,GRAY,false));gap(v,13);
+    v.addView(text("Green bar = recorded collections; amber = recorded expenditure. Contributors count only members with a positive recognized cash contribution, not attendance.",11,GRAY,false));gap(v,13);
+    v.addView(text("YEARLY FINANCIAL & STOCK SUMMARY",12,GREEN,true));gap(v,8);
+    for(PremiumV26Analytics.Year yr:PremiumV26Analytics.annual(data)){
+     LinearLayout group=col();
+     group.addView(text(yr.year+" · "+yr.reportedMonths+" recorded month(s)",16,DARK,true));gap(group,7);
+     group.addView(text("Cash received "+rupee(yr.received)+
+      " · Expenditure "+rupee(yr.spent)+" · Final closing "+rupee(yr.closing),12,GREEN,true));gap(group,6);
+     group.addView(text("Unresolved difference "+rupee(yr.unresolved)+
+      " · Used "+yr.shuttles+" · Acquired "+yr.acquired+" shuttles",
+      11,yr.unresolved!=0?0xFF9F383A:GRAY,false));
+     panel(v,group);
+    }
     v.addView(button("Share independent A4 dashboard PDF",()->sharePdf("Premium_Dashboard_"+month+".pdf",()->PremiumV26Analytics.pdf(this,data,month))));gap(v,9);
-    v.addView(button("Export verified monthly CSV",()->shareAnalyticsCsv(data,month)));
+    v.addView(button("Export verified monthly CSV",()->shareAnalyticsCsv(data,month)));gap(v,8);
+    v.addView(button("Export yearly reconciliation CSV",()->shareAnnualCsv(data,month)));
     ScrollView scroll=new ScrollView(this);scroll.addView(v);
     new AlertDialog.Builder(this).setView(scroll).setPositiveButton("Close",null).show();
    });
@@ -2046,6 +2059,23 @@ public final class MainActivity extends Activity {
      share.putExtra(Intent.EXTRA_STREAM,uri);share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
      startActivity(Intent.createChooser(share,"Save or share verified dashboard CSV"));
     }catch(Exception ex){error(new IOException("Could not share monthly CSV: "+ex.getMessage()));}
+   });
+  });
+ }
+ private void shareAnnualCsv(List<PremiumV26Analytics.Month> data,String month){
+  background(()->{
+   File file=new File(shareCacheDir(),"Premium_Yearly_"+month+".csv");
+   try(OutputStream out=new FileOutputStream(file)){
+    out.write(PremiumV26Analytics.annualCsv(data).getBytes(StandardCharsets.UTF_8));
+   }
+   runOnUiThread(()->{
+    try{
+     Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",file);
+     Intent send=new Intent(Intent.ACTION_SEND);send.setType("text/csv");
+     send.putExtra(Intent.EXTRA_STREAM,uri);
+     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+     startActivity(Intent.createChooser(send,"Save or share verified yearly CSV"));
+    }catch(Exception ex){error(new IOException("Could not share yearly CSV."));}
    });
   });
  }
