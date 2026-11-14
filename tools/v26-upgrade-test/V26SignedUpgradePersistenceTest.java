@@ -125,6 +125,24 @@ public final class V26SignedUpgradePersistenceTest {
   assertTrue("Expected tested historical fixture in verified export",
    verified.ledger.has("legacy")&&verified.ledger.getJSONArray("legacy").length()==2);
  }
+ private static void assertA4LandscapePdf(java.io.File file,String category)throws Exception{
+  assertNotNull(category+" PDF not generated",file);
+  assertTrue(category+" PDF must contain content",file.isFile()&&file.length()>300);
+  try(java.io.FileInputStream in=new java.io.FileInputStream(file)){
+   byte[] signature=new byte[5];
+   assertEquals(5,in.read(signature));
+   assertEquals("%PDF-",new String(signature,java.nio.charset.StandardCharsets.US_ASCII));
+  }
+  try(android.os.ParcelFileDescriptor fd=android.os.ParcelFileDescriptor.open(file,
+        android.os.ParcelFileDescriptor.MODE_READ_ONLY);
+      android.graphics.pdf.PdfRenderer pdf=new android.graphics.pdf.PdfRenderer(fd)){
+   assertEquals(category+" must stay one page",1,pdf.getPageCount());
+   try(android.graphics.pdf.PdfRenderer.Page page=pdf.openPage(0)){
+    assertEquals(category+" A4 landscape width",842,page.getWidth());
+    assertEquals(category+" A4 landscape height",595,page.getHeight());
+   }
+  }finally{file.delete();}
+ }
  private static long queryCount(LedgerDatabase db,String table){
   try(android.database.Cursor cursor=db.getOpenHelper().getReadableDatabase().query("SELECT COUNT(*) FROM "+table)){
    assertTrue(cursor.moveToFirst());return cursor.getLong(0);
@@ -307,6 +325,11 @@ public final class V26SignedUpgradePersistenceTest {
     assertTrue("Entire synthetic migration must pass exact temporary restore",
      rehearsal.contains("RESTORE DRY-RUN PASSED"));
     assertEquals("In-memory restore rehearsal must not touch installed Room database",
+     intactBefore,fullRoomDigest(db));
+    Context printContext=InstrumentationRegistry.getInstrumentation().getTargetContext();
+    assertA4LandscapePdf(ClassicLedgerV231.master(printContext,dao,MONTH),"Classic Master");
+    assertA4LandscapePdf(MonthlyReviewPdfV258.make(printContext,dao,MONTH),"Month-end review");
+    assertEquals("PDF generation and rehearsal must leave financial Room rows unmodified",
      intactBefore,fullRoomDigest(db));
    }finally{
     Arrays.fill(privateTestPassword,(char)0);
