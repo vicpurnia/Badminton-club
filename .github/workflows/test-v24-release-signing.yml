@@ -113,6 +113,8 @@ jobs:
           assert "Find or share any past receipt" in s
           assert "SEARCH MEMBER, PERIOD OR AMOUNT" in s
           assert "Show next 25 receipts" in s
+          assert "RECEIPT LIBRARY · ALL MONTHS" in s
+          assert '.replace("₹","").replace(",","")' in s
           assert "Share statement" in s
           assert "Share receipt" in s
           assert "Save PDF" in s
