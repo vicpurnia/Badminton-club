@@ -640,6 +640,9 @@ public final class MainActivity extends Activity {
    // An explicitly audited RESTORE is permitted for a previously canceled original.
    final Contribution original=target;
    final long reviewedEffective=state.effective;
+   ReportMath.Result last=null;
+   for(ReportMath.Result item:ReportMath.monthly(dao,ReportMath.lastMonth(dao)))last=item;
+   final long reviewedClubClosing=last==null?0:last.closing;
    runOnUiThread(()->{
     Dialog dialog=new Dialog(this);
     LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,20,21);
@@ -676,9 +679,7 @@ public final class MainActivity extends Activity {
        throw new IllegalArgumentException("Restoration amount must be positive and no greater than the original payment.");
       if(why.length()<8||why.length()>200)
        throw new IllegalArgumentException("Explain the change in 8-200 characters.");
-      ReportMath.Result last=null;
-      for(ReportMath.Result item:ReportMath.monthly(dao,ReportMath.lastMonth(dao)))last=item;
-      long currentClosing=last==null?0:last.closing;
+      long currentClosing=reviewedClubClosing;
       long nextClosing=Math.addExact(currentClosing,Math.subtractExact(next,reviewedEffective));
       String explanation="Member: "+member.name+"\nPayment ID: "+original.id+
        "\nMonth: "+original.feeMonth+
@@ -1774,7 +1775,9 @@ public final class MainActivity extends Activity {
    requireImportedLedger();
    LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
    List<Member> members=dao.members();List<Contribution> payments=dao.contributions();
-   List<PremiumV26State.FeePolicy> rules=PremiumV26State.policies(meta.inventoryStockJson,knownMembers());
+   Set<String> known=knownMembers();
+   Map<String,PremiumV26State.Profile> feeProfiles=PremiumV26State.profiles(meta.inventoryStockJson,known);
+   List<PremiumV26State.FeePolicy> rules=PremiumV26State.policies(meta.inventoryStockJson,known);
    List<PremiumV26State.Waiver> waivers=PremiumV26State.waivers(meta.inventoryStockJson,knownMembers());
    String month=reportMonth;
    runOnUiThread(()->{
@@ -1787,7 +1790,7 @@ public final class MainActivity extends Activity {
     for(Member member:members){
      PremiumV26State.FeeSummary f=PremiumV26State.feeSummary(meta.inventoryStockJson,
       member.id,"2026-01",month,payments);
-     String name=effectiveName(member,PremiumV26State.profiles(meta.inventoryStockJson,knownMembers()));
+     String name=effectiveName(member,feeProfiles);
      long rate=PremiumV26State.rateFor(rules,member.id,month);
      LinearLayout item=col();
      item.addView(text(name,14,DARK,true));gap(item,5);
