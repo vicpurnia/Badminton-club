@@ -98,7 +98,7 @@ function Find-Keytool {
 if ($CheckJavaOnly) {
     $located = Find-Keytool
     if (-not $located) { Fail "No JDK keytool found (check mode)." }
-    Write-Host "JDK detected: $located" -ForegroundColor Green
+    Write-Output "JDK detected: $located"
     return
 }
 
