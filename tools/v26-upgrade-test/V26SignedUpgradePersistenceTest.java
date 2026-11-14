@@ -300,7 +300,7 @@ public final class V26SignedUpgradePersistenceTest {
     assertTrue("Entire synthetic migration must pass exact temporary restore",
      rehearsal.contains("RESTORE DRY-RUN PASSED"));
    }finally{
-    Arrays.fill(privateTestPassword,'\\u0000');
+    Arrays.fill(privateTestPassword,(char)0);
    }
    System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
   }finally{db.close();}
