@@ -2330,9 +2330,66 @@ public final class MainActivity extends Activity {
    }).show();
  }
 
+ private void showCashDateAudit(){
+  background(()->{
+   requireImportedLedger();
+   LedgerDao dao=database.dao();
+   String chosen=reportMonth;
+   PremiumCashDateAudit.Result audit=PremiumCashDateAudit.review(
+    dao.meta().inventoryStockJson,dao.contributions(),chosen);
+   runOnUiThread(()->{
+    LinearLayout body=col();pad(body,18,18);
+    body.addView(text("Recorded receipt-date evidence",20,DARK,true));gap(body,8);
+    body.addView(text("Only original cash entries with an actual recorded calendar date are grouped by receipt month. Fee periods and receipt months are not interchangeable.",12,GRAY,false));gap(body,12);
+    body.addView(text("Exact-dated entries: "+audit.exactDatedEntries+
+     "  ·  Later-corrected entries: "+audit.correctedDatedEntries,
+     13,GREEN,true));gap(body,12);
+    for(PremiumCashDateAudit.Month m:audit.months){
+     LinearLayout cell=col();
+     cell.addView(text(dateLabel(m.month),15,DARK,true));gap(cell,6);
+     cell.addView(text("Original recorded "+rupee(m.originallyRecorded)+
+       " · Current recognized "+rupee(m.effectiveRecognized),12,GREEN,true));gap(cell,4);
+     cell.addView(text(m.entries+" dated entries · "+m.corrected+
+       " later corrected",11,GRAY,false));
+     panel(body,cell);
+    }
+    if(audit.months.isEmpty()){
+     body.addView(text("No cash entries with trustworthy recorded receipt dates through "+
+       chosen+". Unrecorded receipt dates will not be guessed.",12,GRAY,false));gap(body,10);
+    }
+    body.addView(text("UNKNOWN RECEIPT DATE · ALL HISTORY",12,0xFF9D6B24,true));gap(body,6);
+    body.addView(text(audit.unknownDateEntries+" undated / approximate cash entries"+
+     " · original "+rupee(audit.unknownOriginal)+
+     " · current recognized "+rupee(audit.unknownEffective),12,DARK,false));gap(body,12);
+    body.addView(text("Important: 'Current recognized' adjusts original payments using the latest correction state. The date of a refund or clerical correction is NOT reconstructed; this audit is not a bank statement or full dated cash-flow report.",11,GRAY,false));gap(body,14);
+    body.addView(button("Share dated-cash evidence CSV",()->shareCashDateAuditCsv(audit,chosen)));
+    ScrollView scroll=new ScrollView(this);scroll.addView(body);
+    new AlertDialog.Builder(this).setView(scroll).setPositiveButton("Close",null).show();
+   });
+  });
+ }
+ private void shareCashDateAuditCsv(PremiumCashDateAudit.Result audit,String through){
+  background(()->{
+   File out=new File(shareCacheDir(),"Cash_Date_Evidence_"+through+".csv");
+   try(OutputStream stream=new FileOutputStream(out)){
+    stream.write(PremiumCashDateAudit.csv(audit).getBytes(StandardCharsets.UTF_8));
+   }
+   runOnUiThread(()->{
+    try{
+     Uri uri=FileProvider.getUriForFile(this,getPackageName()+".files",out);
+     Intent intent=new Intent(Intent.ACTION_SEND);intent.setType("text/csv");
+     intent.putExtra(Intent.EXTRA_STREAM,uri);
+     intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+     startActivity(Intent.createChooser(intent,"Share recorded-date cash evidence"));
+    }catch(Exception ex){error(new IOException("Cash-date CSV could not be shared: "+ex.getMessage()));}
+   });
+  });
+ }
+
  private void showReports(){title("Reports","Your club finances, beautifully presented");
     reportTile("▣","v26 EXECUTIVE DASHBOARD","Review fee-period cash allocations, expenses, stock usage and unresolved differences",this::showExecutiveDashboard);
     reportTile("◎","MONTHLY FEES & DUES","Configure effective fees, inspect arrears and record audited concessions",this::showFeeCentre);
+    reportTile("◷","CASH RECEIPT-DATE EVIDENCE","See known actual receipt months separately from fee-month allocations and unknown historical dates",this::showCashDateAudit);
     reportTile("🔒","ENCRYPTED BACKUP · OPTIONAL","Password-protected export for offline transfer to a new phone",this::startEncryptedExport);
     reportTile("✓","TEST / IMPORT ENCRYPTED BACKUP","Decrypt, verify and dry-run first; import only into an empty app",this::chooseEncryptedBackup);
    LinearLayout selector=col();selector.addView(text("REPORTING MONTH",11,GRAY,true));gap(selector,9);
