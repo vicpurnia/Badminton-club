@@ -20,6 +20,18 @@ This document maps the ten requested upgrades to code and release gates. It does
 | **v26.8 Encrypted recovery** | Optional authenticated AES-256-GCM + PBKDF2 export, 12+ character password, saved-file byte re-read, wrong-password/tamper rejection, read-only in-memory rehearsal, import only to empty app | Password unrecoverable if lost; physically test storage providers and moving an encrypted backup between devices; no cloud sync or blind merge |
 | **v26.9 UX and RC** | Shared tap debounce, premium/consistent buttons, explicit statuses, native full-screen PDF preview, candidate labels, regression-gated debug build | Final visual polish, Android accessibility, talkback, large-font/device QA, permanent key signature + upgrade acceptance still pending |
 
+## Release hardening completed after initial v26.9 candidate
+
+- **Concession-aware status:** Member filters derive status from the *net fee due* after authorized waivers. No-pay zero-fee months say *Settled*, never *Paid*.
+- **Stock anchor lock:** A confirmed physical count protects every stock-affecting month up to that count. New backdated purchases, donated packs or used/lost/damaged shuttles are blocked, as are opening-stock edits that would invalidate the count.
+- **Immutable membership billing origin:** Newly added members begin accruing fees from their creation month, not from earlier global fee rules. Later joining-date/profile edits cannot silently erase earlier assessments.
+- **Fee policy/waiver consistency:** Reject fee-rate changes that would invalidate an earlier authorized concession; reject cumulative waivers above the effective fee rather than silently capping them.
+- **Month-end review:** Separately shows members with an assessed fee, members not due (archived or pre-joining), and those without a configured fee.
+- **Members UX:** Reconciled status calculations run on a background executor with stale-result suppression; long filters scroll rather than compress into unusable narrow chips.
+- **Signed test candidate workflow:** `.github/workflows/build-v26-signed-test-candidate.yml` is separate from v25.9 stable signing. It runs Java/Android tests, signs with the owner's existing GitHub-secret keystore, verifies the certificate SHA-256, and uploads a **TEST ONLY** APK. It does not publish, merge or install an app.
+
+The signed TEST APK is only an acceptance vehicle. A CI-green/signed APK is **not** proof of data-preserving in-place Android installation; that still requires a verified external backup and actual-device inspection before production approval.
+
 ## Source-of-truth guarantees
 
 1. **Main stays untouched** until development PR review and production acceptance. Original signing private key is never committed or transmitted in source or chat.
