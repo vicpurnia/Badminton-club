@@ -511,6 +511,110 @@ public final class MainActivity extends Activity {
     (payment.feeMonth==null?"Unknown month":payment.feeMonth);}
   long amount(){return isHistorical()?historical.amount:correction==null?payment.amount:correction.effective;}
  }
+
+ private void openCashCorrection(Member member,Contribution payment){
+  background(()->{
+   requireImportedLedger();
+   LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
+   List<Contribution> all=dao.contributions();
+   Contribution target=null;
+   for(Contribution c:all)if(c.id.equals(payment.id)){target=c;break;}
+   if(target==null||!"cash".equals(target.kind)||!member.id.equals(target.memberId))
+    throw new IllegalArgumentException("Recorded cash payment no longer matches the selected member.");
+   CashCorrectionsV256.State state=CashCorrectionsV256.stateFor(meta.inventoryStockJson,all,target);
+   if(state.effective<=0)throw new IllegalStateException("This cash payment is already canceled. It cannot be adjusted again.");
+   final Contribution original=target;
+   final long reviewedEffective=state.effective;
+   runOnUiThread(()->{
+    Dialog dialog=new Dialog(this);
+    LinearLayout form=col();form.setBackground(bg(Color.WHITE,24));pad(form,20,21);
+    form.addView(text("Correct an existing cash payment",20,DARK,true));gap(form,8);
+    form.addView(text("Original payment "+original.id+" remains preserved. This action adds an audited adjustment and recalculates balances.",12,GRAY,false));gap(form,16);
+    form.addView(text(member.name+" · "+original.feeMonth,16,DARK,true));gap(form,5);
+    form.addView(text("Original: "+rupee(original.amount)+" · Currently recognized: "+rupee(reviewedEffective),13,GREEN,true));gap(form,16);
+    form.addView(text("ACTION",11,GRAY,true));gap(form,7);
+    Spinner choice=new Spinner(this);
+    choice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
+      new String[]{"Correct amount","Cancel incorrect payment","Refund cash actually returned"}));
+    form.addView(choice);gap(form,15);
+    form.addView(text("NEW RECOGNIZED CASH AMOUNT (₹)",11,GRAY,true));gap(form,7);
+    EditText amount=new EditText(this);amount.setSingleLine(true);
+    amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    amount.setText(String.valueOf(reviewedEffective));
+    amount.setBackground(border(LIGHT,LINE,12));pad(amount,14,12);
+    form.addView(amount);gap(form,10);
+    form.addView(text("For a refund, enter the amount retained after the actual refund. For cancellation, the recognized amount becomes zero.",11,GRAY,false));gap(form,15);
+    form.addView(text("REASON (REQUIRED, 8-200 CHARACTERS)",11,GRAY,true));gap(form,7);
+    EditText reason=new EditText(this);reason.setMinLines(2);reason.setHint("Explain the correction or actual refund");
+    reason.setBackground(border(LIGHT,LINE,12));pad(reason,14,12);form.addView(reason);gap(form,15);
+    form.addView(button("Review financial correction",()->{
+     try{
+      int selected=choice.getSelectedItemPosition();
+      final String action=selected==1?"CANCEL":selected==2?"REFUND":"CORRECT";
+      final long next=selected==1?0:Long.parseLong(amount.getText().toString().trim());
+      final String why=reason.getText().toString().trim();
+      if(next<0||next>1000000000L||next==reviewedEffective)
+       throw new IllegalArgumentException("Enter a different recognized amount up to ₹100 crore.");
+      if("REFUND".equals(action)&&next>=reviewedEffective)
+       throw new IllegalArgumentException("Refund must reduce recognized cash. Never use this for a promised but unpaid refund.");
+      if(why.length()<8||why.length()>200)
+       throw new IllegalArgumentException("Explain the change in 8-200 characters.");
+      String explanation="Member: "+member.name+"\nPayment ID: "+original.id+
+       "\nMonth: "+original.feeMonth+
+       "\nPrevious recognized cash: "+rupee(reviewedEffective)+
+       "\nNew recognized cash: "+rupee(next)+
+       "\nImpact on club balance: "+(next-reviewedEffective>0?"+":"")+rupee(next-reviewedEffective)+
+       "\nAction: "+action+
+       "\nReason: "+why+
+       "\n\nOriginal entry and all past corrections remain in audit history. Confirm financial adjustment?";
+      new AlertDialog.Builder(this).setTitle("Confirm balance-changing correction")
+       .setMessage(explanation).setNegativeButton("Keep editing",null)
+       .setPositiveButton("Commit audited correction",(d,w)->{
+        dialog.dismiss();
+        background(()->{
+         database.runInTransaction(()->{
+          LedgerDao liveDao=database.dao();LedgerMeta live=liveDao.meta();
+          if(live==null)throw new IllegalStateException("No imported ledger");
+          List<Contribution> records=liveDao.contributions();
+          Contribution current=null;
+          for(Contribution c:records)if(c.id.equals(original.id)){current=c;break;}
+          if(current==null||!current.memberId.equals(member.id)||current.amount!=original.amount)
+           throw new IllegalStateException("Original payment identity changed. Correction blocked.");
+          CashCorrectionsV256.State now=CashCorrectionsV256.stateFor(live.inventoryStockJson,records,current);
+          if(now.effective!=reviewedEffective)throw new IllegalStateException("Payment was changed while reviewing. Reopen before correcting.");
+          String event="correction-"+UUID.randomUUID();
+          String at=new Date().toString();
+          String json=CashCorrectionsV256.append(live.inventoryStockJson,records,current,next,action,why,event,at);
+          if(liveDao.updateInventoryJson(json)!=1)
+           throw new IllegalStateException("Correction was not stored.");
+          AuditEvent audit=new AuditEvent();
+          audit.id=event;audit.createdAt=at;
+          audit.action="CASH "+action+" on original "+original.id;
+          audit.details="Member "+member.id+"; "+original.feeMonth+"; recognized "+
+           reviewedEffective+" -> "+next+"; reason: "+why;
+          liveDao.audit(audit);
+         });
+         BackupGuardian.save(this,database,"cash-correction",true);
+         warnOnBackupFailure();
+         runOnUiThread(()->{
+          Toast.makeText(this,"Audited correction saved",Toast.LENGTH_LONG).show();
+          showReceiptLibrary();
+         });
+        });
+       }).show();
+     }catch(Exception ex){error(new IllegalArgumentException(ex.getMessage()==null?"Check correction values.":ex.getMessage()));}
+    }));
+    ScrollView scroll=new ScrollView(this);scroll.addView(form);
+    dialog.setContentView(scroll);dialog.show();
+    Window window=dialog.getWindow();if(window!=null){
+     window.setBackgroundDrawableResource(android.R.color.transparent);
+     window.setGravity(Gravity.BOTTOM);
+     window.setLayout(-1,Math.min(dp(790),(int)(getResources().getDisplayMetrics().heightPixels*.92f)));
+    }
+   });
+  });
+ }
+
  private void showReceiptLibrary(){
   title("Receipt Library","Search existing cash payments across every month");
   content.addView(button("‹ Back to Collect",this::showPayments),fill());gap(content,12);
