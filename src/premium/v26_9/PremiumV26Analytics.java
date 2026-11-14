@@ -12,8 +12,10 @@ final class PremiumV26Analytics {
  static final class Month {
   final String month;
   final long collections,expenses,closing,difference,usage,acquired;
-  Month(String m,long c,long e,long end,long d,long u,long a){
+  final int contributingMembers;
+  Month(String m,long c,long e,long end,long d,long u,long a,int participants){
    month=m;collections=c;expenses=e;closing=end;difference=d;usage=u;acquired=a;
+   contributingMembers=participants;
   }
  }
  private PremiumV26Analytics(){}
@@ -26,6 +28,7 @@ final class PremiumV26Analytics {
   List<StockUsage> usage=dao.stockUsages();
   List<Expense> expenses=dao.expenses();
   List<Contribution> payments=dao.contributions();
+  Map<String,CashCorrectionsV256.State> corrected=CashCorrectionsV256.states(meta.inventoryStockJson,payments);
   InventoryCheckpoint.Config config=InventoryCheckpoint.read(meta.inventoryStockJson);
   for(ReportMath.Result r:statements){
    if(r.month.compareTo(month)>0)continue;
@@ -40,16 +43,51 @@ final class PremiumV26Analytics {
      acquired=Math.addExact(acquired,Math.multiplyExact(c.amount,
        StockReconciliationV257.packSize(c.note,config.perPack)));
    }
-   result.add(new Month(r.month,r.collections,r.expenses,r.closing,r.difference,count,acquired));
+   Set<String> contributors=new HashSet<>();
+   for(Contribution payment:payments)if("cash".equals(payment.kind)&&
+      r.month.equals(payment.feeMonth)){
+    long recognized=corrected.containsKey(payment.id)?corrected.get(payment.id).effective:payment.amount;
+    if(recognized>0)contributors.add(payment.memberId);
+   }
+   result.add(new Month(r.month,r.collections,r.expenses,r.closing,r.difference,count,acquired,contributors.size()));
   }
   return result;
  }
+ static final class Year {
+  final String year;
+  long received,spent,closing,unresolved,shuttles,acquired;
+  int reportedMonths;
+  Year(String year){this.year=year;}
+ }
+ static List<Year> annual(List<Month> months){
+  LinkedHashMap<String,Year> rows=new LinkedHashMap<>();
+  for(Month m:months){
+   String year=m.month.substring(0,4);
+   Year y=rows.get(year);
+   if(y==null){y=new Year(year);rows.put(year,y);}
+   y.received=Math.addExact(y.received,m.collections);
+   y.spent=Math.addExact(y.spent,m.expenses);
+   y.shuttles=Math.addExact(y.shuttles,m.usage);
+   y.acquired=Math.addExact(y.acquired,m.acquired);
+   y.unresolved=Math.addExact(y.unresolved,m.difference);
+   y.closing=m.closing;y.reportedMonths++;
+  }
+  return new ArrayList<>(rows.values());
+ }
+ static String annualCsv(List<Month> months){
+  StringBuilder s=new StringBuilder("Year,Recorded_Months,Cash_Collected_INR,Expenditure_INR,Final_Closing_INR,Unresolved_Differences_INR,Shuttles_Used,Shuttles_Acquired\r\n");
+  for(Year y:annual(months))s.append(y.year).append(',').append(y.reportedMonths)
+   .append(',').append(y.received).append(',').append(y.spent).append(',')
+   .append(y.closing).append(',').append(y.unresolved).append(',')
+   .append(y.shuttles).append(',').append(y.acquired).append("\r\n");
+  return s.toString();
+ }
  static String csv(List<Month> months){
-  StringBuilder s=new StringBuilder("Month,Collections_INR,Expenses_INR,Closing_INR,Unresolved_Difference_INR,Recorded_Shuttles_Used,Recorded_Shuttles_Acquired\r\n");
+  StringBuilder s=new StringBuilder("Month,Collections_INR,Expenses_INR,Closing_INR,Unresolved_Difference_INR,Recorded_Shuttles_Used,Recorded_Shuttles_Acquired,Members_With_Recorded_Cash\r\n");
   for(Month m:months)s.append(m.month).append(',').append(m.collections).append(',')
     .append(m.expenses).append(',').append(m.closing).append(',')
     .append(m.difference).append(',').append(m.usage).append(',')
-    .append(m.acquired).append("\r\n");
+    .append(m.acquired).append(',').append(m.contributingMembers).append("\r\n");
   return s.toString();
  }
  static File pdf(Context context,List<Month> data,String through)throws Exception{
