@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_1/**'
+      - 'src/premium/v25_2/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,7 +75,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_1/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_2/MainActivity.java").read_text())
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_3/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
@@ -99,7 +99,13 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
-          assert "STABLE v25.1" in s
+          assert "STABLE v25.2" in s
+          assert "Stock position from confirmed baseline" in s
+          assert "openInventoryCheckpoint()" in s
+          assert "InventoryCheckpoint.calculate" in s
+          assert "InventoryCheckpoint.updatedJson" in s
+          assert "dao.updateInventoryJson(updated)" in s
+          assert "checkpointSummary" in s
           assert "Record shuttle usage" in s
           assert "openShuttleUsageForm()" in s
           assert "Shuttles used this month" in s
@@ -107,18 +113,18 @@ jobs:
           assert "List<StockUsage> issued=database.dao().stockUsages()" in s
           assert "insertStock(Collections.singletonList(entry))" in s
           assert 'BackupGuardian.save(this,database,"shuttle-usage",true)' in s
-          assert "Stock tracking" in s
+          assert "Stock accounting basis" in s
           assert "requireImportedLedger()" in s
           assert "result.stockUsage" in s
           assert "current.stockUsage" in s
-          assert "inventoryStockJson" not in s
+          assert "inventoryStockJson" in s
           assert "Complete recorded member history" in s
           assert "Imported historical periods" in s
           assert "openShuttleDonation()" in s
           assert 'e.category="Shuttle pack"' in s
           assert 'c.kind="packs"' in s
           assert "Total packs acquired" in s
-          assert "Stock tracking" in s
+          assert "Stock accounting basis" in s
           assert "checkedPurchaseDate" in s
           records=Path("app/src/main/java/com/vinayak/badminton/nativepreview/Records.java").read_text()
           dao=Path("app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDao.java").read_text()
@@ -161,6 +167,27 @@ jobs:
           manifest.write_text(text)
           PY
 
+      - name: Patch existing Room inventory column and verified JSON exports
+        run: |
+          python3 src/premium/v25_2/patch_inventory.py
+          python3 - <<'PY'
+          from pathlib import Path
+          app=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          dao=(app/"LedgerDao.java").read_text()
+          codec=(app/"MigrationCodec.java").read_text()
+          model=(app/"LedgerDatabase.java").read_text()
+          assert "int updateInventoryJson(String json)" in dao
+          assert 'state.put("inventoryStock",new JSONObject(meta.inventoryStockJson))' in codec
+          assert 'InventoryCheckpoint.read(inventory.toString())' in codec
+          assert "version=1" in model
+          assert (app/"InventoryCheckpoint.java").exists()
+          assert (app/"ShuttleInventoryMath.java").exists()
+          PY
+      - name: Regression-test shuttle stock arithmetic with javac
+        run: |
+          mkdir -p "$RUNNER_TEMP/stock-tests"
+          javac -d "$RUNNER_TEMP/stock-tests" src/premium/v25_2/ShuttleInventoryMath.java src/premium/v25_2/InventoryMathSmoke.java
+          java -cp "$RUNNER_TEMP/stock-tests" com.vinayak.badminton.nativepreview.InventoryMathSmoke
       - name: Generate disposable CI-only signing keystore
         shell: bash
         run: |
