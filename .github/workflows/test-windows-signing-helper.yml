@@ -98,6 +98,45 @@ jobs:
             $env:PATH = $oldPath
             Remove-Item Env:\BADMINTON_MOCK_GH_FLAG -ErrorAction SilentlyContinue
           }
+      - name: Test empty and existing GitHub repository variable lists under StrictMode
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $root = Join-Path $env:RUNNER_TEMP "mock-gh-empty-vars"
+          New-Item -ItemType Directory -Path $root -Force | Out-Null
+          $scriptPath = Join-Path (Get-Location) 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'
+          $mock = Join-Path $root 'gh.cmd'
+          $batch = @'
+          @echo off
+          if "%1"=="auth" if "%2"=="status" exit /b 0
+          if "%1"=="variable" if "%2"=="list" (
+            type "%BADMINTON_VARIABLE_RESPONSE_FILE%"
+            exit /b 0
+          )
+          exit /b 99
+          '@
+          [IO.File]::WriteAllText($mock, ($batch -replace '\r?\n', [Environment]::NewLine), [Text.Encoding]::ASCII)
+          $originalPath = $env:PATH
+          try {
+            $env:PATH = "$root;$originalPath"
+            $fixture = Join-Path $root "repo-variables.json"
+            $env:BADMINTON_VARIABLE_RESPONSE_FILE = $fixture
+            [IO.File]::WriteAllText($fixture, "[]", [Text.Encoding]::ASCII)
+            $empty = (& $scriptPath -CheckVariableListOnly | Out-String)
+            if ($empty -notmatch "NO_CERTIFICATE_PIN") {
+              throw "Empty GitHub variable list did not return safe no-pin state. Output: $empty"
+            }
+            $presentJson = '[{"name":"BADMINTON_EXPECTED_CERT_SHA256","value":"0000000000000000000000000000000000000000000000000000000000000000"}]'
+            [IO.File]::WriteAllText($fixture, $presentJson, [Text.Encoding]::ASCII)
+            $present = (& $scriptPath -CheckVariableListOnly | Out-String)
+            if ($present -notmatch "CERTIFICATE_PIN_FOUND") {
+              throw "Existing GitHub signing identity was not detected. Output: $present"
+            }
+            Write-Host "Both empty and pre-existing GitHub variable scenarios passed"
+          } finally {
+            $env:PATH = $originalPath
+            Remove-Item Env:\BADMINTON_VARIABLE_RESPONSE_FILE -ErrorAction SilentlyContinue
+          }
       - name: Parse Windows setup PowerShell without executing it
         shell: pwsh
         run: |
