@@ -122,6 +122,7 @@ final class PremiumV26State {
   try{
    JSONArray a=entries(root(json),PROFILE_KEY);Map<String,Profile> result=new HashMap<>();
    Set<String> ids=new HashSet<>();
+   Set<String> memberOrigins=new HashSet<>();
    for(int i=0;i<a.length();i++){
     JSONObject e=a.getJSONObject(i);
     String id=e.getString("id"),at=e.getString("at");
@@ -131,6 +132,14 @@ final class PremiumV26State {
     String joined=e.optString("joined",""),notes=e.optString("notes","");
     String effective=e.optString("statusFrom","");
     if(!effective.isEmpty())MigrationCodec.ym(effective);
+    String origin=e.optString("memberStartMonth","");
+    if(!origin.isEmpty()){
+     MigrationCodec.ym(origin);
+     if(!memberOrigins.add(member))
+      throw new IllegalArgumentException("A member may have only one original billing-start event");
+     if(!origin.equals(effective))
+      throw new IllegalArgumentException("Original billing-start event must take effect in its creation month");
+    }
     if(name.isEmpty()||name.length()>100||contact.length()>80||joined.length()>10||notes.length()>400)
      throw new IllegalArgumentException("Profile field length out of bounds");
     if(!joined.isEmpty()){
@@ -190,17 +199,26 @@ final class PremiumV26State {
    String selected=MigrationCodec.ym(month);
    JSONArray history=entries(root(raw),PROFILE_KEY);
    boolean active=true;
-   String joined="";
+   String joined="",firstBillable="";
    for(int i=0;i<history.length();i++){
     JSONObject e=history.getJSONObject(i);
     if(!member.equals(e.getString("member")))continue;
-    String entered=e.optString("joined","");
-    if(!entered.isEmpty())joined=entered;
+    String created=e.optString("memberStartMonth","");
+    if(!created.isEmpty()){
+     String monthOrigin=MigrationCodec.ym(created);
+     if(!firstBillable.isEmpty())
+      throw new IllegalArgumentException("Duplicate membership billing origin");
+     firstBillable=monthOrigin;
+    }
     String effective=e.optString("statusFrom","");
-    if(!effective.isEmpty()&&MigrationCodec.ym(effective).compareTo(selected)<=0)
+    if(!effective.isEmpty()&&MigrationCodec.ym(effective).compareTo(selected)<=0){
+     String entered=e.optString("joined","");
+     if(!entered.isEmpty())joined=entered;
      active=e.getBoolean("active");
+    }
    }
-   return active&&(joined.isEmpty()||joined.substring(0,7).compareTo(selected)<=0);
+   return (firstBillable.isEmpty()||selected.compareTo(firstBillable)>=0)
+       &&active&&(joined.isEmpty()||joined.substring(0,7).compareTo(selected)<=0);
   }catch(JSONException ex){throw new IllegalArgumentException("Invalid membership status history",ex);}
  }
  static FeeSummary feeSummary(String raw,String member,String from,String through,
@@ -284,6 +302,26 @@ final class PremiumV26State {
     .put("statusFrom",new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new java.util.Date()));
    String updated=add(raw,PROFILE_KEY,e);validate(updated,known);return updated;
   }catch(JSONException ex){throw new IllegalArgumentException("Cannot update member profile",ex);}
+ }
+ /** Records the first billed month for a newly created member without rewriting old ledger rows. */
+ static String addNewMemberOrigin(String raw,String member,String name,String startMonth,
+                                  String id,String at,Set<String> known){
+  checkId(id,at);validMember(member,known);
+  String beginning=MigrationCodec.ym(startMonth);
+  if(name==null||name.trim().isEmpty()||name.trim().length()>100)
+   throw new IllegalArgumentException("Member name is required");
+  if(profiles(raw,known).containsKey(member))
+   throw new IllegalArgumentException("Member profile already has a recorded origin");
+  try{
+   JSONObject e=new JSONObject().put("id",id).put("member",member)
+    .put("name",name.trim()).put("contact","")
+    .put("joined",beginning+"-01").put("notes","")
+    .put("active",true).put("at",at)
+    .put("statusFrom",beginning).put("memberStartMonth",beginning);
+   String updated=add(raw,PROFILE_KEY,e);
+   validate(updated,known);
+   return updated;
+  }catch(JSONException ex){throw new IllegalArgumentException("Cannot record new member billing origin",ex);}
  }
  static String setReorder(String raw,long threshold,String reason,String id,String at){
   checkId(id,at);checkReason(reason);
