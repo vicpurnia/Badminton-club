@@ -295,10 +295,19 @@ public final class V26SignedUpgradePersistenceTest {
     String sealed=PremiumBackupCrypto.encrypt(source,privateTestPassword);
     String recovered=PremiumBackupCrypto.decrypt(sealed,privateTestPassword);
     assertEquals("Encrypted backup must preserve verified JSON bytes",source,recovered);
+    boolean rejectedWrongPassword=false;
+    try{
+     PremiumBackupCrypto.decrypt(sealed,"ci-incorrect-password-never-works".toCharArray());
+    }catch(IllegalArgumentException expected){rejectedWrongPassword=true;}
+    assertTrue("Wrong backup password must fail on real Android cryptographic provider",
+     rejectedWrongPassword);
+    String intactBefore=fullRoomDigest(db);
     String rehearsal=BackupRecoveryV259.dryRun(
      InstrumentationRegistry.getInstrumentation().getTargetContext(),recovered);
     assertTrue("Entire synthetic migration must pass exact temporary restore",
      rehearsal.contains("RESTORE DRY-RUN PASSED"));
+    assertEquals("In-memory restore rehearsal must not touch installed Room database",
+     intactBefore,fullRoomDigest(db));
    }finally{
     Arrays.fill(privateTestPassword,(char)0);
    }
