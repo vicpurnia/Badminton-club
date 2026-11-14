@@ -44,4 +44,20 @@ for marker, count in [
 assert source.count("database.runInTransaction(") >= 5
 assert "requireOpenMonth(original.feeMonth)" in source
 assert "PremiumV26StockGuard.requireEditableStockMonth(" in source
-print("v26 screen epoch, post-save routing, month consistency and financial transaction guard: PASS")
+# Financial mutation safety: an earlier open month cannot alter a later closed snapshot.
+assert "PremiumV26ClosingGuard.requireWritable(meta.inventoryStockJson" in source
+assert "PremiumV26PaymentOnce.alreadyCommitted(dao.contributions()" in source
+assert 'final String submissionId="pay-"+UUID.randomUUID();' in source
+assert "reviewing.compareAndSet(false,true)" in source
+assert 'if(!created[0])' in source
+assert 'requireOpenMonth(fee)' in source
+
+# Receipt batch exports must not retain hundreds of abandoned cached PDF files.
+assert "uncompressedBytes>35_000_000L" in source
+assert "if(pdf!=null)pdf.delete();" in source
+assert "zip.delete(); // Never leave a broken ZIP" in source
+
+recovery = Path("src/premium/v26_9/BackupRecoveryV259.java").read_text(encoding="utf-8")
+assert "MigrationCodec.canonical(allBefore).equals(MigrationCodec.canonical(allAfter))" in recovery
+
+print("v26 navigation / chronological closing / payment replay / receipt ZIP / full restore-metadata safety: PASS")
