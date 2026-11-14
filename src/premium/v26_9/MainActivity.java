@@ -511,12 +511,10 @@ public final class MainActivity extends Activity {
        memberDialog.dismiss();
        shareRecordedReceipt(m,c);
       }));
-      if(recognized>0){
-       gap(right,4);
-       right.addView(inlineButton("Correct",GREEN,()->{
-        memberDialog.dismiss();openCashCorrection(m,c);
-       }));
-      }
+      gap(right,4);
+      right.addView(inlineButton(recognized>0?"Correct":"Restore audited",GREEN,()->{
+       memberDialog.dismiss();openCashCorrection(m,c);
+      }));
      }
      item.addView(right);body.addView(item);gap(body,11);
     }
@@ -639,7 +637,7 @@ public final class MainActivity extends Activity {
    if(target==null||!"cash".equals(target.kind)||!member.id.equals(target.memberId))
     throw new IllegalArgumentException("Recorded cash payment no longer matches the selected member.");
    CashCorrectionsV256.State state=CashCorrectionsV256.stateFor(meta.inventoryStockJson,all,target);
-   if(state.effective<=0)throw new IllegalStateException("This cash payment is already canceled. It cannot be adjusted again.");
+   // An explicitly audited RESTORE is permitted for a previously canceled original.
    final Contribution original=target;
    final long reviewedEffective=state.effective;
    runOnUiThread(()->{
@@ -652,12 +650,12 @@ public final class MainActivity extends Activity {
     form.addView(text("ACTION",11,GRAY,true));gap(form,7);
     Spinner choice=new Spinner(this);
     choice.setAdapter(new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,
-      new String[]{"Correct amount","Cancel incorrect payment","Refund cash actually returned"}));
+      reviewedEffective==0?new String[]{"Restore canceled original"}:new String[]{"Correct amount","Cancel incorrect payment","Refund cash actually returned"}));
     form.addView(choice);gap(form,15);
     form.addView(text("NEW RECOGNIZED CASH AMOUNT (₹)",11,GRAY,true));gap(form,7);
     EditText amount=new EditText(this);amount.setSingleLine(true);
     amount.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-    amount.setText(String.valueOf(reviewedEffective));
+    amount.setText(String.valueOf(reviewedEffective==0?original.amount:reviewedEffective));
     amount.setBackground(border(LIGHT,LINE,12));pad(amount,14,12);
     form.addView(amount);gap(form,10);
     form.addView(text("For a refund, enter the amount retained after the actual refund. For cancellation, the recognized amount becomes zero.",11,GRAY,false));gap(form,15);
@@ -667,20 +665,28 @@ public final class MainActivity extends Activity {
     form.addView(button("Review financial correction",()->{
      try{
       int selected=choice.getSelectedItemPosition();
-      final String action=selected==1?"CANCEL":selected==2?"REFUND":"CORRECT";
-      final long next=selected==1?0:Long.parseLong(amount.getText().toString().trim());
+      final String action=reviewedEffective==0?"RESTORE":selected==1?"CANCEL":selected==2?"REFUND":"CORRECT";
+      final long next=(reviewedEffective>0&&selected==1)?0:Long.parseLong(amount.getText().toString().trim());
       final String why=reason.getText().toString().trim();
       if(next<0||next>1000000000L||next==reviewedEffective)
        throw new IllegalArgumentException("Enter a different recognized amount up to ₹100 crore.");
       if("REFUND".equals(action)&&next>=reviewedEffective)
        throw new IllegalArgumentException("Refund must reduce recognized cash. Never use this for a promised but unpaid refund.");
+      if("RESTORE".equals(action)&&(next<=0||next>original.amount))
+       throw new IllegalArgumentException("Restoration amount must be positive and no greater than the original payment.");
       if(why.length()<8||why.length()>200)
        throw new IllegalArgumentException("Explain the change in 8-200 characters.");
+      ReportMath.Result last=null;
+      for(ReportMath.Result item:ReportMath.monthly(dao,ReportMath.lastMonth(dao)))last=item;
+      long currentClosing=last==null?0:last.closing;
+      long nextClosing=Math.addExact(currentClosing,Math.subtractExact(next,reviewedEffective));
       String explanation="Member: "+member.name+"\nPayment ID: "+original.id+
        "\nMonth: "+original.feeMonth+
        "\nPrevious recognized cash: "+rupee(reviewedEffective)+
        "\nNew recognized cash: "+rupee(next)+
        "\nImpact on club balance: "+(next-reviewedEffective>0?"+":"")+rupee(next-reviewedEffective)+
+       "\nProjected latest closing: "+rupee(nextClosing)+
+       " (currently "+rupee(currentClosing)+")"+
        "\nAction: "+action+
        "\nReason: "+why+
        "\n\nOriginal entry and all past corrections remain in audit history. Confirm financial adjustment?";
@@ -842,9 +848,10 @@ public final class MainActivity extends Activity {
         new LinearLayout.LayoutParams(0,-2,1));
       }
       card.addView(actions);
-      if(!item.isHistorical()&&item.amount()>0){
+      if(!item.isHistorical()){
        gap(card,8);
-       card.addView(inlineButton("Correct payment / record refund / cancel",GREEN,
+       card.addView(inlineButton(item.amount()>0?
+         "Correct payment / refund / cancel":"Audited restoration of canceled original",GREEN,
          ()->openCashCorrection(item.member,item.payment)));
       }
       panel(results,card);
