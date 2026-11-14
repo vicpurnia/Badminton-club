@@ -104,7 +104,7 @@ public final class V26SignedUpgradePersistenceTest {
     db.getOpenHelper().getReadableDatabase().getVersion());
  }
 
- @Test public void seedOnSignedV25(){
+ @Test public void seedOnSignedV25()throws Exception{
   LedgerDatabase db=open();
   try{
    LedgerDao dao=db.dao();
@@ -179,7 +179,7 @@ public final class V26SignedUpgradePersistenceTest {
   }finally{db.close();}
  }
 
- @Test public void verifyAfterSignedV26Upgrade(){
+ @Test public void verifyAfterSignedV26Upgrade()throws Exception{
   LedgerDatabase db=open();
   try{
    LedgerDao dao=db.dao();
