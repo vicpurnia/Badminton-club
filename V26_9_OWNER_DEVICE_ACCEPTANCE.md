@@ -3,7 +3,7 @@
 **Purpose:** Permit a controlled test of the v26.9 candidate on the existing Badminton Premium package ID without mistaking a successful build for a completed release. This document contains no actual member identifiers beyond the previously documented historical acceptance landmarks.
 
 **Build source:** `dev/v26-0-to-26-9-20261114` (draft PR).  
-**Android application ID:** `premiumv24` — unchanged from v25.9.  
+**Android application ID:** `com.vinayak.badminton.premiumv24` — unchanged from v25.9.  
 **Signing certificate:** the same permanent owner-controlled certificate, verified against `BADMINTON_EXPECTED_CERT_SHA256`.  
 **Candidate status:** owner-signed TEST build, NOT stable. It must never automatically replace the user's installed APK.
 
@@ -31,7 +31,7 @@
 - [ ] Open the owner's GitHub Actions **Build Badminton Premium v26 SIGNED TEST Candidate (NOT STABLE)** workflow for the exact candidate SHA.
 - [ ] Confirm its automated checks: previous accounting regressions, v26 synthetic suite, Android build, APK package ID + version code, expected permanent signing certificate SHA-256 all **PASS**.
 - [ ] Verify the artifact name includes `SIGNED-TEST-CANDIDATE_NOT-PRODUCTION`.
-- [ ] Confirm the package ID is still `premiumv24`, and candidate `versionCode` exceeds v25.9.
+- [ ] Confirm the package ID is still `com.vinayak.badminton.premiumv24`, and candidate `versionCode` exceeds v25.9.
 - [ ] Do not install a debug artifact or a downloaded unsigned preview as an update to the signed app.
 
 ## C. Controlled device acceptance
