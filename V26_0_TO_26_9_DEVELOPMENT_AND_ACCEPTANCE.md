@@ -80,3 +80,12 @@ Use a **verified external JSON backup and the owner's signed v25.9 installation*
 - Run synthetic Java tests for closing chronology, duplicate payment submissions and conflicting IDs; source checks must retain the wiring in all CI pipelines.
 
 Production acceptance and original private-key signed upgrade testing remain separate from automated compilation.
+
+
+## Development milestone: same-certificate upgrade persistence + full-record backup comparison
+
+The Android 35 emulator successfully installed the archived signed v25.9.19 APK, seeded test-only member, cash, expense and shuttle-usage Room rows, installed signed v26.9-rc-test.2 **over the same package without uninstall**, verified the same rows and opened the updated app. Evidence: GitHub Actions run `43620161516`.
+
+The new `PremiumV26BackupCompare` checks canonical equality of every verified ledger JSON field. It distinguishes **exact pre/post-upgrade matches** from changed data sections even when membership counts and closing totals are unchanged. Users should compare the pre-upgrade external backup before recording post-upgrade transactions.
+
+This completes a new automated persistence gate. It does **not** substitute for real-phone acceptance or complete historical-ledger metadata coverage.
