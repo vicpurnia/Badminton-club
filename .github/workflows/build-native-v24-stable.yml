@@ -133,7 +133,7 @@ jobs:
           assert "Show next 25 receipts" in s
           assert "Save PDF" in s
           assert "HistoricalReceiptsV253.legacy(this,item.member,item.historical" in s
-          assert "HistoricalReceiptsV253.payment(this,item.member,item.payment" in s
+          assert "renderCashReceipt(item.member,item.payment)" in s
           assert '"cash".equals(c.kind)&&c.amount>0' in s
           assert '"cash".equals(item.kind)&&item.amount>0' in s
           assert "Find or share any past receipt" in s
