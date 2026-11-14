@@ -165,6 +165,30 @@ public final class V26CoreSmoke {
   reject(()->PremiumV26State.validate(orphanProfile,known),
    "Orphan member profile must never be imported");
 
+  // A payment's FEE MONTH is not necessarily the date that cash was received.
+  // Imported day-of-month placeholders must remain in an explicit undated bucket.
+  c.receivedDate="2026-11-10";c.approximate=false;
+  another.receivedDate="2026-03-01";another.approximate=true;
+  PremiumCashDateAudit.Result byReceiptDate=PremiumCashDateAudit.review(
+    data,payments,"2026-11");
+  yes(byReceiptDate.months.size()==1 &&
+      "2026-11".equals(byReceiptDate.months.get(0).month),
+      "Payment dated November cannot be assigned to February simply because of feeMonth");
+  yes(byReceiptDate.months.get(0).originallyRecorded==2000 &&
+      byReceiptDate.months.get(0).effectiveRecognized==1000 &&
+      byReceiptDate.months.get(0).corrected==1,
+      "Receipt-date evidence displays original and correction-adjusted values separately");
+  yes(byReceiptDate.unknownDateEntries==1 &&
+      byReceiptDate.unknownOriginal==900 &&
+      byReceiptDate.unknownEffective==900,
+      "Approximate imported first-day dates never count as known receipt dates");
+  yes(PremiumCashDateAudit.csv(byReceiptDate).contains("DATE_UNAVAILABLE"),
+      "CSV must preserve unknown dates in a distinct bucket");
+  another.approximate=false;another.receivedDate="2026-02-30";
+  yes(PremiumCashDateAudit.review(data,payments,"2026-11").unknownDateEntries==1,
+      "Impossible dates must never be placed on financial timeline");
+  another.approximate=true;another.receivedDate="2026-03-01";
+
   // Encryption test uses a synthetic verified ledger and never touches a real database.
   String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
@@ -187,7 +211,7 @@ public final class V26CoreSmoke {
 
 /* Minimal compile-time stubs: tests exercise the real production v26 logic. */
 final class Contribution {
- String id,memberId,feeMonth,kind;long amount;
+ String id,memberId,feeMonth,kind,receivedDate;long amount;boolean approximate;
 }
 final class MigrationCodec {
  static String ym(String s){
