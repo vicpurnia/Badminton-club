@@ -27,7 +27,7 @@ import java.nio.charset.StandardCharsets;
  */
 public final class MainActivity extends Activity {
  private static final int GREEN=0xFF12644E,DARK=0xFF102E29,LIGHT=0xFFF6F8F4,GRAY=0xFF72847C,GOLD=0xFFE6C88A,LINE=0xFFE6EBE5,PALE=0xFFEAF3ED;
- private static final int PICK_LEDGER=2001, SAVE_VERIFIED=2002, SAVE_PDF=2003, PICK_BACKUP_TREE=2004, VERIFY_BACKUP=2005;
+ private static final int PICK_LEDGER=2001, SAVE_VERIFIED=2002, SAVE_PDF=2003, PICK_BACKUP_TREE=2004, VERIFY_BACKUP=2005, TEST_RESTORE=2006;
  private LedgerDatabase database;
  private final ExecutorService io=Executors.newSingleThreadExecutor();
  private LinearLayout root,content,nav,header;private String tab="Home",reportMonth="2026-11",memberFilter="All";private String searchText="";
@@ -195,6 +195,24 @@ public final class MainActivity extends Activity {
   if(config==null)return "not configured";
   return config.month+" / "+config.openingShuttles+" shuttles / "+config.perPack+" per pack";
  }
+
+ private void verifyExternalBackup(){
+  background(()->{
+   String summary=BackupGuardian.verifyLatestExternal(this);
+   runOnUiThread(()->new AlertDialog.Builder(this)
+    .setTitle("External backup integrity verified")
+    .setMessage(summary)
+    .setPositiveButton("OK",null).show());
+  });
+ }
+ private void testRestoreWithoutChanges(){
+  Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+  pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("application/json");
+  pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  try{startActivityForResult(pick,TEST_RESTORE);}
+  catch(Exception ex){error(new IOException("Android cannot open the verified JSON picker."));}
+ }
+
  private void chooseBackupToVerify(){
   Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
   pick.addCategory(Intent.CATEGORY_OPENABLE);
@@ -229,6 +247,29 @@ public final class MainActivity extends Activity {
  }
  private void pickMigration(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("application/json");i.addCategory(Intent.CATEGORY_OPENABLE);i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivityForResult(i,PICK_LEDGER);}
  @Override protected void onActivityResult(int req,int resultCode,Intent data){super.onActivityResult(req,resultCode,data);
+  if(req==TEST_RESTORE){
+   if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
+   final Uri selected=data.getData();
+   background(()->{
+    ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+    try(InputStream in=getContentResolver().openInputStream(selected)){
+     if(in==null)throw new IOException("Selected restore-test JSON cannot be opened.");
+     byte[] block=new byte[16384];int n;
+     while((n=in.read(block))!=-1){
+      if(n==0)continue;
+      if(bytes.size()+n>BackupGuardian.MAX_BACKUP_BYTES)
+       throw new IOException("Restore-test JSON exceeds the 12 MB verified export limit.");
+      bytes.write(block,0,n);
+     }
+    }
+    String report=BackupRecoveryV259.dryRun(this,bytes.toString(StandardCharsets.UTF_8.name()));
+    runOnUiThread(()->new AlertDialog.Builder(this)
+      .setTitle("Restore rehearsal — no account changes")
+      .setMessage(report)
+      .setPositiveButton("OK",null).show());
+   });
+   return;
+  }
   if(req==VERIFY_BACKUP){
    if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
    final Uri selected=data.getData();
@@ -1624,12 +1665,14 @@ public final class MainActivity extends Activity {
    notice("Recovery readiness",BackupGuardian.recoveryReadiness(this));
    reportTile("▣","BACK UP NOW","Creates and checks a verified JSON copy; review any folder warnings",this::backupNow);
    reportTile("✓","VERIFY LAST PRIVATE BACKUP","Checks the newest saved copy, SHA-256, and verified ledger format without changing accounts",this::verifyPrivateBackup);
+   reportTile("✓","VERIFY LATEST EXTERNAL BACKUP","Reopens the latest selected-folder JSON; validates checksum, structure, and cash totals without importing",this::verifyExternalBackup);
+   reportTile("▣","TEST RESTORE WITHOUT CHANGING DATA","Import a chosen verified JSON into temporary memory, re-export, compare balances and discard test database",this::testRestoreWithoutChanges);
    reportTile("⌕","COMPARE SAVED JSON WITH CURRENT LEDGER","Read-only counts, dates, and closing-balance comparison; no replacement or import",this::chooseBackupToVerify);
    reportTile("▱","CHOOSE EXTERNAL BACKUP FOLDER","One-time folder permission; automatic copies after every change",this::pickBackupFolder);
    if(BackupGuardian.folderSelected(this))
     reportTile("×","Disconnect external folder","Stops external copies without deleting any old backup files",this::disableBackupFolder);
    reportTile("⇩","Restore / import verified JSON","Safe import only into an empty database; existing accounts cannot be overwritten",this::pickMigration);
-   notice("Important", "App-private copies disappear on uninstall. Select a dedicated Documents folder for persistent external backups. JSON contains member financial information and is not encrypted.");
+   notice("Important", "App-private copies disappear on uninstall. Choose a private Documents folder, verify its latest external backup, then test a restore in temporary memory. JSON contains unencrypted member financial information; keep exported files private.");
    gap(content,14);
    sectionHeading("Previous paid receipts","Read-only copies of existing cash entries");
    reportTile("▤","RECEIPT LIBRARY · ALL MONTHS","Search by member or month, then share or save any existing receipt or historical statement",this::showReceiptLibrary);
