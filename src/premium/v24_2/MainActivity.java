@@ -226,15 +226,15 @@ public final class MainActivity extends Activity {
     if(database.dao().meta()!=null){
      current=MigrationCodec.inspect(MigrationCodec.exportVerified(database));
     }
-    String comparison="\\n\\nNo current ledger in this app; the selected backup can be imported only into an empty database.";
+    String comparison="\n\nNo current ledger in this app; the selected backup can be imported only into an empty database.";
     if(current!=null){
-     comparison="\\n\\nCURRENT APP vs SELECTED BACKUP"
-      +"\\nMembers: "+current.players+" vs "+result.players
-      +"\\nContributions: "+current.payments+" vs "+result.payments
-      +"\\nExpenses: "+current.expenses+" vs "+result.expenses
-      +"\\nLast month: "+current.lastMonth+" vs "+result.lastMonth
-      +"\\nClosing balance: "+rupee(current.closingBalance)+" vs "+rupee(result.closingBalance)
-      +"\\nThese are summary checks; matching totals alone do not prove every entry is identical.";
+     comparison="\n\nCURRENT APP vs SELECTED BACKUP"
+      +"\nMembers: "+current.players+" vs "+result.players
+      +"\nContributions: "+current.payments+" vs "+result.payments
+      +"\nExpenses: "+current.expenses+" vs "+result.expenses
+      +"\nLast month: "+current.lastMonth+" vs "+result.lastMonth
+      +"\nClosing balance: "+rupee(current.closingBalance)+" vs "+rupee(result.closingBalance)
+      +"\nThese are summary checks; matching totals alone do not prove every entry is identical.";
     }
     String message="SHA-256 envelope and ledger structure validated.\n\n"
       +result.players+" players · "+result.payments+" contributions · "+result.expenses+" expenses"
