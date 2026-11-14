@@ -1989,9 +1989,14 @@ public final class MainActivity extends Activity {
    });
   });
  }
+ private File shareCacheDir() throws IOException{
+  File dir=new File(getCacheDir(),"pdfs");
+  if(!dir.isDirectory()&&!dir.mkdirs())throw new IOException("Shared attachment folder unavailable");
+  return dir;
+ }
  private void shareAnalyticsCsv(List<PremiumV26Analytics.Month> data,String month){
   background(()->{
-   File file=new File(getCacheDir(),"Premium_Dashboard_"+month+".csv");
+   File file=new File(shareCacheDir(),"Premium_Dashboard_"+month+".csv");
    try(OutputStream out=new FileOutputStream(file)){
     out.write(PremiumV26Analytics.csv(data).getBytes(StandardCharsets.UTF_8));
    }
@@ -2014,7 +2019,7 @@ public final class MainActivity extends Activity {
     matches.add(p);
    if(matches.isEmpty())throw new IllegalArgumentException("No recorded cash receipt PDFs for this member");
    if(matches.size()>400)throw new IllegalArgumentException("Please export a smaller range of receipts");
-   File zip=new File(getCacheDir(),"Member_Receipts_"+member.id.replaceAll("[^A-Za-z0-9_-]","_")+".zip");
+   File zip=new File(shareCacheDir(),"Member_Receipts_"+member.id.replaceAll("[^A-Za-z0-9_-]","_")+".zip");
    try(java.util.zip.ZipOutputStream output=new java.util.zip.ZipOutputStream(new FileOutputStream(zip))){
     int n=0;byte[] buffer=new byte[16384];
     for(Contribution payment:matches){
