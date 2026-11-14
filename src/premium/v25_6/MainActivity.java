@@ -347,9 +347,15 @@ public final class MainActivity extends Activity {
   content.addView(filters);gap(content,14);
   LinearLayout results=col();content.addView(results);gap(content,10);content.addView(button("＋  Add new player",this::addMember),fill());
   Runnable render=()->background(()->{
-   List<Member> members=database.dao().members();List<Contribution> payments=database.dao().contributions();List<LegacyEntry> legacy=database.dao().legacy();
+   List<Member> members=database.dao().members();List<Contribution> payments=database.dao().contributions();
+   Map<String,CashCorrectionsV256.State> correct=CashCorrectionsV256.states(database.dao().meta().inventoryStockJson,payments);
+   List<LegacyEntry> legacy=database.dao().legacy();
    runOnUiThread(()->{results.removeAllViews();int shown=0;for(Member member:members){if(!member.name.toLowerCase(Locale.ROOT).contains(search.getText().toString().trim().toLowerCase(Locale.ROOT)))continue;
-    long current=0,lifetime=0,donated=0;for(Contribution c:payments)if(member.id.equals(c.memberId)){if("packs".equals(c.kind))donated+=c.amount;else {lifetime+=c.amount;if(reportMonth.equals(c.feeMonth))current+=c.amount;}}
+    long current=0,lifetime=0,donated=0;for(Contribution c:payments)if(member.id.equals(c.memberId)){if("packs".equals(c.kind))donated+=c.amount;else {
+     long effective=correct.containsKey(c.id)?correct.get(c.id).effective:c.amount;
+     lifetime=Math.addExact(lifetime,effective);
+     if(reportMonth.equals(c.feeMonth))current=Math.addExact(current,effective);
+    }}
     for(LegacyEntry e:legacy)if(member.id.equals(e.memberId)){
       if("cash".equals(e.kind))lifetime+=e.amount;
       else if("packs".equals(e.kind))donated+=e.amount;
@@ -367,7 +373,10 @@ public final class MainActivity extends Activity {
  private void memberWallet(Member m,long monthly,long lifetime,long donated){
   background(()->{
    ArrayList<Contribution> entries=new ArrayList<>();
-   for(Contribution c:database.dao().contributions())if(m.id.equals(c.memberId))entries.add(c);
+   List<Contribution> allPayments=database.dao().contributions();
+   Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(
+    database.dao().meta().inventoryStockJson,allPayments);
+   for(Contribution c:allPayments)if(m.id.equals(c.memberId))entries.add(c);
    entries.sort((a,b)->{
     String am=a.feeMonth==null?"":a.feeMonth,bm=b.feeMonth==null?"":b.feeMonth;
     int month=bm.compareTo(am);if(month!=0)return month;
@@ -393,17 +402,29 @@ public final class MainActivity extends Activity {
      String period=c.feeMonth==null?"Month not recorded":dateLabel(c.feeMonth);
      info.addView(text(period,13,DARK,true));gap(info,3);
      String date=(c.approximate||c.receivedDate==null||c.receivedDate.isEmpty())?"Exact day not recorded":"Recorded "+c.receivedDate;
-     String type="packs".equals(c.kind)?"Donated shuttle pack · noncash":"Cash contribution";
+     CashCorrectionsV256.State state=corrections.get(c.id);
+     long recognized="packs".equals(c.kind)?c.amount:state==null?c.amount:state.effective;
+     String type="packs".equals(c.kind)?"Donated shuttle pack · noncash":
+       state==null?"Cash contribution":state.effective==0?"CANCELED cash payment":
+       "Corrected cash contribution";
      info.addView(text(type+" · "+date,10,GRAY,false));
      item.addView(info,new LinearLayout.LayoutParams(0,-2,1));
      LinearLayout right=col();right.setGravity(Gravity.END);
-     right.addView(text("packs".equals(c.kind)?"+"+c.amount+" pk":rupee(c.amount),13,GREEN,true));
+     right.addView(text("packs".equals(c.kind)?"+"+c.amount+" pk":rupee(recognized),13,
+       recognized==0?GRAY:GREEN,true));
      if("cash".equals(c.kind)&&c.amount>0){
       gap(right,5);
-      right.addView(inlineButton("Share receipt",GREEN,()->{
+      right.addView(inlineButton(state!=null&&recognized==0?"Share void record":"Share receipt",
+       GREEN,()->{
        memberDialog.dismiss();
        shareRecordedReceipt(m,c);
       }));
+      if(recognized>0){
+       gap(right,4);
+       right.addView(inlineButton("Correct",GREEN,()->{
+        memberDialog.dismiss();openCashCorrection(m,c);
+       }));
+      }
      }
      item.addView(right);body.addView(item);gap(body,11);
     }
@@ -442,13 +463,31 @@ public final class MainActivity extends Activity {
  private Dialog memberDialog;
  private void addMember(){EditText e=new EditText(this);e.setHint("Full player name");new AlertDialog.Builder(this).setTitle("New player").setView(e).setNegativeButton("Cancel",null).setPositiveButton("Add",(d,w)->background(()->{String n=e.getText().toString().trim();if(n.isEmpty())throw new IllegalArgumentException("Name required");requireImportedLedger();Member m=new Member();m.id="native-"+UUID.randomUUID();m.name=n;database.dao().insertMember(m);BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();runOnUiThread(this::showMembers);})).show();}
 
+
+ private File renderCashReceipt(Member member,Contribution payment) throws Exception {
+  LedgerDao dao=database.dao();
+  if(dao.meta()==null)throw new IllegalStateException("Ledger not imported");
+  Contribution found=null;
+  List<Contribution> payments=dao.contributions();
+  for(Contribution row:payments)if(row.id.equals(payment.id)){
+   found=row;break;
+  }
+  if(found==null||!"cash".equals(found.kind)||found.amount<=0||
+    !member.id.equals(found.memberId))
+   throw new IllegalArgumentException("The original recorded cash payment could not be verified.");
+  CashCorrectionsV256.State state=CashCorrectionsV256.stateFor(
+   dao.meta().inventoryStockJson,payments,found);
+  return state.corrected()?
+   CashCorrectionPdfV256.make(this,member,found,dao.meta(),state):
+   HistoricalReceiptsV253.payment(this,member,found,dao.meta());
+ }
  private void shareRecordedReceipt(Member member,Contribution payment){
   if(member==null||payment==null||!"cash".equals(payment.kind)||payment.amount<=0){
    error(new IllegalArgumentException("Only an already-recorded cash contribution can be shared."));
    return;
   }
   sharePdf("Recorded_Receipt_"+payment.id+".pdf",
-   ()->HistoricalReceiptsV253.payment(this,member,payment,database.dao().meta()));
+   ()->renderCashReceipt(member,payment));
  }
  private void shareHistoricalStatement(Member member,LegacyEntry historical){
   if(member==null||historical==null||!"cash".equals(historical.kind)||historical.amount<=0){
