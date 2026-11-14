@@ -247,6 +247,41 @@ public final class MainActivity extends Activity {
  }
  private void pickMigration(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.setType("application/json");i.addCategory(Intent.CATEGORY_OPENABLE);i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);startActivityForResult(i,PICK_LEDGER);}
  @Override protected void onActivityResult(int req,int resultCode,Intent data){super.onActivityResult(req,resultCode,data);
+
+  if(req==SAVE_ENCRYPTED_V26){
+   File file=pendingEncryptedExport;pendingEncryptedExport=null;
+   if(resultCode!=RESULT_OK||data==null||data.getData()==null){
+    if(file!=null)file.delete();return;
+   }
+   if(file==null||!file.isFile()){error(new IOException("Encrypted backup export expired"));return;}
+   Uri destination=data.getData();
+   background(()->{
+    try{
+     byte[] original;
+     try(InputStream src=new FileInputStream(file)){
+      ByteArrayOutputStream b=new ByteArrayOutputStream();byte[] buf=new byte[16384];int n;
+      while((n=src.read(buf))!=-1){if(n>0)b.write(buf,0,n);}original=b.toByteArray();
+     }
+     try(OutputStream output=getContentResolver().openOutputStream(destination,"w")){
+      if(output==null)throw new IOException("Could not create encrypted backup");
+      output.write(original);output.flush();
+     }
+     byte[] readback=readDocumentLimited(destination,PremiumBackupCrypto.MAX_ENVELOPE);
+     byte[] a=java.security.MessageDigest.getInstance("SHA-256").digest(original);
+     byte[] b=java.security.MessageDigest.getInstance("SHA-256").digest(readback);
+     if(!java.security.MessageDigest.isEqual(a,b))
+      throw new IOException("Encrypted backup read-back differs; do not rely on this file");
+     runOnUiThread(()->new AlertDialog.Builder(this).setTitle("Encrypted backup saved & byte-verified")
+      .setMessage("The selected file was reopened and checked. Keep the password in a separate secure location. Rehearse recovery on the new phone before discarding any original.")
+      .setPositiveButton("OK",null).show());
+    }finally{file.delete();}
+   });return;
+  }
+  if(req==READ_ENCRYPTED_V26){
+   if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)
+    readEncryptedBackup(data.getData(),encryptedImportAfterCheck);
+   return;
+  }
   if(req==TEST_RESTORE){
    if(resultCode!=RESULT_OK||data==null||data.getData()==null)return;
    final Uri selected=data.getData();
@@ -1992,6 +2027,106 @@ public final class MainActivity extends Activity {
     }catch(Exception ex){error(new IOException("Could not share receipt ZIP: "+ex.getMessage()));}
    });
   });
+ }
+
+
+ private void startEncryptedExport(){
+  LinearLayout form=col();pad(form,16,9);
+  form.addView(text("A password is required on your new phone. If forgotten, this encrypted copy cannot be recovered.",12,GRAY,false));gap(form,12);
+  EditText one=new EditText(this),two=new EditText(this);
+  one.setHint("Strong password, 12+ characters");
+  two.setHint("Repeat password");
+  one.setInputType(129);two.setInputType(129);
+  form.addView(one);gap(form,9);form.addView(two);
+  new AlertDialog.Builder(this).setTitle("Encrypt verified migration backup")
+   .setView(form).setNegativeButton("Cancel",null).setPositiveButton("Encrypt & save",(d,w)->{
+    char[] first=one.getText().toString().toCharArray(),confirm=two.getText().toString().toCharArray();
+    one.setText("");two.setText("");
+    if(first.length<12||!Arrays.equals(first,confirm)){
+     Arrays.fill(first,'\u0000');Arrays.fill(confirm,'\u0000');
+     error(new IllegalArgumentException("Passwords must match and contain at least 12 characters."));return;
+    }
+    Arrays.fill(confirm,'\u0000');
+    background(()->{
+     try{
+      requireImportedLedger();
+      String verified=MigrationCodec.exportVerified(database);
+      String encrypted=PremiumBackupCrypto.encrypt(verified,first);
+      File file=new File(getCacheDir(),"Badminton_Premium_Encrypted_Migration.bpe");
+      try(OutputStream output=new FileOutputStream(file)){
+       output.write(encrypted.getBytes(StandardCharsets.UTF_8));
+      }
+      pendingEncryptedExport=file;
+      runOnUiThread(()->{
+       Intent save=new Intent(Intent.ACTION_CREATE_DOCUMENT);
+       save.addCategory(Intent.CATEGORY_OPENABLE);
+       save.setType("application/octet-stream");
+       save.putExtra(Intent.EXTRA_TITLE,"Badminton_Premium_"+reportMonth+"_encrypted.bpe");
+       try{startActivityForResult(save,SAVE_ENCRYPTED_V26);}
+       catch(Exception ex){pendingEncryptedExport=null;error(new IOException("Secure file picker unavailable."));}
+      });
+     }finally{Arrays.fill(first,'\u0000');}
+    });
+   }).show();
+ }
+ private void chooseEncryptedBackup(){
+  new AlertDialog.Builder(this).setTitle("Encrypted backup recovery")
+   .setMessage("First decrypt and verify the file in temporary memory. Existing live accounts cannot be replaced. If the app is empty, import can be offered after successful verification. No automatic cloud sync or merging.")
+   .setNegativeButton("Cancel",null)
+   .setNeutralButton("Test only",(d,w)->selectEncryptedDocument(false))
+   .setPositiveButton("Test then import if empty",(d,w)->selectEncryptedDocument(true))
+   .show();
+ }
+ private void selectEncryptedDocument(boolean wantsImport){
+  encryptedImportAfterCheck=wantsImport;
+  Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+  pick.addCategory(Intent.CATEGORY_OPENABLE);pick.setType("*/*");
+  pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+  try{startActivityForResult(pick,READ_ENCRYPTED_V26);}
+  catch(Exception ex){error(new IOException("No encrypted file picker available"));}
+ }
+ private byte[] readDocumentLimited(Uri uri,int limit)throws Exception{
+  ByteArrayOutputStream bytes=new ByteArrayOutputStream();
+  try(InputStream in=getContentResolver().openInputStream(uri)){
+   if(in==null)throw new IOException("Could not reopen document");
+   byte[] buffer=new byte[16384];int count;
+   while((count=in.read(buffer))!=-1){
+    if(count<=0)continue;
+    if(bytes.size()+count>limit)throw new IOException("Document exceeds safe size limit");
+    bytes.write(buffer,0,count);
+   }
+  }
+  return bytes.toByteArray();
+ }
+ private void readEncryptedBackup(Uri uri,boolean allowImport){
+  EditText pass=new EditText(this);pass.setInputType(129);
+  pass.setHint("Password used for this encrypted backup");
+  new AlertDialog.Builder(this).setTitle("Unlock encrypted backup")
+   .setView(pass).setNegativeButton("Cancel",null).setPositiveButton("Verify",(d,w)->{
+    char[] password=pass.getText().toString().toCharArray();pass.setText("");
+    background(()->{
+     try{
+      byte[] payload=readDocumentLimited(uri,PremiumBackupCrypto.MAX_ENVELOPE);
+      String decrypted=PremiumBackupCrypto.decrypt(new String(payload,StandardCharsets.UTF_8),password);
+      String summary=BackupRecoveryV259.dryRun(this,decrypted);
+      MigrationCodec.Preview preview=MigrationCodec.inspect(decrypted);
+      if(allowImport&&database.dao().metaCount()==0){
+       pendingImport=preview;
+       runOnUiThread(()->new AlertDialog.Builder(this)
+        .setTitle("Encrypted migration verified · empty app")
+        .setMessage(summary+"\n\nImport this verified ledger into the currently EMPTY app? No merge is performed.")
+        .setNegativeButton("Keep empty",(dd,ww)->pendingImport=null)
+        .setPositiveButton("Import verified history",(dd,ww)->importPending()).show());
+      }else{
+       runOnUiThread(()->new AlertDialog.Builder(this)
+        .setTitle("Encrypted backup verified · read only")
+        .setMessage(summary+
+         (allowImport?"\n\nImport blocked because the installed app already contains a ledger. No replacement was performed.":""))
+        .setPositiveButton("OK",null).show());
+      }
+     }finally{Arrays.fill(password,'\u0000');}
+    });
+   }).show();
  }
 
  private void showReports(){title("Reports","Your club finances, beautifully presented");
