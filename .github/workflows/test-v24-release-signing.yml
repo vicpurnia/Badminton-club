@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_5/**'
+      - 'src/premium/v25_6/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,7 +75,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_5/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_6/MainActivity.java").read_text())
           receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
           assert receipt.exists()
           receiptSource=receipt.read_text()
@@ -85,6 +85,11 @@ jobs:
           assert "Only positive historical cash records" in receiptSource
           assert "This copy does not record a new payment" in receiptSource
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/HistoricalReceiptsV253.java").write_text(receiptSource)
+          cash=Path("src/premium/v25_6/CashCorrectionsV256.java")
+          correctionPdf=Path("src/premium/v25_6/CashCorrectionPdfV256.java")
+          assert cash.exists() and correctionPdf.exists()
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/CashCorrectionsV256.java").write_text(cash.read_text())
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/CashCorrectionPdfV256.java").write_text(correctionPdf.read_text())
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_3/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
@@ -108,7 +113,13 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
-          assert "STABLE v25.5" in s
+          assert "STABLE v25.6" in s
+          assert "openCashCorrection(" in s
+          assert "renderCashReceipt(" in s
+          assert "Commit audited correction" in s
+          assert "CashCorrectionsV256.append" in s
+          assert "CashCorrectionsV256.monthDeltas" not in s
+          assert "CANCELED record" in s
           assert "private void previewPdf" in s
           assert "Preview recorded PDF" in s
           assert "No PDF viewer is available" in s
@@ -123,7 +134,7 @@ jobs:
           assert "Share receipt" in s
           assert "Save PDF" in s
           assert "HistoricalReceiptsV253.legacy(this,item.member,item.historical" in s
-          assert "HistoricalReceiptsV253.payment(this,item.member,item.payment" in s
+          assert "renderCashReceipt(item.member,item.payment)" in s
           assert '"cash".equals(c.kind)&&c.amount>0' in s
           assert '"cash".equals(item.kind)&&item.amount>0' in s
           assert "Find or share any past receipt" in s
@@ -213,6 +224,23 @@ jobs:
           assert "version=1" in model
           assert (app/"InventoryCheckpoint.java").exists()
           assert (app/"ShuttleInventoryMath.java").exists()
+          PY
+      - name: Verify immutable cash-correction accounting integration
+        run: |
+          python3 src/premium/v25_6/patch_cash_corrections.py
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          codec=(root/"MigrationCodec.java").read_text()
+          math=(root/"ReportMath.java").read_text()
+          classic=(root/"ClassicLedgerV231.java").read_text()
+          pdf=(root/"PdfReports.java").read_text()
+          assert "cashCorrectionDeltas=CashCorrectionsV256.monthDeltas(ledger)" in codec
+          assert "importedCorrectionDeltas=CashCorrectionsV256.monthDeltas(d)" in codec
+          assert "CashCorrectionsV256.monthDeltas(meta.inventoryStockJson,payments)" in math
+          assert "CashCorrectionsV256.states(meta.inventoryStockJson,contributions)" in classic
+          assert "reported==0?\"VOID\"" in pdf
+          assert "version=1" in (root/"LedgerDatabase.java").read_text()
           PY
       - name: Regression-test shuttle stock arithmetic with javac
         run: |
