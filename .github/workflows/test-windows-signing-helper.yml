@@ -84,7 +84,7 @@ jobs:
           )
           exit /b 99
           '@
-          [IO.File]::WriteAllText($mock, $batch.Replace([char]10,[string]([char]13)+[char]10), [Text.Encoding]::ASCII)
+          [IO.File]::WriteAllText($mock, ($batch -replace '\r?\n', [Environment]::NewLine), [Text.Encoding]::ASCII)
           $oldPath = $env:PATH
           try {
             $env:PATH = "$root;$oldPath"
