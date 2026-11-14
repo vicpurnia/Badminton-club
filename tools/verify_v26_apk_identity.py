@@ -29,8 +29,8 @@ def check(apk: str, version_prefix: str) -> None:
     if found is None:
         raise SystemExit("Cannot parse Android package identity from APK")
     app_id, code, name = found.group(1), int(found.group(2)), found.group(3)
-    if app_id != "premiumv24":
-        raise SystemExit(f"ABORT: package ID differs from expected: observed={app_id!r}, expected='premiumv24'")
+    if app_id != "com.vinayak.badminton.premiumv24":
+        raise SystemExit(f"ABORT: package ID differs from expected: observed={app_id!r}, expected='com.vinayak.badminton.premiumv24'")
     if not (27_000 <= code < 100_000):
         raise SystemExit("ABORT: candidate versionCode cannot safely supersede v25 stable")
     if not name.startswith(version_prefix):
