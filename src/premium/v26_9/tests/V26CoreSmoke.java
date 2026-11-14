@@ -145,6 +145,26 @@ public final class V26CoreSmoke {
                    .put(new JSONObject().put("id","c").put("month","2026-08"))).toString()),
    "Duplicated physical count event ID must fail closed");
 
+  // Import must reject fee/profile/waiver events that reference absent member IDs.
+  String orphanPolicy=new JSONObject().put(PremiumV26State.FEE_KEY,new JSONArray().put(
+   new JSONObject().put("id","orphan-fee").put("scope","not-a-member")
+    .put("month","2026-11").put("rate",1000)
+    .put("reason","Unknown identity forbidden").put("at","2026-11-14"))).toString();
+  reject(()->PremiumV26State.validate(orphanPolicy,known),
+   "Orphan fee policy must never be imported");
+  String orphanConcession=new JSONObject().put(PremiumV26State.WAIVER_KEY,new JSONArray().put(
+   new JSONObject().put("id","orphan-waiver").put("member","not-a-member")
+    .put("month","2026-11").put("amount",100)
+    .put("reason","Unknown concession owner").put("at","2026-11-14"))).toString();
+  reject(()->PremiumV26State.validate(orphanConcession,known),
+   "Orphan waiver must never be imported");
+  String orphanProfile=new JSONObject().put(PremiumV26State.PROFILE_KEY,new JSONArray().put(
+   new JSONObject().put("id","orphan-profile").put("member","not-a-member")
+    .put("name","Unknown member").put("joined","").put("active",true)
+    .put("at","2026-11-14"))).toString();
+  reject(()->PremiumV26State.validate(orphanProfile,known),
+   "Orphan member profile must never be imported");
+
   // Encryption test uses a synthetic verified ledger and never touches a real database.
   String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
