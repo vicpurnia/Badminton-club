@@ -230,6 +230,31 @@ public final class V26CoreSmoke {
       "pay-independent-second-payment","synthetic-A","2026-11",1200,"UPI"),
       "An independent payment form can still record a second genuine receipt");
 
+  // An equal headcount and closing balance do NOT establish record parity.
+  JSONObject oldLedger=new JSONObject().put("players",
+    new JSONArray().put(new JSONObject().put("id","synthetic-A").put("name","Old")))
+    .put("payments",new JSONArray().put(new JSONObject().put("id","p-1").put("amount",1379)))
+    .put("closingBalance",9000)
+    .put("inventoryStock",new JSONObject().put("openingShuttles",24));
+  JSONObject matching=new JSONObject(oldLedger.toString());
+  PremiumV26BackupCompare.Comparison equal=
+   PremiumV26BackupCompare.compare(matching,oldLedger);
+  yes(equal.exact&&equal.differences.isEmpty(),
+   "Full exact baseline backup must verify equal, including inventory metadata");
+  matching.getJSONArray("payments").getJSONObject(0).put("amount",1380);
+  PremiumV26BackupCompare.Comparison modified=
+   PremiumV26BackupCompare.compare(matching,oldLedger);
+  yes(!modified.exact&&modified.differences.contains("payments"),
+   "Same count and closing balance must not conceal an edited cash payment");
+  matching=new JSONObject(oldLedger.toString());
+  matching.getJSONObject("inventoryStock").put("openingShuttles",25);
+  yes(PremiumV26BackupCompare.compare(matching,oldLedger).differences.contains("inventoryStock"),
+   "Changed stock checkpoint must be reported in full ledger comparison");
+  matching=new JSONObject(oldLedger.toString());
+  matching.put("newAuditField",new JSONArray().put("future-metadata"));
+  yes(PremiumV26BackupCompare.compare(matching,oldLedger).differences.contains("newAuditField"),
+   "Unknown future audit key must not be excluded from exact comparison");
+
   // Encryption test uses a synthetic verified ledger and never touches a real database.
   String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
