@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25/**'
+      - 'src/premium/v25_1/**'
       - '.github/workflows/build-native-v24-stable.yml'
 
 permissions:
@@ -74,7 +74,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_1/MainActivity.java").read_text())
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_3/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
@@ -104,13 +104,30 @@ jobs:
           assert "Backup health" in s
           assert "BackupGuardian.MAX_BACKUP_BYTES" in s
           assert "Recovery readiness" in s
-          assert "STABLE v25" in s
+          assert "STABLE v25.1" in s
+          assert "Record shuttle usage" in s
+          assert "openShuttleUsageForm()" in s
+          assert "Shuttles used this month" in s
+          assert "Shuttles used all-time" in s
+          assert "List<StockUsage> issued=database.dao().stockUsages()" in s
+          assert "insertStock(Collections.singletonList(entry))" in s
+          assert 'BackupGuardian.save(this,database,"shuttle-usage",true)' in s
+          assert "requireImportedLedger()" in s
+          assert "result.stockUsage" in s
+          assert "current.stockUsage" in s
           assert "Complete recorded member history" in s
           assert "Imported historical periods" in s
           assert "openShuttleDonation()" in s
           assert "Total packs acquired" in s
-          assert "Inventory limitation" in s
+          assert "Stock tracking" in s
           assert "checkedPurchaseDate" in s
+          records=Path("app/src/main/java/com/vinayak/badminton/nativepreview/Records.java").read_text()
+          dao=Path("app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDao.java").read_text()
+          codec=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MigrationCodec.java").read_text()
+          assert '@Entity(tableName="stock_usage"' in records
+          assert "void insertStock(List<StockUsage> rows)" in dao
+          assert '"stockUsage",stock' in codec
+          assert 'x.shuttles=v.getLong("shuttles")' in codec
           assert 'e.category="Shuttle pack"' in s
           assert 'c.kind="packs"' in s
           assert "6_000_000" not in s
@@ -133,7 +150,7 @@ jobs:
           s=s.replace("premiumv20","premiumv24")
           import os
           s=s.replace("versionCode 20","versionCode "+str(24000+int(os.environ["GITHUB_RUN_NUMBER"])))
-          s += '\nandroid { defaultConfig { versionName "25.0.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
+          s += '\nandroid { defaultConfig { versionName "25.1.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
@@ -195,6 +212,6 @@ jobs:
       - name: Upload signed stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v25-STABLE-signed
+          name: Badminton-Premium-v25.1-STABLE-signed
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
