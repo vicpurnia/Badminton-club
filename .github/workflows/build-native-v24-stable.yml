@@ -1,4 +1,4 @@
-name: Build Badminton Premium v24 STABLE (private signing key)
+name: Build Badminton Premium STABLE (private signing key)
 
 on:
   workflow_dispatch:
