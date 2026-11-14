@@ -363,7 +363,7 @@ public final class MainActivity extends Activity {
       checkpointSummary(result.ledger.optJSONObject("inventoryStock")==null?"":result.ledger.optJSONObject("inventoryStock").toString())
       +"\nLast month: "+current.lastMonth+" vs "+result.lastMonth
       +"\nClosing balance: "+rupee(current.closingBalance)+" vs "+rupee(result.closingBalance)
-      +"\nThese are summary checks; matching totals alone do not prove every entry is identical.";
+      +"\n\n"+PremiumV26BackupCompare.compare(current.ledger,result.ledger).summary();
     }
     String message="SHA-256 envelope and ledger structure validated.\n\n"
       +result.players+" players · "+result.payments+" contributions · "+result.expenses+" expenses"
@@ -2500,7 +2500,7 @@ public final class MainActivity extends Activity {
    reportTile("✓","VERIFY LAST PRIVATE BACKUP","Checks the newest saved copy, SHA-256, and verified ledger format without changing accounts",this::verifyPrivateBackup);
    reportTile("✓","VERIFY LATEST EXTERNAL BACKUP","Reopens the latest selected-folder JSON; validates checksum, structure, and cash totals without importing",this::verifyExternalBackup);
    reportTile("▣","TEST RESTORE WITHOUT CHANGING DATA","Import a chosen verified JSON into temporary memory, re-export, compare balances and discard test database",this::testRestoreWithoutChanges);
-   reportTile("⌕","COMPARE SAVED JSON WITH CURRENT LEDGER","Read-only counts, dates, and closing-balance comparison; no replacement or import",this::chooseBackupToVerify);
+   reportTile("⌕","COMPARE SAVED JSON WITH CURRENT LEDGER","Read-only, complete field-level comparison against the current verified ledger; no replacement or import",this::chooseBackupToVerify);
    reportTile("▱","CHOOSE EXTERNAL BACKUP FOLDER","One-time folder permission; automatic copies after every change",this::pickBackupFolder);
    if(BackupGuardian.folderSelected(this))
     reportTile("×","Disconnect external folder","Stops external copies without deleting any old backup files",this::disableBackupFolder);
