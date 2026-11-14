@@ -118,6 +118,8 @@ final class PremiumV26State {
     String member=validMember(e.getString("member"),known);
     String name=e.getString("name").trim(),contact=e.optString("contact","");
     String joined=e.optString("joined",""),notes=e.optString("notes","");
+    String effective=e.optString("statusFrom","");
+    if(!effective.isEmpty())MigrationCodec.ym(effective);
     if(name.isEmpty()||name.length()>100||contact.length()>80||joined.length()>10||notes.length()>400)
      throw new IllegalArgumentException("Profile field length out of bounds");
     if(!joined.isEmpty()&&!joined.matches("\\d{4}-\\d{2}-\\d{2}"))
@@ -161,6 +163,24 @@ final class PremiumV26State {
   }
   return rate;
  }
+ static boolean billableMonth(String raw,String member,String month){
+  try{
+   String selected=MigrationCodec.ym(month);
+   JSONArray history=entries(root(raw),PROFILE_KEY);
+   boolean active=true;
+   String joined="";
+   for(int i=0;i<history.length();i++){
+    JSONObject e=history.getJSONObject(i);
+    if(!member.equals(e.getString("member")))continue;
+    String entered=e.optString("joined","");
+    if(!entered.isEmpty())joined=entered;
+    String effective=e.optString("statusFrom","");
+    if(!effective.isEmpty()&&MigrationCodec.ym(effective).compareTo(selected)<=0)
+     active=e.getBoolean("active");
+   }
+   return active&&(joined.isEmpty()||joined.substring(0,7).compareTo(selected)<=0);
+  }catch(JSONException ex){throw new IllegalArgumentException("Invalid membership status history",ex);}
+ }
  static FeeSummary feeSummary(String raw,String member,String from,String through,
                              List<Contribution> payments){
   String start=MigrationCodec.ym(from),end=MigrationCodec.ym(through);
@@ -181,7 +201,9 @@ final class PremiumV26State {
    if(++safety>240)throw new IllegalArgumentException("Maximum fee history review is 240 months");
    long rate=rateFor(rules,member,month),paid=cash.getOrDefault(month,0L);
    result.paid=Math.addExact(result.paid,paid);
-   if(rate<0){
+   if(!billableMonth(raw,member,month)){
+    result.unallocated=Math.addExact(result.unallocated,paid);
+   }else if(rate<0){
     result.unconfiguredMonths++;result.unallocated=Math.addExact(result.unallocated,paid);
    }else{
     result.configuredMonths++;
@@ -236,7 +258,8 @@ final class PremiumV26State {
    JSONObject e=new JSONObject().put("id",id).put("member",member)
     .put("name",name==null?"":name.trim()).put("contact",contact==null?"":contact.trim())
     .put("joined",joined==null?"":joined.trim()).put("notes",notes==null?"":notes.trim())
-    .put("active",active).put("at",at);
+    .put("active",active).put("at",at)
+    .put("statusFrom",new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new java.util.Date()));
    String updated=add(raw,PROFILE_KEY,e);validate(updated,known);return updated;
   }catch(JSONException ex){throw new IllegalArgumentException("Cannot update member profile",ex);}
  }
