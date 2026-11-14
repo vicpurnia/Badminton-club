@@ -124,7 +124,10 @@ public final class MainActivity extends Activity {
     LinearLayout welcome=col();welcome.setBackground(gradient(GREEN,DARK,22));pad(welcome,20,22);welcome.addView(text("WELCOME TO THE CLUB",11,GOLD,true));gap(welcome,12);welcome.addView(text("Your accounts, beautifully organised.",27,Color.WHITE,true));gap(welcome,10);welcome.addView(text("Welcome to Badminton Premium Stable. If this is your first stable installation, import a verified JSON backup from your previous Badminton app. Later stable updates signed with the same permanent key can preserve these accounts automatically.",13,0xFFD6F0E1,false));gap(welcome,20);welcome.addView(button("Import verified ledger",this::pickMigration));content.addView(welcome,fill());gap(content,16);
     notice("Keep your existing Badminton app","Before importing, save a verified JSON export from your previous app. Keep that app and its records until all balances are confirmed here. Existing stable installs should update without reimporting.");});return;}
    String display=reportMonth;List<ReportMath.Result> summaries=ReportMath.monthly(dao,display);if(summaries.isEmpty()){runOnUiThread(()->notice("No closing data","This month is before the opening-balance period."));return;}ReportMath.Result latest=summaries.get(summaries.size()-1);
-   List<Member> members=dao.members();List<Contribution> payments=dao.contributions();int count=0;for(Contribution c:payments)if(display.equals(c.feeMonth)&&!"packs".equals(c.kind))count++;
+   List<Member> members=dao.members();List<Contribution> payments=dao.contributions();
+   Map<String,CashCorrectionsV256.State> effective=CashCorrectionsV256.states(meta.inventoryStockJson,payments);
+   int count=0;for(Contribution c:payments)if(display.equals(c.feeMonth)&&!"packs".equals(c.kind)&&
+    (!effective.containsKey(c.id)||effective.get(c.id).effective>0))count++;
    final int paymentCount=count;runOnUiThread(()->{
     LinearLayout card=col();card.setBackground(gradient(0xFF165E4A,0xFF07352D,24));pad(card,22,24);
     LinearLayout header=row();header.addView(text("CLUB BALANCE",11,0xFFD7F3E0,true),new LinearLayout.LayoutParams(0,-2,1));header.addView(pill(dateLabel(display),Color.WHITE,0xFF2C735B));card.addView(header);gap(card,14);
@@ -141,7 +144,8 @@ public final class MainActivity extends Activity {
     content.addView(safetyActions);gap(content,20);
     sectionHeading("Quick actions","Everything you use every day");LinearLayout actions=row();actions.addView(action("＋","Collect fee",()->openPayment(null)),new LinearLayout.LayoutParams(0,-2,1));actions.addView(action("◈","Shuttle pack",this::openExpense),new LinearLayout.LayoutParams(0,-2,1));actions.addView(action("▤","Master PDF",()->sharePdf("Classic_Master_Ledger.pdf",()->ClassicLedgerV231.master(this,dao,display))),new LinearLayout.LayoutParams(0,-2,1));content.addView(actions);gap(content,23);
     sectionHeading("Recent activity","Latest recorded contributions");Map<String,String> names=new HashMap<>();for(Member m:members)names.put(m.id,m.name);ArrayList<Contribution> recent=new ArrayList<>(payments);Collections.reverse(recent);int n=0;
-    for(Contribution p:recent){if(!"cash".equals(p.kind))continue;LinearLayout item=row();TextView av=avatar(names.getOrDefault(p.memberId,"?"));item.addView(av);LinearLayout texts=col();pad(texts,12,0);texts.addView(text(names.getOrDefault(p.memberId,"Member"),14,DARK,true));gap(texts,4);texts.addView(text(dateLabel(p.feeMonth)+(p.approximate?" · Imported":" · "+p.method),11,GRAY,false));item.addView(texts,new LinearLayout.LayoutParams(0,-2,1));item.addView(text("+"+rupee(p.amount),14,GREEN,true));panel(content,item);if(++n==4)break;}
+    for(Contribution p:recent){if(!"cash".equals(p.kind))continue;LinearLayout item=row();TextView av=avatar(names.getOrDefault(p.memberId,"?"));item.addView(av);LinearLayout texts=col();pad(texts,12,0);texts.addView(text(names.getOrDefault(p.memberId,"Member"),14,DARK,true));gap(texts,4);texts.addView(text(dateLabel(p.feeMonth)+(p.approximate?" · Imported":" · "+p.method),11,GRAY,false));item.addView(texts,new LinearLayout.LayoutParams(0,-2,1));long recognized=effective.containsKey(p.id)?effective.get(p.id).effective:p.amount;
+    item.addView(text(recognized==0?"VOID":("+"+rupee(recognized)),14,recognized==0?GRAY:GREEN,true));panel(content,item);if(++n==4)break;}
     if(n==0)notice("No payments recorded","Tap Collect fee to add the first contribution.");
     if(summaries.stream().anyMatch(x->x.difference!=0))notice("Historical reconciliation","The February 2026 collection difference is retained. Historical totals have not been altered.");
    });
@@ -763,8 +767,12 @@ public final class MainActivity extends Activity {
   content.addView(headline);gap(content,16);
   notice("Previously paid?", "Use the Receipt Library to search all recorded months by member and share or save the PDF. Imported 2025 period totals are labeled Historical Contribution Statements.");
   sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));final String viewedMonth=reportMonth;
-  background(()->{List<Contribution> rows=database.dao().contributions();Map<String,Member> names=new HashMap<>();for(Member m:database.dao().members())names.put(m.id,m);runOnUiThread(()->{int n=0;for(int i=rows.size()-1;i>=0;i--){Contribution c=rows.get(i);if("packs".equals(c.kind)||!viewedMonth.equals(c.feeMonth))continue;Member m=names.get(c.memberId);if(m==null)continue;
-   LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);right.addView(text(rupee(c.amount),15,GREEN,true));gap(right,6);right.addView(inlineButton("Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
+  background(()->{List<Contribution> rows=database.dao().contributions();
+  Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(database.dao().meta().inventoryStockJson,rows);
+  Map<String,Member> names=new HashMap<>();for(Member m:database.dao().members())names.put(m.id,m);runOnUiThread(()->{int n=0;for(int i=rows.size()-1;i>=0;i--){Contribution c=rows.get(i);if("packs".equals(c.kind)||!viewedMonth.equals(c.feeMonth))continue;Member m=names.get(c.memberId);if(m==null)continue;
+   LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);long net=corrections.containsKey(c.id)?corrections.get(c.id).effective:c.amount;
+   right.addView(text(net==0?"VOID":rupee(net),15,net==0?GRAY:GREEN,true));gap(right,6);
+   right.addView(inlineButton(net==0?"Void record":"Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
    if(n==0)notice("No receipts this month","Choose another month above or collect a contribution.");});});
  }
  private void openPayment(String chosen){background(()->{requireImportedLedger();List<Member> members=database.dao().members();runOnUiThread(()->{
@@ -1367,6 +1375,7 @@ public final class MainActivity extends Activity {
    pressable(month,()->chooseMonth(month.getText().toString(),v->{month.setText(v);reportMonth=v;}));
    selector.addView(month);panel(content,selector);gap(content,13);
    notice("Prevent portrait printouts", "Use Save A4 Landscape PDF or Print A4 Landscape below. Avoid printing a shared PDF through another viewer, which can scale it into portrait.");
+   notice("Financial correction audit","Previous cash payments can be corrected, canceled or marked refunded only through the Receipt Library. Corrections preserve the original entry, require a reason, and adjust reported balances. Imported 2025 period totals remain protected.");
 
    sectionHeading("Backup & recovery","Protect your ledger before changing phones or reinstalling");
    notice("Verified backup status",BackupGuardian.status(this));
