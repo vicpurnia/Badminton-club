@@ -54,7 +54,13 @@ final class CashCorrectionsV256 {
    JSONObject c=rows.getJSONObject(i);
    if(!"cash".equals(c.optString("kind","cash")))continue;
    String id=c.getString("id");
-   Base item=new Base(id,c.getString("playerId"),c.getString("feeMonth"),c.getLong("amount"));
+   String month=c.optString("feeMonth","");
+   if(month.isEmpty()){
+    String date=c.optString("date","");
+    if(date.length()<7)throw new IllegalArgumentException("Payment lacks a valid fee period "+id);
+    month=date.substring(0,7);
+   }
+   Base item=new Base(id,c.getString("playerId"),MigrationCodec.ym(month),c.getLong("amount"));
    if(item.amount<=0||result.put(id,item)!=null)
     throw new IllegalArgumentException("Invalid or duplicate original cash payment "+id);
   }
@@ -118,9 +124,9 @@ final class CashCorrectionsV256 {
  }
  static Map<String,Long> monthDeltas(JSONObject ledger) {
   try{
-   Map<String,Base> records=originalRows(ledger.getJSONArray("payments"));
    JSONObject metadata=ledger.optJSONObject("inventoryStock");
-   if(metadata==null)metadata=new JSONObject();
+   if(metadata==null||!metadata.has(KEY))return new HashMap<>();
+   Map<String,Base> records=originalRows(ledger.getJSONArray("payments"));
    return deltas(parse(metadata,records),records);
   }catch(JSONException ex){throw new IllegalArgumentException("Invalid archived correction history: "+ex.getMessage(),ex);}
  }
