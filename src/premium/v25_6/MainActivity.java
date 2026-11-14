@@ -640,10 +640,10 @@ public final class MainActivity extends Activity {
    Map<String,Member> members=new HashMap<>();
    for(Member m:dao.members())members.put(m.id,m);
    ArrayList<ReceiptIndexLine> all=new ArrayList<>();
-   List<Contribution> recorded=dao.contributions();
+   List<Contribution> indexedPayments=dao.contributions();
    Map<String,CashCorrectionsV256.State> corrections=CashCorrectionsV256.states(
-     dao.meta().inventoryStockJson,recorded);
-   for(Contribution c:recorded){
+     dao.meta().inventoryStockJson,indexedPayments);
+   for(Contribution c:indexedPayments){
     Member m=members.get(c.memberId);
     if(m!=null&&"cash".equals(c.kind)&&c.amount>0)all.add(new ReceiptIndexLine(m,c,null,corrections.get(c.id)));
    }
