@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_3/**'
+      - 'src/premium/v25_4/**'
       - '.github/workflows/build-native-v24-stable.yml'
 
 permissions:
@@ -74,7 +74,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_3/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_4/MainActivity.java").read_text())
           receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
           assert receipt.exists()
           receiptSource=receipt.read_text()
@@ -113,8 +113,18 @@ jobs:
           assert "Backup health" in s
           assert "BackupGuardian.MAX_BACKUP_BYTES" in s
           assert "Recovery readiness" in s
-          assert "STABLE v25.3" in s
-          assert "Share previous paid receipt" in s
+          assert "STABLE v25.4" in s
+          assert "private void showReceiptLibrary()" in s
+          assert "Find or share any past receipt" in s
+          assert "RECEIPT LIBRARY · ALL MONTHS" in s
+          assert "SEARCH MEMBER, PERIOD OR AMOUNT" in s
+          assert "Show next 25 receipts" in s
+          assert "Save PDF" in s
+          assert "HistoricalReceiptsV253.legacy(this,item.member,item.historical" in s
+          assert "HistoricalReceiptsV253.payment(this,item.member,item.payment" in s
+          assert '"cash".equals(c.kind)&&c.amount>0' in s
+          assert '"cash".equals(item.kind)&&item.amount>0' in s
+          assert "Find or share any past receipt" in s
           assert "Share receipt" in s
           assert "Share statement" in s
           assert "HistoricalReceiptsV253.payment(this,member,payment" in s
@@ -170,7 +180,7 @@ jobs:
           s=s.replace("premiumv20","premiumv24")
           import os
           s=s.replace("versionCode 20","versionCode "+str(24000+int(os.environ["GITHUB_RUN_NUMBER"])))
-          s += '\nandroid { defaultConfig { versionName "25.3.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
+          s += '\nandroid { defaultConfig { versionName "25.4.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
@@ -253,6 +263,6 @@ jobs:
       - name: Upload signed stable APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v25.3-STABLE-signed
+          name: Badminton-Premium-v25.4-STABLE-signed
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
