@@ -3,7 +3,7 @@
 **Branch:** `dev/v26-0-to-26-9-20261114`  
 **Baseline:** signed v25.9 source on `main`  
 **Release status:** SOURCE DEVELOPMENT CANDIDATE — NOT A SIGNED PRODUCTION RELEASE  
-**Package:** unchanged `premiumv24`; **Room schema:** unchanged `version=1`
+**Package:** unchanged `com.vinayak.badminton.premiumv24`; **Room schema:** unchanged `version=1`
 
 This document maps the ten requested upgrades to code and release gates. It does not certify on-device acceptance or imply that ten separate signed APKs have been published.
 
@@ -35,7 +35,7 @@ The signed TEST APK is only an acceptance vehicle. A CI-green/signed APK is **no
 ## Source-of-truth guarantees
 
 1. **Main stays untouched** until development PR review and production acceptance. Original signing private key is never committed or transmitted in source or chat.
-2. Preserve `premiumv24` and the original signing certificate. The candidate CI produces only a debug APK; it **must not be installed over the owner's signed stable app**.
+2. Preserve `com.vinayak.badminton.premiumv24` and the original signing certificate. The candidate CI produces only a debug APK; it **must not be installed over the owner's signed stable app**.
 3. The documented original 15-member history is not recreated or rewritten. The recorded Kanishk February 2026 donated shuttle pack stays **noncash**; its historical ₹8,500 +1 pack total stays separate from receipts.
 4. Preserve the unresolved February 2026 **₹1,000** cash reconciliation difference as an exception, not an adjustment or guessed payment.
 5. Preserve immutable payments, receipt dates (if unknown, display unknown), corrections, audited stock counts and fee policy history.
