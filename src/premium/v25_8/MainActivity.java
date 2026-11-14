@@ -42,6 +42,11 @@ public final class MainActivity extends Activity {
  @Override protected void onDestroy(){io.shutdown();super.onDestroy();}
  @FunctionalInterface interface CheckedJob {void run() throws Exception;}
  private void background(CheckedJob job){io.execute(()->{try{job.run();}catch(Exception e){runOnUiThread(()->error(e));}});}
+ private void requireOpenMonth(String month){
+  LedgerMeta meta=database.dao().meta();
+  if(meta==null)throw new IllegalStateException("Import the verified ledger before changes.");
+  MonthlyCloseV258.requireOpen(meta.inventoryStockJson,MigrationCodec.ym(month));
+ }
  private void requireImportedLedger(){
   if(database.dao().meta()==null)
    throw new IllegalStateException("Import your verified club ledger before recording new entries. No data was changed.");
@@ -579,6 +584,7 @@ public final class MainActivity extends Activity {
          database.runInTransaction(()->{
           LedgerDao liveDao=database.dao();LedgerMeta live=liveDao.meta();
           if(live==null)throw new IllegalStateException("No imported ledger");
+          requireOpenMonth(original.feeMonth);
           List<Contribution> records=liveDao.contributions();
           Contribution current=null;
           for(Contribution c:records)if(c.id.equals(original.id)){current=c;break;}
@@ -817,7 +823,7 @@ public final class MainActivity extends Activity {
  }
  private void persistPayment(Member m,String fee,long amount,String method){background(()->{
   Contribution c=new Contribution();c.id="pay-"+UUID.randomUUID();c.memberId=m.id;c.feeMonth=fee;c.receivedDate=new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT).format(new Date());c.amount=amount;c.kind="cash";c.method=method;
-  database.runInTransaction(()->{requireImportedLedger();database.dao().insertPayment(c);AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();a.createdAt=new Date().toString();a.action="Contribution added";a.details=c.id+" / "+rupee(amount);database.dao().audit(a);});
+  database.runInTransaction(()->{requireImportedLedger();requireOpenMonth(fee);database.dao().insertPayment(c);AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();a.createdAt=new Date().toString();a.action="Contribution added";a.details=c.id+" / "+rupee(amount);database.dao().audit(a);});
   BackupGuardian.save(this,database,"payment",true);
   warnOnBackupFailure();
   runOnUiThread(()->{Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();showPayments();sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));});
@@ -1223,6 +1229,7 @@ public final class MainActivity extends Activity {
        e.category="Shuttle pack";e.date=dd;e.quantity=qty;e.amount=total;
        if(explicitSize>0)e.note=StockReconciliationV257.packNote(explicitSize,"Original purchase pack size");
        database.runInTransaction(()->{
+        requireOpenMonth(mm);
         database.dao().insertExpense(e);
         AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
         a.createdAt=new Date().toString();a.action="Shuttle purchase recorded";
@@ -1324,6 +1331,7 @@ public final class MainActivity extends Activity {
            c.note=dd.isEmpty()?"Month-only donated packs; exact day unknown.":"Member donated packs on recorded day.";
          if(explicitSize>0)c.note=StockReconciliationV257.packNote(explicitSize,c.note);
            database.runInTransaction(()->{
+            requireOpenMonth(mm);
             database.dao().insertPayment(c);
             AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
             a.createdAt=new Date().toString();a.action="Noncash shuttle donation recorded";
@@ -1398,7 +1406,7 @@ public final class MainActivity extends Activity {
        entry.id="usage-"+UUID.randomUUID();entry.month=mm;
        entry.date=actual;entry.shuttles=qty;entry.note=details;
        database.runInTransaction(()->{
-        requireImportedLedger();
+        requireImportedLedger();requireOpenMonth(mm);
         database.dao().insertStock(Collections.singletonList(entry));
         AuditEvent audit=new AuditEvent();audit.id="audit-"+UUID.randomUUID();
         audit.createdAt=new Date().toString();audit.action="Shuttle usage recorded";
@@ -1460,6 +1468,7 @@ public final class MainActivity extends Activity {
    database.runInTransaction(()->{
     LedgerDao dao=database.dao();
     if(dao.meta()==null)throw new IllegalStateException("No imported ledger found");
+    requireOpenMonth("2026-02");
     confirmedHistoricalMember(dao);
     if(historicalDonationRecorded(dao))return;
     Contribution donation=new Contribution();
