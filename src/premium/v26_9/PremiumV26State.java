@@ -182,10 +182,10 @@ final class PremiumV26State {
   // Never silently truncate an already-authorized concession if a fee rule
   // is later lowered or removed. This must fail before committing a new rule,
   // and must also fail when inspecting a tampered migration JSON.
-  HashMap<String,Long> total=new HashMap<>();
+  HashMap<String,Map<String,Long>> totals=new HashMap<>();
   for(Waiver item:concessions){
-   String key=item.member+"\\u0000"+item.month;
-   long sum=total.merge(key,item.amount,Math::addExact);
+   Map<String,Long> byMonth=totals.computeIfAbsent(item.member,k->new HashMap<>());
+   long sum=byMonth.merge(item.month,item.amount,Math::addExact);
    long fee=rateFor(configured,item.member,item.month);
    if(fee<0||sum>fee)
     throw new IllegalArgumentException("Audited concession for "+item.member+
