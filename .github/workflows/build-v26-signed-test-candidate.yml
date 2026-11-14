@@ -325,6 +325,8 @@ jobs:
           grep -q 'development TEST candidate only' src/premium/v26_9/MainActivity.java
           grep -q 'selectTab("Shuttles")' src/premium/v26_9/MainActivity.java
           grep -q 'currentScreen(screen,"Home",period)' src/premium/v26_9/MainActivity.java
+          grep -q 'PremiumV26BackupCompare.compare(current.ledger,result.ledger)' src/premium/v26_9/MainActivity.java
+          grep -q 'PremiumV26BackupCompare.java' src/premium/v26_9/patch_v26.py
       - name: Require persistent private signing key
         shell: bash
         env:
