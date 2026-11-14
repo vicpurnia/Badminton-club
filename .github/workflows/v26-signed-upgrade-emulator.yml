@@ -312,6 +312,21 @@ jobs:
           PY
       - name: Guard against stale screen rendering after navigation and month change
         run: python3 tools/check_v26_navigation_safety.py
+      - name: Inspect original Room metadata schema for expanding synthetic upgrade coverage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+          records=(root/"Records.java").read_text()
+          dao=(root/"LedgerDao.java").read_text()
+          for phrase in ["class LedgerMeta","class MonthlyControl","class LegacyEntry"]:
+           pos=records.find(phrase)
+           if pos>=0: print("\\nSOURCE SCHEMA:",records[pos:pos+1050])
+          print("\\nSOURCE DAO relevant methods:")
+          print("\\n".join(x.strip() for x in dao.splitlines() if any(
+            k in x.lower() for k in ["meta(", "insertmeta", "updateinventoryjson","insertcontrol","insertlegacy"])))
+          PY
       - name: Regression-test shuttle stock arithmetic
         run: |
           mkdir -p "$RUNNER_TEMP/stock-tests"
