@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_8/**'
+      - 'src/premium/v25_9/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,7 +75,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_8/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_9/MainActivity.java").read_text())
           receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
           assert receipt.exists()
           receiptSource=receipt.read_text()
@@ -85,12 +85,17 @@ jobs:
           assert "Only positive historical cash records" in receiptSource
           assert "This copy does not record a new payment" in receiptSource
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/HistoricalReceiptsV253.java").write_text(receiptSource)
+          recovery=Path("src/premium/v25_9/BackupRecoveryV259.java").read_text()
+          assert "Room.inMemoryDatabaseBuilder" in recovery
+          assert "temporary.close()" in recovery
+          assert "MigrationCodec.exportVerified(temporary)" in recovery
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupRecoveryV259.java").write_text(recovery)
           cash=Path("src/premium/v25_6/CashCorrectionsV256.java")
           correctionPdf=Path("src/premium/v25_6/CashCorrectionPdfV256.java")
           assert cash.exists() and correctionPdf.exists()
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/CashCorrectionsV256.java").write_text(cash.read_text())
           Path("app/src/main/java/com/vinayak/badminton/nativepreview/CashCorrectionPdfV256.java").write_text(correctionPdf.read_text())
-          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_3/BackupGuardian.java").read_text())
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v25_9/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
           pdfsource=pdf.read_text()
@@ -113,7 +118,12 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
-          assert "STABLE v25.8" in s
+          assert "STABLE v25.9" in s
+          assert "verifyLatestExternal(this)" in s
+          assert "TEST RESTORE WITHOUT CHANGING DATA" in s
+          assert "BackupRecoveryV259.dryRun(this" in s
+          assert "TEST_RESTORE=2006" in s
+          assert "Restore rehearsal — no account changes" in s
           assert "openMonthEndReview(" in s
           assert "askMonthCloseReason(" in s
           assert "MonthlyCloseV258.record" in s
@@ -194,11 +204,13 @@ jobs:
           assert "This v24 preview" not in s
           assert "CHOOSE EXTERNAL BACKUP FOLDER" in s
           assert "PICK_BACKUP_TREE" in s
-          guardian=Path("src/premium/v24_3/BackupGuardian.java").read_text()
+          guardian=Path("src/premium/v25_9/BackupGuardian.java").read_text()
           assert "MigrationCodec.inspect(json)" in guardian
           assert "takePersistableUriPermission" in guardian
           assert "lastError(Context context)" in guardian
           assert "verifySavedCopy(Context context,Uri document,File original)" in guardian
+          assert "verifyLatestExternal(Context context)" in guardian
+          assert "MigrationCodec.inspect(new String(data,StandardCharsets.UTF_8))" in guardian
           assert "static String recoveryReadiness(Context context)" in guardian
           assert "static final int MAX_BACKUP_BYTES=12_000_000" in guardian
           assert "ClassicLedgerV231.master" in s
