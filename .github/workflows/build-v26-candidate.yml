@@ -300,6 +300,8 @@ jobs:
           assert "MigrationCodec.inspect" in crypto
           assert "version=1" in Path("app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDatabase.java").read_text()
           PY
+      - name: Guard against stale screen rendering after navigation and month change
+        run: python3 tools/check_v26_navigation_safety.py
       - name: Regression-test shuttle stock arithmetic
         run: |
           mkdir -p "$RUNNER_TEMP/stock-tests"
