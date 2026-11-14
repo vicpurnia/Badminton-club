@@ -34,6 +34,7 @@ public final class V26SignedUpgradePersistenceTest {
  }
 
  private static final String SNAPSHOT_FILE="ci-synthetic-all-room-records.sha256";
+ private static final String JSON_FINGERPRINT_FILE="ci-synthetic-verified-ledger.sha256";
  private static String fullRoomDigest(LedgerDatabase db)throws Exception{
   // Include every user table and field, even ones not anticipated by explicit
   // transaction assertions. Ignore SQLite/Room internal implementation tables.
@@ -94,6 +95,36 @@ public final class V26SignedUpgradePersistenceTest {
   assertEquals("All user-table fields must be byte-equivalent after signed in-place upgrade",
    old,fullRoomDigest(db));
  }
+ private static void preserveVerifiedLedgerDigest(LedgerDatabase db)throws Exception{
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  String exported=MigrationCodec.exportVerified(db);
+  MigrationCodec.Preview preview=MigrationCodec.inspect(exported);
+  assertEquals("Only synthetic member must be exported",1,preview.players);
+  assertEquals("Only synthetic payment must be exported",1,preview.payments);
+  assertEquals("Original historical legacy cash+noncash must be exported",2,
+   preview.ledger.getJSONArray("legacy").length());
+  java.io.File file=new java.io.File(context.getFilesDir(),JSON_FINGERPRINT_FILE);
+  try(java.io.FileOutputStream stream=new java.io.FileOutputStream(file)){
+   stream.write(MigrationCodec.sha256(MigrationCodec.canonical(preview.ledger))
+    .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+   stream.getFD().sync();
+  }
+  assertEquals(64L,file.length());
+ }
+ private static void assertVerifiedLedgerDigestUnchanged(LedgerDatabase db)throws Exception{
+  Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
+  java.io.File baseline=new java.io.File(context.getFilesDir(),JSON_FINGERPRINT_FILE);
+  assertTrue("Pre-upgrade verified ledger fingerprint must survive",baseline.isFile());
+  String previous=new String(java.nio.file.Files.readAllBytes(baseline.toPath()),
+   java.nio.charset.StandardCharsets.UTF_8);
+  MigrationCodec.Preview verified=MigrationCodec.inspect(MigrationCodec.exportVerified(db));
+  String current=MigrationCodec.sha256(MigrationCodec.canonical(verified.ledger));
+  assertEquals("Every canonical verified ledger field must survive the signed update",
+   previous,current);
+  // Future backup comparison is available from a verified in-memory ledger.
+  assertTrue("Expected tested historical fixture in verified export",
+   verified.ledger.has("legacy")&&verified.ledger.getJSONArray("legacy").length()==2);
+ }
  private static long queryCount(LedgerDatabase db,String table){
   try(android.database.Cursor cursor=db.getOpenHelper().getReadableDatabase().query("SELECT COUNT(*) FROM "+table)){
    assertTrue(cursor.moveToFirst());return cursor.getLong(0);
@@ -148,6 +179,20 @@ public final class V26SignedUpgradePersistenceTest {
    meta.openingBalance=17890L;
    meta.receiptPrefix="CI";
    meta.inventoryStockJson=META_AUDIT; // Unknown original v25 JSON key must survive.
+   // Simulate the original migrated source JSON's historical legacy section.
+   // ExportVerified rebuilds current transactions and control totals from Room
+   // but preserves historical data only when present in sourceLedgerJson.
+   org.json.JSONArray legacySource=new org.json.JSONArray()
+    .put(new org.json.JSONObject().put("playerId",MEMBER_ID).put("period","2025-12")
+     .put("kind","cash").put("amount",489))
+    .put(new org.json.JSONObject().put("playerId",MEMBER_ID).put("period","2025-12")
+     .put("kind","packs").put("amount",1));
+   org.json.JSONObject original=new org.json.JSONObject()
+    .put("legacy",legacySource)
+    .put("legacyTotals",new org.json.JSONObject())
+    .put("periods",new org.json.JSONArray().put("2025-12"))
+    .put("history",new org.json.JSONArray());
+   meta.sourceLedgerJson=MigrationCodec.canonical(original);
    dao.insertMeta(meta);
 
    MonthlyControl control=new MonthlyControl();
@@ -174,6 +219,7 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(2,dao.legacy().size());
    assertEquals(1,queryCount(db,"audit_events"));
    preserveFingerprint(db);
+   preserveVerifiedLedgerDigest(db);
 
    System.out.println("SYNTHETIC_V25_SEED_PASSED: member, cash, expense, usage, opening meta, controls, legacy, noncash pack and audit");
   }finally{db.close();}
@@ -240,6 +286,7 @@ public final class V26SignedUpgradePersistenceTest {
    assertEquals(1L,noncashPacks);
    assertEquals(1L,queryCount(db,"audit_events"));
    assertFingerprintUnchanged(db);
+   assertVerifiedLedgerDigestUnchanged(db);
    System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
   }finally{db.close();}
  }
