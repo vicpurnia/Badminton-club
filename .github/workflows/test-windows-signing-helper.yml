@@ -38,6 +38,29 @@ jobs:
             throw "Windows PowerShell 5.1 detected a parser error"
           }
           Write-Host "Windows PowerShell 5.1 parser verified; source is ASCII-safe."
+      - name: Test JDK auto-detection in Windows PowerShell 5.1
+        shell: powershell
+        run: |
+          $scriptPath = Join-Path (Get-Location) 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'
+          $fakeHome = Join-Path $env:RUNNER_TEMP 'Example JDK With Spaces'
+          $bin = Join-Path $fakeHome 'bin'
+          New-Item -Path $bin -ItemType Directory -Force | Out-Null
+          [IO.File]::WriteAllBytes((Join-Path $bin 'keytool.exe'), [byte[]] @(1,2,3))
+          $oldPath = $env:PATH
+          $oldJavaHome = $env:JAVA_HOME
+          try {
+            # Ensure detection comes from JAVA_HOME, not preinstalled runner Java.
+            $env:PATH = "$env:WINDIR\System32;$env:WINDIR"
+            $env:JAVA_HOME = $fakeHome
+            $output = (& $scriptPath -CheckJavaOnly | Out-String)
+            if ($output -notlike '*Example JDK With Spaces*') {
+              throw "Failed to find keytool in JAVA_HOME with spaces. Output: $output"
+            }
+            Write-Host "Fresh-window JDK discovery passed under Windows PowerShell 5.1"
+          } finally {
+            $env:PATH = $oldPath
+            $env:JAVA_HOME = $oldJavaHome
+          }
       - name: Parse Windows setup PowerShell without executing it
         shell: pwsh
         run: |
