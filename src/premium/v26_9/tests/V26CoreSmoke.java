@@ -189,6 +189,22 @@ public final class V26CoreSmoke {
       "Impossible dates must never be placed on financial timeline");
   another.approximate=true;another.receivedDate="2026-03-01";
 
+  // A closed month seals every preceding month feeding its opening balance.
+  Map<String,Boolean> closure=new HashMap<>();
+  closure.put("2026-03",true);
+  reject(()->PremiumV26ClosingGuard.requireWritable(closure,"2026-02"),
+   "Open February must not alter March's closed opening balance");
+  reject(()->PremiumV26ClosingGuard.requireWritable(closure,"2026-03"),
+   "Closed March must not accept same-month transaction changes");
+  PremiumV26ClosingGuard.requireWritable(closure,"2026-04");
+  yes(PremiumV26ClosingGuard.projectedImpact("2026-02",closure).contains("2026-03"),
+   "Preview must explain the downstream protected month");
+  closure.put("2026-03",false); // Explicit audited reopening has been committed.
+  PremiumV26ClosingGuard.requireWritable(closure,"2026-02");
+  closure.put("2026-05",true);
+  reject(()->PremiumV26ClosingGuard.requireWritable(closure,"2026-02"),
+   "All later closed periods must be reopened, not just the nearest one");
+
   // Encryption test uses a synthetic verified ledger and never touches a real database.
   String json="{\"verified\":true,\"synthetic\":\"fee-1\"}";
   char[] password="synthetic-secure-password-2026".toCharArray();
