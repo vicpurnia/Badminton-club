@@ -69,3 +69,14 @@ Use a **verified external JSON backup and the owner's signed v25.9 installation*
 10. Test rapid double taps, rotation, font scaling, storage permission denial, device low space, safe exit/reopen and recovery from interrupted write.
 
 **Release gate:** no known critical cash, stock, data-loss or signature defects; 100% of critical real-device workflows performed. If any gate fails, leave PR draft and keep signed v25.9 as the stable release.
+
+
+## v26.9 follow-on defect corrections — development only
+
+- Closed-month roll-forward protection: transactions entered for an earlier month cannot silently alter a later protected CLOSE snapshot.
+- Payment idempotency: one immutable payment form ID, repeat-confirmation guard and transaction-level replay detection before inserting cash or the audit entry.
+- Member receipt ZIP export: bounded total size, temporary PDF cleanup and deletion of incomplete archives.
+- Restore metadata equality: compare the full verified inventory/audit JSON in temporary memory, preserving future metadata extensions beyond the known event keys.
+- Run synthetic Java tests for closing chronology, duplicate payment submissions and conflicting IDs; source checks must retain the wiring in all CI pipelines.
+
+Production acceptance and original private-key signed upgrade testing remain separate from automated compilation.
