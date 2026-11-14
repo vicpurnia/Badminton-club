@@ -55,6 +55,31 @@ public final class V26CoreSmoke {
   yes(totals.waived==300,"Approved noncash concession deducted from dues");
   yes(totals.paid==1900,"Fees use corrected cash not original amounts");
   yes(totals.arrears==1600,"Outstanding dues do not invent collected cash");
+
+  // Fee status must account for authorized concessions, not the gross fee rate.
+  PremiumV26State.FeeSummary march=PremiumV26State.feeSummary(
+   data,"synthetic-A","2026-03","2026-03",payments);
+  yes(march.billed==1800&&march.waived==300&&march.paid==900,
+   "March displays gross assessed fee, waiver and actual cash separately");
+  yes("Partial".equals(PremiumV26State.monthStatus(march,true)),
+   "Member with 900 received against 1500 net due is partial");
+  Contribution remainder=payment("cash-3","2026-03",600);
+  List<Contribution> paidMarch=Arrays.asList(c,another,remainder);
+  PremiumV26State.FeeSummary fullySettled=PremiumV26State.feeSummary(
+   data,"synthetic-A","2026-03","2026-03",paidMarch);
+  yes("Paid".equals(PremiumV26State.monthStatus(fullySettled,true)),
+   "Concession plus net cash fully settles fee even when cash is below gross rate");
+  PremiumV26State.FeeSummary unconfigured=PremiumV26State.feeSummary(
+   data,"synthetic-A","2026-01","2026-01",payments);
+  yes("Unconfigured".equals(PremiumV26State.monthStatus(unconfigured,true)),
+   "Missing historical fee rate never implies zero due or Paid");
+  PremiumV26State.FeeSummary zeroAssessed=new PremiumV26State.FeeSummary();
+  zeroAssessed.configuredMonths=1;
+  yes("Settled".equals(PremiumV26State.monthStatus(zeroAssessed,true)),
+   "Fee fully waived or set to zero must never be labeled as cash Paid");
+  yes("Not due".equals(PremiumV26State.monthStatus(fullySettled,false)),
+   "Member not billable must not appear as unpaid");
+
   data=PremiumV26State.addProfile(data,"synthetic-A","Synthetic A renamed","123","","Test profile",false,
    "profile-1","2026-11-14",known);
   yes(!PremiumV26State.profiles(data,known).get("synthetic-A").active,
