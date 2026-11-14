@@ -450,7 +450,7 @@ public final class MainActivity extends Activity {
   });
  }
  private void importPending(){MigrationCodec.Preview preview=pendingImport;pendingImport=null;if(preview==null)return;
-  background(()->{MigrationCodec.importChecked(database,preview);BackupGuardian.save(this,database,"import",true);warnOnBackupFailure();runOnUiThread(()->{Toast.makeText(this,"Ledger imported. Review backups in Reports.",Toast.LENGTH_LONG).show();showHome();});});}
+  background(()->{MigrationCodec.importChecked(database,preview);BackupGuardian.save(this,database,"import",true);warnOnBackupFailure();runOnUiThread(()->{Toast.makeText(this,"Ledger imported. Review backups in Reports.",Toast.LENGTH_LONG).show();selectTab("Home");});});}
 
  private volatile int memberRenderGeneration=0;
  private static final class MemberCardData {
@@ -1086,7 +1086,7 @@ public final class MainActivity extends Activity {
   database.runInTransaction(()->{requireImportedLedger();requireOpenMonth(fee);database.dao().insertPayment(c);AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();a.createdAt=new Date().toString();a.action="Contribution added";a.details=c.id+" / "+rupee(amount);database.dao().audit(a);});
   BackupGuardian.save(this,database,"payment",true);
   warnOnBackupFailure();
-  runOnUiThread(()->{Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();showPayments();sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));});
+  runOnUiThread(()->{Toast.makeText(this,"Payment saved",Toast.LENGTH_SHORT).show();selectTab("Collect");sharePdf("Receipt_"+c.id+".pdf",()->PdfReports.receipt(this,m,c,database.dao().meta()));});
  });}
 
  private static boolean isShuttlePurchase(Expense e){
@@ -1329,7 +1329,7 @@ public final class MainActivity extends Activity {
           });
           BackupGuardian.save(this,database,"physical-reconciliation",true);
           warnOnBackupFailure();
-          runOnUiThread(()->{Toast.makeText(this,"Physical count saved",Toast.LENGTH_LONG).show();showExpenses();});
+          runOnUiThread(()->{Toast.makeText(this,"Physical count saved",Toast.LENGTH_LONG).show();selectTab("Shuttles");});
          });
         }).show());
       });
@@ -1430,7 +1430,7 @@ public final class MainActivity extends Activity {
          });
          BackupGuardian.save(this,database,"confirmed-opening-stock",true);
          warnOnBackupFailure();
-         runOnUiThread(()->{Toast.makeText(this,"Stock checkpoint saved",Toast.LENGTH_LONG).show();showExpenses();});
+         runOnUiThread(()->{Toast.makeText(this,"Stock checkpoint saved",Toast.LENGTH_LONG).show();selectTab("Shuttles");});
         });
        }).show();
      }catch(Exception ex){
@@ -1513,7 +1513,7 @@ public final class MainActivity extends Activity {
        });
        BackupGuardian.save(this,database,"shuttle-purchase",true);
        warnOnBackupFailure();
-       runOnUiThread(()->{Toast.makeText(this,"Shuttle purchase recorded",Toast.LENGTH_LONG).show();showExpenses();});
+       runOnUiThread(()->{Toast.makeText(this,"Shuttle purchase recorded",Toast.LENGTH_LONG).show();selectTab("Shuttles");});
       });
      }).show();
    }catch(Exception ex){error(new IllegalArgumentException("Check the month, optional date, pack quantity and positive unit price."));}
@@ -1615,7 +1615,7 @@ public final class MainActivity extends Activity {
             database.dao().audit(a);
            });
            BackupGuardian.save(this,database,"shuttle-donation",true);warnOnBackupFailure();
-           runOnUiThread(()->{Toast.makeText(this,"Noncash shuttle donation recorded",Toast.LENGTH_LONG).show();showExpenses();});
+           runOnUiThread(()->{Toast.makeText(this,"Noncash shuttle donation recorded",Toast.LENGTH_LONG).show();selectTab("Shuttles");});
           });
          }).show();
        });
@@ -1699,7 +1699,7 @@ public final class MainActivity extends Activity {
        warnOnBackupFailure();
        runOnUiThread(()->{
         Toast.makeText(this,"Shuttle usage saved",Toast.LENGTH_LONG).show();
-        showExpenses();
+        selectTab("Shuttles");
        });
       });
      }).show();
