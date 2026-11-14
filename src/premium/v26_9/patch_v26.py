@@ -9,7 +9,7 @@ new=old+"\n    PremiumV26State.validate(inventory.toString(),null);"
 if s.count(old)!=1:
  raise RuntimeError(f"v26 verified JSON validator anchor count {s.count(old)} != 1")
 codec.write_text(s.replace(old,new,1))
-for filename in ["PremiumV26State.java","PremiumV26Analytics.java","PremiumBackupCrypto.java","CashCorrectionsV256.java","BackupRecoveryV259.java"]:
+for filename in ["PremiumV26State.java","PremiumV26Analytics.java","PremiumBackupCrypto.java","CashCorrectionsV256.java","BackupRecoveryV259.java","PremiumV26StockGuard.java"]:
  p=Path("src/premium/v26_9")/filename
  if not p.is_file(): raise RuntimeError(f"Missing v26 module {p}")
  (root/filename).write_text(p.read_text())
