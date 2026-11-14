@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v24_2/**'
+      - 'src/premium/v24_3/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,8 +75,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v24_2/MainActivity.java").read_text())
-          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_2/BackupGuardian.java").read_text())
+          p.write_text(Path("src/premium/v24_3/MainActivity.java").read_text())
+          Path("app/src/main/java/com/vinayak/badminton/nativepreview/BackupGuardian.java").write_text(Path("src/premium/v24_3/BackupGuardian.java").read_text())
           pdf=Path("src/premium/v23_1/ClassicLedgerV231.java")
           assert pdf.exists()
           pdfsource=pdf.read_text()
@@ -99,15 +99,21 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
+          assert "STABLE v24.3" in s
+          assert "Recovery readiness" in s
+          assert "BackupGuardian.MAX_BACKUP_BYTES" in s
+          assert "6_000_000" not in s
           assert "MigrationCodec.inspect(json)" in s
           assert "This v24 preview" not in s
           assert "CHOOSE EXTERNAL BACKUP FOLDER" in s
           assert "PICK_BACKUP_TREE" in s
-          guardian=Path("src/premium/v24_2/BackupGuardian.java").read_text()
+          guardian=Path("src/premium/v24_3/BackupGuardian.java").read_text()
           assert "MigrationCodec.inspect(json)" in guardian
           assert "takePersistableUriPermission" in guardian
           assert "lastError(Context context)" in guardian
           assert "verifySavedCopy(Context context,Uri document,File original)" in guardian
+          assert "static String recoveryReadiness(Context context)" in guardian
+          assert "static final int MAX_BACKUP_BYTES=12_000_000" in guardian
           assert "ClassicLedgerV231.master" in s
           assert 'PRINT CLASSIC · A4 LANDSCAPE' in s
           assert 'setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())' in s
