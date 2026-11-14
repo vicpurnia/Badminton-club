@@ -47,6 +47,11 @@ public final class MainActivity extends Activity {
   if(meta==null)throw new IllegalStateException("Import the verified ledger before changes.");
   MonthlyCloseV258.requireOpen(meta.inventoryStockJson,MigrationCodec.ym(month));
  }
+ private void requireEditableStockMonth(String month){
+  LedgerMeta meta=database.dao().meta();
+  if(meta==null)throw new IllegalStateException("Verified club ledger must be imported first");
+  PremiumV26StockGuard.requireEditableStockMonth(meta.inventoryStockJson,month);
+ }
  private void requireImportedLedger(){
   if(database.dao().meta()==null)
    throw new IllegalStateException("Import your verified club ledger before recording new entries. No data was changed.");
@@ -1287,6 +1292,7 @@ public final class MainActivity extends Activity {
            if(closed.closed()&&closed.month.compareTo(mm)>=0)
             throw new IllegalStateException("A closed month depends on this stock baseline. Reopen closed months from "+mm+" onward before changing the checkpoint.");
           }
+          PremiumV26StockGuard.requireEditableOpeningCheckpoint(live.inventoryStockJson);
           String updated=InventoryCheckpoint.updatedJson(live.inventoryStockJson,chosen);
           if(dao.updateInventoryJson(updated)!=1)
            throw new IllegalStateException("Inventory metadata update was not applied.");
@@ -1375,6 +1381,7 @@ public final class MainActivity extends Activity {
        if(explicitSize>0)e.note=StockReconciliationV257.packNote(explicitSize,"Original purchase pack size");
        database.runInTransaction(()->{
         requireOpenMonth(mm);
+        requireEditableStockMonth(mm);
         database.dao().insertExpense(e);
         AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
         a.createdAt=new Date().toString();a.action="Shuttle purchase recorded";
@@ -1477,6 +1484,7 @@ public final class MainActivity extends Activity {
          if(explicitSize>0)c.note=StockReconciliationV257.packNote(explicitSize,c.note);
            database.runInTransaction(()->{
             requireOpenMonth(mm);
+            requireEditableStockMonth(mm);
             database.dao().insertPayment(c);
             AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
             a.createdAt=new Date().toString();a.action="Noncash shuttle donation recorded";
@@ -1557,6 +1565,7 @@ public final class MainActivity extends Activity {
        entry.date=actual;entry.shuttles=qty;entry.note=details;
        database.runInTransaction(()->{
         requireImportedLedger();requireOpenMonth(mm);
+        requireEditableStockMonth(mm);
         database.dao().insertStock(Collections.singletonList(entry));
         AuditEvent audit=new AuditEvent();audit.id="audit-"+UUID.randomUUID();
         audit.createdAt=new Date().toString();audit.action="Shuttle usage recorded";
@@ -1619,6 +1628,7 @@ public final class MainActivity extends Activity {
     LedgerDao dao=database.dao();
     if(dao.meta()==null)throw new IllegalStateException("No imported ledger found");
     requireOpenMonth("2026-02");
+    requireEditableStockMonth("2026-02");
     confirmedHistoricalMember(dao);
     if(historicalDonationRecorded(dao))return;
     Contribution donation=new Contribution();
