@@ -14,5 +14,6 @@ javac -encoding UTF-8 -cp "$JAR" -d "$WORK/classes" \
   src/premium/v26_9/PremiumBackupCrypto.java \
   src/premium/v26_9/PremiumV26StockGuard.java \
   src/premium/v26_9/PremiumCashDateAudit.java \
+  src/premium/v26_9/PremiumV26ClosingGuard.java \
   src/premium/v26_9/tests/V26CoreSmoke.java
 java -ea -cp "$WORK/classes:$JAR" com.vinayak.badminton.nativepreview.V26CoreSmoke
