@@ -122,7 +122,7 @@ jobs:
           assert "HistoricalReceiptsV253.payment(this,item.member,item.payment" in s
           assert '"cash".equals(c.kind)&&c.amount>0' in s
           assert '"cash".equals(item.kind)&&item.amount>0' in s
-          assert "Share previous paid receipt" in s
+          assert "Find or share any past receipt" in s
           assert "Share receipt" in s
           assert "Share statement" in s
           assert "HistoricalReceiptsV253.payment(this,member,payment" in s
