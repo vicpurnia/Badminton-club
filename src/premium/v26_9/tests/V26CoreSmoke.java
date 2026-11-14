@@ -33,6 +33,15 @@ public final class V26CoreSmoke {
    "Other member keeps global fee");
   String afterWaiver=PremiumV26State.addWaiver(data,"synthetic-A","2026-03",300,
    "Approved member concession","waiver-1","2026-11-14",known);
+  // A later lower fee rate cannot silently discard an authorized waiver.
+  reject(()->PremiumV26State.addPolicy(afterWaiver,"synthetic-A","2026-03",200,
+   "Proposed rate lower than approved concession","fee-unsafe","2026-11-14",known),
+   "Revised fee may not be lower than cumulative approved concession");
+  // Separate concessions must not collectively exceed a member's monthly rate.
+  final String alreadyReduced=afterWaiver;
+  reject(()->PremiumV26State.addWaiver(alreadyReduced,"synthetic-A","2026-03",1600,
+   "Second concession exceeds effective rate","waiver-unsafe","2026-11-14",known),
+   "Cumulative concessions cannot exceed the effective policy rate");
   data=CashCorrectionsV256.append(afterWaiver,payments,c,1500,"CORRECT",
    "Verified deposited cash","fix-1","2026-11-14");
   data=CashCorrectionsV256.append(data,payments,c,1200,"REFUND",
