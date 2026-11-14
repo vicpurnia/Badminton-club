@@ -22,6 +22,22 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Parse script with Windows PowerShell 5.1 (the version used by BAT launcher)
+        shell: powershell
+        run: |
+          $path = Join-Path (Get-Location) 'tools/SETUP_BADMINTON_STABLE_SIGNING.ps1'
+          $bytes = [System.IO.File]::ReadAllBytes($path)
+          if (@($bytes | Where-Object { $_ -gt 127 }).Count -gt 0) {
+            throw "Signing script has non-ASCII bytes. Windows PowerShell 5.1 may misparse UTF-8 without BOM."
+          }
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            throw "Windows PowerShell 5.1 detected a parser error"
+          }
+          Write-Host "Windows PowerShell 5.1 parser verified; source is ASCII-safe."
       - name: Parse Windows setup PowerShell without executing it
         shell: pwsh
         run: |
