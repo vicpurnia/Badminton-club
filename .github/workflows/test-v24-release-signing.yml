@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_3/**'
+      - 'src/premium/v25_4/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,7 +75,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_3/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_4/MainActivity.java").read_text())
           receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
           assert receipt.exists()
           receiptSource=receipt.read_text()
@@ -108,7 +108,18 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
-          assert "STABLE v25.3" in s
+          assert "STABLE v25.4" in s
+          assert "private void showReceiptLibrary()" in s
+          assert "Find or share any past receipt" in s
+          assert "SEARCH MEMBER, PERIOD OR AMOUNT" in s
+          assert "Show next 25 receipts" in s
+          assert "Share statement" in s
+          assert "Share receipt" in s
+          assert "Save PDF" in s
+          assert "HistoricalReceiptsV253.legacy(this,item.member,item.historical" in s
+          assert "HistoricalReceiptsV253.payment(this,item.member,item.payment" in s
+          assert '"cash".equals(c.kind)&&c.amount>0' in s
+          assert '"cash".equals(item.kind)&&item.amount>0' in s
           assert "Share previous paid receipt" in s
           assert "Share receipt" in s
           assert "Share statement" in s
