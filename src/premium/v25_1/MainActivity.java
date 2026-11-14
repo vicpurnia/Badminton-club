@@ -696,31 +696,59 @@ public final class MainActivity extends Activity {
       final String dd=checkedPurchaseDate(day.getText().toString(),mm);
       final long qty=Long.parseLong(quantity.getText().toString().trim());
       if(qty<=0||qty>100)throw new IllegalArgumentException("Enter 1–100 donated packs.");
-      new AlertDialog.Builder(this).setTitle("Confirm noncash donation")
-       .setMessage(donor.name+" · "+qty+" donated pack(s) · "+mm+
-        "\nDate: "+(dd.isEmpty()?"not recorded":dd)+
-        "\n\nCash collection and balance remain unchanged. This is a new entry, not a correction of earlier donations.")
-       .setNegativeButton("Keep editing",null)
-       .setPositiveButton("Record donated packs",(d,w)->{
-        dialog.dismiss();
-        background(()->{
-         Contribution c=new Contribution();
-         c.id="donated-pack-"+UUID.randomUUID();c.memberId=donor.id;c.feeMonth=mm;
-         c.receivedDate=dd.isEmpty()?mm+"-01":dd;c.approximate=dd.isEmpty();
-         c.historical=false;c.kind="packs";c.amount=qty;
-         c.method="Donated shuttle packs";
-         c.note=dd.isEmpty()?"Month-only donated packs; exact day unknown.":"Member donated packs on recorded day.";
-         database.runInTransaction(()->{
-          database.dao().insertPayment(c);
-          AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
-          a.createdAt=new Date().toString();a.action="Noncash shuttle donation recorded";
-          a.details=c.id+" / "+donor.name+" / "+qty+" donated pack(s) / "+mm+" / no cash adjustment";
-          database.dao().audit(a);
-         });
-         BackupGuardian.save(this,database,"shuttle-donation",true);warnOnBackupFailure();
-         runOnUiThread(()->{Toast.makeText(this,"Noncash shuttle donation recorded",Toast.LENGTH_LONG).show();showExpenses();});
-        });
-       }).show();
+      // Inspect existing donations before adding another: warns, never silently
+      // merges or deletes a legitimate historical record.
+      background(()->{
+       int previousEntries=0;long previousPacks=0;
+       for(Contribution existing:database.dao().contributions()){
+        if(donor.id.equals(existing.memberId)&&mm.equals(existing.feeMonth)&&"packs".equals(existing.kind)){
+         previousPacks+=existing.amount;previousEntries++;
+        }
+       }
+       for(LegacyEntry historical:database.dao().legacy()){
+        if(donor.id.equals(historical.memberId)&&mm.equals(historical.period)&&"packs".equals(historical.kind)){
+         previousPacks+=historical.amount;previousEntries++;
+        }
+       }
+       boolean historicalControl=false;
+       for(MonthlyControl control:database.dao().controls())
+        if(mm.equals(control.month)){historicalControl=true;break;}
+       final int existingCount=previousEntries;
+       final long existingPacks=previousPacks;
+       final boolean controlledMonth=historicalControl;
+       runOnUiThread(()->{
+        String warning=existingCount>0?
+         "\n\nPOSSIBLE DUPLICATE: "+existingCount+" existing donated-pack entry/entries total "+existingPacks+
+         " pack(s) for this member and month. Add another only if a separate donation occurred.":"";
+        if(controlledMonth)
+         warning+="\n\nHISTORICAL CONTROL: Earlier monthly reconciliation remains unchanged. The new noncash entry does not erase past differences.";
+        new AlertDialog.Builder(this).setTitle(existingCount>0?"Review possible duplicate donation":"Confirm noncash donation")
+         .setMessage(donor.name+" · "+qty+" donated pack(s) · "+mm+
+          "\nDate: "+(dd.isEmpty()?"not recorded":dd)+warning+
+          "\n\nCash collection, expenditure and closing balance remain unchanged.")
+         .setNegativeButton("Keep editing",null)
+         .setPositiveButton(existingCount>0?"Add another donation":"Record donated packs",(d,w)->{
+          dialog.dismiss();
+          background(()->{
+           Contribution c=new Contribution();
+           c.id="donated-pack-"+UUID.randomUUID();c.memberId=donor.id;c.feeMonth=mm;
+           c.receivedDate=dd.isEmpty()?mm+"-01":dd;c.approximate=dd.isEmpty();
+           c.historical=false;c.kind="packs";c.amount=qty;
+           c.method="Donated shuttle packs";
+           c.note=dd.isEmpty()?"Month-only donated packs; exact day unknown.":"Member donated packs on recorded day.";
+           database.runInTransaction(()->{
+            database.dao().insertPayment(c);
+            AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
+            a.createdAt=new Date().toString();a.action="Noncash shuttle donation recorded";
+            a.details=c.id+" / "+donor.name+" / "+qty+" donated pack(s) / "+mm+" / no cash adjustment";
+            database.dao().audit(a);
+           });
+           BackupGuardian.save(this,database,"shuttle-donation",true);warnOnBackupFailure();
+           runOnUiThread(()->{Toast.makeText(this,"Noncash shuttle donation recorded",Toast.LENGTH_LONG).show();showExpenses();});
+          });
+         }).show();
+       });
+      });
      }catch(Exception ex){error(new IllegalArgumentException("Check member, month, donated-pack quantity and optional date."));}
     }));
     ScrollView scroll=new ScrollView(this);scroll.addView(form);dialog.setContentView(scroll);dialog.show();
