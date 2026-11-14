@@ -622,6 +622,100 @@ public final class MainActivity extends Activity {
    });
   });
  }
+
+ private void openInventoryCheckpoint(){
+  background(()->{
+   requireImportedLedger();
+   LedgerMeta meta=database.dao().meta();
+   final String firstAllowed=meta.openingMonth;
+   final InventoryCheckpoint.Config existing=InventoryCheckpoint.read(meta.inventoryStockJson);
+   runOnUiThread(()->{
+    Dialog dialog=new Dialog(this);LinearLayout form=col();
+    form.setBackground(bg(Color.WHITE,24));pad(form,21,22);
+    form.addView(text("Confirmed opening shuttle stock",21,DARK,true));gap(form,8);
+    form.addView(text("Use a real, verified count at the START of the selected month, before any transactions that month. If only today's count is known, do not backdate it.",12,GRAY,false));gap(form,16);
+    if(existing!=null){
+     form.addView(text("Currently confirmed: "+existing.openingShuttles+" individual shuttles at start of "+
+       existing.month+" · "+existing.perPack+" shuttles/pack. Updating creates an audit record.",12,GREEN,true));
+     gap(form,14);
+    }
+    form.addView(text("OPENING MONTH (YYYY-MM)",11,GRAY,true));gap(form,7);
+    EditText month=new EditText(this);month.setSingleLine(true);
+    month.setText(existing==null?reportMonth:existing.month);
+    month.setBackground(border(LIGHT,LINE,12));pad(month,14,12);form.addView(month);gap(form,14);
+    form.addView(text("INDIVIDUAL SHUTTLES AT MONTH START",11,GRAY,true));gap(form,7);
+    EditText opening=new EditText(this);opening.setSingleLine(true);
+    opening.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    opening.setHint("Count each shuttlecock, not packs");
+    if(existing!=null)opening.setText(String.valueOf(existing.openingShuttles));
+    opening.setBackground(border(LIGHT,LINE,12));pad(opening,14,12);form.addView(opening);gap(form,14);
+    form.addView(text("SHUTTLES PER PACK (CONFIRMED)",11,GRAY,true));gap(form,7);
+    EditText perPack=new EditText(this);perPack.setSingleLine(true);
+    perPack.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+    perPack.setHint("e.g. 12 — enter actual pack size");
+    if(existing!=null)perPack.setText(String.valueOf(existing.perPack));
+    perPack.setBackground(border(LIGHT,LINE,12));pad(perPack,14,12);form.addView(perPack);gap(form,14);
+    form.addView(text("OPTIONAL STOCK-COUNT NOTE",11,GRAY,true));gap(form,7);
+    EditText note=new EditText(this);note.setMinLines(2);
+    note.setHint("Source of physical count, who checked it");
+    if(existing!=null)note.setText(existing.note);
+    note.setBackground(border(LIGHT,LINE,12));pad(note,14,12);form.addView(note);gap(form,16);
+    form.addView(button("Review confirmed stock checkpoint",()->{
+     try{
+      final String mm=MigrationCodec.ym(month.getText().toString().trim());
+      String today=new java.text.SimpleDateFormat("yyyy-MM",Locale.ROOT).format(new Date());
+      if(mm.compareTo(firstAllowed)<0)
+       throw new IllegalArgumentException("Checkpoint cannot precede ledger opening "+firstAllowed);
+      if(mm.compareTo(today)>0)
+       throw new IllegalArgumentException("Cannot confirm a future opening stock count");
+      final long count=Long.parseLong(opening.getText().toString().trim());
+      final long factor=Long.parseLong(perPack.getText().toString().trim());
+      final String details=note.getText().toString().trim();
+      final InventoryCheckpoint.Config chosen=InventoryCheckpoint.confirmed(mm,count,factor,details);
+      String message="Month-start count: "+count+" individual shuttles"+
+       "\nEffective at START of "+mm+
+       "\nPack factor: "+factor+" individual shuttles per pack."+
+       "\n\nAll recorded purchases, donations and usage in "+mm+" will be counted AFTER this opening amount."+
+       "\n\n"+(existing==null?"Create first confirmed checkpoint?":
+        "REPLACE existing stock checkpoint? This will recalculate all displayed stock positions from the new basis, without changing transactions.")+
+       "\n\nConfirm only if the historical month-start count is known.";
+      new AlertDialog.Builder(this).setTitle("Confirm physically checked stock")
+       .setMessage(message).setNegativeButton("Keep editing",null)
+       .setPositiveButton(existing==null?"Confirm opening stock":"Replace checkpoint",(d,w)->{
+        dialog.dismiss();
+        background(()->{
+         database.runInTransaction(()->{
+          LedgerDao dao=database.dao();LedgerMeta live=dao.meta();
+          if(live==null)throw new IllegalStateException("Cannot set stock before importing the ledger.");
+          String updated=InventoryCheckpoint.updatedJson(live.inventoryStockJson,chosen);
+          if(dao.updateInventoryJson(updated)!=1)
+           throw new IllegalStateException("Inventory metadata update was not applied.");
+          AuditEvent audit=new AuditEvent();
+          audit.id="audit-stock-"+UUID.randomUUID();
+          audit.createdAt=new Date().toString();
+          audit.action="Manually confirmed opening stock";
+          audit.details="Effective "+mm+"; "+count+" individual shuttles; "+
+           factor+" per pack; previous="+(InventoryCheckpoint.read(live.inventoryStockJson)==null?"not set":"replaced")+
+           "; note="+details;
+          dao.audit(audit);
+         });
+         BackupGuardian.save(this,database,"confirmed-opening-stock",true);
+         warnOnBackupFailure();
+         runOnUiThread(()->{Toast.makeText(this,"Stock checkpoint saved",Toast.LENGTH_LONG).show();showExpenses();});
+        });
+       }).show();
+     }catch(Exception ex){
+      error(new IllegalArgumentException(ex.getMessage()==null?"Check stock opening values.":ex.getMessage()));
+     }
+    }));
+    ScrollView scroll=new ScrollView(this);scroll.addView(form);
+    dialog.setContentView(scroll);dialog.show();Window w=dialog.getWindow();
+    if(w!=null){w.setBackgroundDrawableResource(android.R.color.transparent);
+     w.setGravity(Gravity.BOTTOM);w.setLayout(-1,Math.min(dp(740),(int)(getResources().getDisplayMetrics().heightPixels*.91f)));}
+   });
+  });
+ }
+
  private void openExpense(){
   background(()->{
    requireImportedLedger();
