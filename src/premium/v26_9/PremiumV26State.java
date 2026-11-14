@@ -176,7 +176,21 @@ final class PremiumV26State {
   }catch(JSONException ex){throw new IllegalArgumentException("Invalid stock threshold metadata",ex);}
  }
  static void validate(String json,Set<String> known){
-  policies(json,known);waivers(json,known);profiles(json,known);reorderThreshold(json);
+  List<FeePolicy> configured=policies(json,known);
+  List<Waiver> concessions=waivers(json,known);
+  profiles(json,known);reorderThreshold(json);
+  // Never silently truncate an already-authorized concession if a fee rule
+  // is later lowered or removed. This must fail before committing a new rule,
+  // and must also fail when inspecting a tampered migration JSON.
+  HashMap<String,Long> total=new HashMap<>();
+  for(Waiver item:concessions){
+   String key=item.member+"\\u0000"+item.month;
+   long sum=total.merge(key,item.amount,Math::addExact);
+   long fee=rateFor(configured,item.member,item.month);
+   if(fee<0||sum>fee)
+    throw new IllegalArgumentException("Audited concession for "+item.member+
+     " in "+item.month+" exceeds the effective fee. Review the policy instead of hiding the difference.");
+  }
  }
  static long rateFor(List<FeePolicy> all,String member,String month){
   String mm=MigrationCodec.ym(month);long rate=-1;
@@ -247,7 +261,9 @@ final class PremiumV26State {
     result.unconfiguredMonths++;result.unallocated=Math.addExact(result.unallocated,paid);
    }else{
     result.configuredMonths++;
-    long waived=Math.min(rate,credits.getOrDefault(month,0L));
+    long waived=credits.getOrDefault(month,0L);
+    if(waived<0||waived>rate)
+     throw new IllegalStateException("Authorized concession exceeds the configured fee for "+month);
     long owed=Math.subtractExact(rate,waived);
     result.billed=Math.addExact(result.billed,rate);
     result.waived=Math.addExact(result.waived,waived);
