@@ -12,7 +12,7 @@ def inject(path, anchor, replacement, label):
 
 dao=root/"LedgerDao.java"
 old=' @Insert(onConflict=OnConflictStrategy.ABORT) void audit(AuditEvent e);'
-add=" @Query(\"UPDATE ledger_meta SET inventoryStockJson=:json WHERE \`key\`='active'\") int updateInventoryJson(String json);"
+add=" @Query(\"UPDATE ledger_meta SET inventoryStockJson=:json WHERE \x60key\x60='active'\") int updateInventoryJson(String json);"
 inject(dao,old,add+"\n"+old,"ledger update accessor")
 codec=root/"MigrationCodec.java"
 before='   JSONArray members=ledger.getJSONArray("players"),payments=ledger.getJSONArray("payments"),expenses=ledger.getJSONArray("expenses"),usage=ledger.optJSONArray("stockUsage");'
