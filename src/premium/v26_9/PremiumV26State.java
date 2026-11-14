@@ -47,6 +47,17 @@ final class PremiumV26State {
     (unconfiguredMonths>0?"; "+unconfiguredMonths+" month(s) without configured fee policy":"");
   }
  }
+ static String monthStatus(FeeSummary assessment,boolean billable){
+  if(assessment==null)throw new IllegalArgumentException("Fee assessment not available");
+  if(!billable)return "Not due";
+  if(assessment.unconfiguredMonths>0)return "Unconfigured";
+  if(assessment.configuredMonths!=1)
+   throw new IllegalArgumentException("A monthly payment status requires exactly one assessed month");
+  long net=Math.subtractExact(assessment.billed,assessment.waived);
+  if(net==0)return "Settled"; // Completely waived or zero fee: not a cash receipt
+  if(assessment.paid>=net)return "Paid";
+  return assessment.paid>0?"Partial":"Unpaid";
+ }
  private static JSONObject root(String json)throws JSONException {
   return json==null||json.trim().isEmpty()?new JSONObject():new JSONObject(json);
  }
