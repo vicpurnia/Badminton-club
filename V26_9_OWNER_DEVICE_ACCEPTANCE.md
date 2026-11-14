@@ -104,3 +104,19 @@ Run this check **before entering any new payments or expenses** in the upgraded 
 - Full 15-member real imported ledger, Kanishk February noncash +1 pack, unresolved February ₹1,000 difference and every historical record preserved
 - Exact pre/post-upgrade verified JSON comparison on device, before entering new data
 - WhatsApp/receipt/ZIP/PDF sharing, SAF folder exports, password recovery and cross-phone import acceptance
+
+
+### Broader historical-structure signed upgrade test — PASS
+
+A second clean Android 35 emulator check now passed: [run 43621155133](https://github.com/vicpurnia/Badminton-club/actions/runs/43621155133). This used authentic owner-signed **v25.9.19 → v26.9-rc-test.4**, same permanent certificate and app ID, and `adb install -r` without uninstall or clearing storage.
+
+The expanded synthetic-only Room fixture additionally verified preservation of:
+- Ledger metadata including opening month, original opening INR balance, club label, receipt prefix and previously unknown JSON metadata
+- Original monthly cash control and imported-member cash control fields
+- A 2025 historical member cash record and a separate **noncash donated shuttle pack**, each with stable keys and amount
+- The immutable original audit event and its row count
+- Original member, individual cash contribution, purchase expense and recorded shuttle usage
+
+Both on-device instrumentation methods passed, and the upgraded application launched. This closes the **automated synthetic Room row-persistence** subtest; it does not assert that the full real imported club ledger, its Form/backup envelope or physical-device actions are validated. The v25.9 production branch is not changed.
+
+**Latest separate signed development TEST artifact including exact backup comparison:** [build 43620891575](https://github.com/vicpurnia/Badminton-club/actions/runs/43620891575), with permanent certificate matching and a higher versionCode. It is NOT approved as stable.
