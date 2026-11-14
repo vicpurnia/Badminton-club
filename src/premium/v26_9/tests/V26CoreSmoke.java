@@ -99,6 +99,24 @@ public final class V26CoreSmoke {
   yes(PremiumV26State.reorderThreshold(data)==12,"Inventory threshold preserved");
   PremiumV26State.validate(data,known);
 
+  // New member starts at the actual registration month and must not accrue old fees.
+  String newlyJoined=PremiumV26State.addNewMemberOrigin("{}","synthetic-B","New member",
+   "2026-11","origin-1","2026-11-14",known);
+  yes(!PremiumV26State.billableMonth(newlyJoined,"synthetic-B","2026-03"),
+   "New November member must not inherit the historic March fee");
+  yes(PremiumV26State.billableMonth(newlyJoined,"synthetic-B","2026-11"),
+   "New member is billable beginning in verified joining month");
+  final String immutableOrigin=newlyJoined;
+  reject(()->PremiumV26State.addNewMemberOrigin(immutableOrigin,"synthetic-B","New member",
+   "2026-01","origin-2","2026-11-14",known),
+   "New member billing-start event may not be silently rewritten");
+  // A later profile entry cannot retroactively erase earlier assessed fees.
+  String laterProfile=PremiumV26State.addProfile(data,"synthetic-B",
+   "Imported member with actual joining-date note","","2026-10-15",
+   "Historical joining date added today",true,"profile-2","2026-11-14",known);
+  yes(PremiumV26State.billableMonth(laterProfile,"synthetic-B","2026-03"),
+   "Adding a joining-date note cannot reclassify previously assessed months");
+
   // A physical stock anchor cannot be retroactively invalidated by newly inserted
   // purchase, donated pack, shuttle usage or arbitrary opening-checkpoint edits.
   String physicallyCounted=new JSONObject().put(PremiumV26StockGuard.COUNT_KEY,
