@@ -140,7 +140,7 @@ jobs:
           assert "Find or share any past receipt" in s
           assert "Share receipt" in s
           assert "Share statement" in s
-          assert "HistoricalReceiptsV253.payment(this,member,payment" in s
+          assert "renderCashReceipt(member,payment)" in s
           assert "HistoricalReceiptsV253.legacy(this,member,historical" in s
           assert "Stock position from confirmed baseline" in s
           assert "openInventoryCheckpoint()" in s
