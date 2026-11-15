@@ -46,15 +46,26 @@ def tap(tab,expected):
     print(f"POPULATED-SYNTHETIC-NAV PASS: {tab} -> {expected}")
 
 home=set()
-for attempt in range(7):
+for attempt in range(12):
     home=labels(dump())
     if "Overview" in home:
         break
-    # A signed APK update may briefly leave Android's launcher or instrumentation
-    # on top of the activity. Explicit launch is harmless to the persisted ledger.
-    if attempt==1:
-        adb("shell","am","start","-W","-n",
-            PKG+"/com.vinayak.badminton.nativepreview.MainActivity")
+    # Only the *emulator's* Pixel Launcher can become unresponsive after
+    # a signed APK update. Never clear or modify the club app or its data.
+    if any("Pixel Launcher isn't responding" in text for text in home):
+        for launcher in ("com.google.android.apps.nexuslauncher","com.android.launcher3"):
+            adb("shell","am","force-stop",launcher)
+        try:
+            adb("shell","input","keyevent","KEYCODE_BACK")
+        except subprocess.CalledProcessError:
+            pass
+    # Retry starting Badminton directly, rather than asking the hung launcher.
+    if attempt % 2==0:
+        try:
+            adb("shell","am","start","-n",
+                PKG+"/com.vinayak.badminton.nativepreview.MainActivity")
+        except subprocess.CalledProcessError:
+            pass
     time.sleep(2)
 else:
     raise AssertionError(
