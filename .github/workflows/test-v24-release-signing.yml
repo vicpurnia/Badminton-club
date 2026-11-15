@@ -5,7 +5,17 @@ on:
   push:
     branches: [main]
     paths:
+      - 'src/archive/**'
+      - 'src/premium/v20-overlay.tar.xz.base64'
+      - 'src/premium/v23_1/**'
+      - 'src/premium/v25_2/**'
+      - 'src/premium/v25_3/**'
+      - 'src/premium/v25_6/**'
+      - 'src/premium/v25_7/**'
+      - 'src/premium/v25_8/**'
+      - 'src/premium/v25_9/**'
       - 'src/premium/v25_9_1/**'
+      - 'tools/check-stable-signature.sh'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
