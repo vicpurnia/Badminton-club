@@ -2034,36 +2034,55 @@ public final class MainActivity extends Activity {
   });
  }
  private void showFeeCentre(){
+  final String requestedMonth=reportMonth;
+  final int requestedScreen=screenEpoch;
   background(()->{
    requireImportedLedger();
    LedgerDao dao=database.dao();LedgerMeta meta=dao.meta();
    List<Member> members=dao.members();List<Contribution> payments=dao.contributions();
    Set<String> known=knownMembers();
-   Map<String,PremiumV26State.Profile> feeProfiles=PremiumV26State.profiles(meta.inventoryStockJson,known);
-   List<PremiumV26State.FeePolicy> rules=PremiumV26State.policies(meta.inventoryStockJson,known);
-   List<PremiumV26State.Waiver> waivers=PremiumV26State.waivers(meta.inventoryStockJson,knownMembers());
-   String month=reportMonth;
+   String raw=meta.inventoryStockJson;
+   Map<String,PremiumV26State.Profile> feeProfiles=PremiumV26State.profiles(raw,known);
+   List<PremiumV26State.FeePolicy> rules=PremiumV26State.policies(raw,known);
+   List<PremiumV26State.Waiver> waivers=PremiumV26State.waivers(raw,known);
+   // Fee assessments involve month-by-month arithmetic and correction histories.
+   // Compute them on the database worker; never block the UI while opening this dialog.
+   ArrayList<String[]> rendered=new ArrayList<>();
+   for(Member member:members){
+    PremiumV26State.FeeSummary f=PremiumV26State.feeSummary(raw,
+     member.id,"2026-01",requestedMonth,payments);
+    long rate=PremiumV26State.rateFor(rules,member.id,requestedMonth);
+    String headline="Current fee: "+(rate<0?"not configured":rupee(rate))+
+     "  ·  Outstanding across assigned periods: "+rupee(f.arrears);
+    String detail="Cash allocated: "+rupee(f.paid)+"  ·  Concessions: "+rupee(f.waived)+
+     "  ·  Excess assigned: "+rupee(f.excess)+
+     (f.unconfiguredMonths>0?"  ·  Unconfigured: "+f.unconfiguredMonths+" mo":"");
+    rendered.add(new String[]{effectiveName(member,feeProfiles),headline,detail});
+   }
    runOnUiThread(()->{
+    // Discard delayed work if the user has changed screen or reporting month.
+    if(screenEpoch!=requestedScreen||!requestedMonth.equals(reportMonth))return;
     LinearLayout view=col();pad(view,20,20);
     view.addView(text("Fees, dues & arrears",22,DARK,true));gap(view,7);
     view.addView(text("Cash received and amounts due are calculated separately. Past receipts are never rewritten.",12,GRAY,false));gap(view,14);
-    view.addView(text("Fee rules: "+rules.size()+"  ·  Concessions: "+waivers.size()+"  ·  Review through "+month,12,GREEN,true));gap(view,13);
+    view.addView(text("Fee rules: "+rules.size()+"  ·  Concessions: "+waivers.size()+
+     "  ·  Review through "+requestedMonth,12,GREEN,true));gap(view,13);
     view.addView(button("Set monthly fee (effective dated)",()->editFeePolicy(members)));gap(view,9);
     view.addView(button("Record authorized fee concession",()->editFeeWaiver(members)));gap(view,17);
-    for(Member member:members){
-     PremiumV26State.FeeSummary f=PremiumV26State.feeSummary(meta.inventoryStockJson,
-      member.id,"2026-01",month,payments);
-     String name=effectiveName(member,feeProfiles);
-     long rate=PremiumV26State.rateFor(rules,member.id,month);
+    // Bound native cards to prevent a 1000+ member roster freezing the UI.
+    int visible=Math.min(80,rendered.size());
+    for(int index=0;index<visible;index++){
+     String[] row=rendered.get(index);
      LinearLayout item=col();
-     item.addView(text(name,14,DARK,true));gap(item,5);
-     item.addView(text("Current fee: "+(rate<0?"not configured":rupee(rate))+
-      "  ·  Outstanding across assigned periods: "+rupee(f.arrears),12,GREEN,true));gap(item,4);
-     item.addView(text("Cash allocated: "+rupee(f.paid)+"  ·  Concessions: "+rupee(f.waived)+
-      "  ·  Excess assigned: "+rupee(f.excess)+
-      (f.unconfiguredMonths>0?"  ·  Unconfigured: "+f.unconfiguredMonths+" mo":""),
-      11,GRAY,false));
+     item.addView(text(row[0],14,DARK,true));gap(item,5);
+     item.addView(text(row[1],12,GREEN,true));gap(item,4);
+     item.addView(text(row[2],11,GRAY,false));
      panel(view,item);
+    }
+    if(visible<rendered.size()){
+     view.addView(text("Showing the first "+visible+" of "+rendered.size()+
+      " members. Open Members to search the complete roster.",12,GRAY,false));
+     gap(view,11);
     }
     view.addView(text("Unpaid fees are obligations only, not incoming cash. Excess paid against one month is not silently reassigned to another.",11,GRAY,false));gap(view,10);
     ScrollView sc=new ScrollView(this);sc.addView(view);
