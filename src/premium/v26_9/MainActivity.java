@@ -1151,6 +1151,10 @@ public final class MainActivity extends Activity {
     // A repeated callback must not produce another cash row or audit event.
     if(PremiumV26PaymentOnce.alreadyCommitted(dao.contributions(),
        submissionId,m.id,fee,amount,method))return;
+    // Do not trust an earlier chooser snapshot: a player can be archived
+    // while an old payment form remains open. Guard the atomic write.
+    PremiumV26State.requireActiveForCollection(
+      dao.meta().inventoryStockJson,m.id,knownMembers());
     requireOpenMonth(fee);
     dao.insertPayment(c);
     AuditEvent a=new AuditEvent();a.id="audit-"+UUID.randomUUID();
