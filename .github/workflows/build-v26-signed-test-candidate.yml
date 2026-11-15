@@ -12,6 +12,19 @@ on:
   push:
     branches: [dev/v26-0-to-26-9-20261114]
     paths:
+      - 'src/premium/v26_9/**'
+      - 'src/premium/v25_2/**'
+      - 'src/premium/v25_3/**'
+      - 'src/premium/v25_6/**'
+      - 'src/premium/v25_7/**'
+      - 'src/premium/v25_8/**'
+      - 'src/premium/v25_9/**'
+      - 'src/premium/v23_1/**'
+      - 'src/archive/**'
+      - 'src/premium/v20-overlay.tar.xz.base64'
+      - 'tools/check_v26_navigation_safety.py'
+      - 'tools/run_v26_core_smoke.sh'
+      - 'tools/check-stable-signature.sh'
       - '.github/workflows/build-v26-signed-test-candidate.yml'
   workflow_dispatch:
 
