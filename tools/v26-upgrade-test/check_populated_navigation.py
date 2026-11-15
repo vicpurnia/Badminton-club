@@ -70,3 +70,42 @@ for tab,expected in [
 ]:
     tap(tab,expected)
 print("SIGNED-v25-TO-v26 populated synthetic ledger: five-tab UI navigation PASSED")
+
+# Real Android accessibility-level verification of the v25.9.1 navigation hotfix.
+# This runs against the signed, in-place-upgraded SYNTHETIC ledger, not real accounts.
+def tap_home_card(prefix,expected):
+    size=adb("shell","wm","size")
+    match=re.search(r"(\\d+)x(\\d+)",size)
+    assert match,f"Cannot read emulator dimensions: {size!r}"
+    width,height=map(int,match.groups())
+    target=None
+    for attempt in range(6):
+        tree=dump()
+        candidates=[node for node in tree.iter()
+            if node.attrib.get("content-desc","").startswith(prefix+": ")]
+        if candidates:
+            target=candidates[-1]
+            break
+        adb("shell","input","swipe",str(width//2),str(int(height*.78)),
+            str(width//2),str(int(height*.32)),"300")
+        time.sleep(.6)
+    assert target is not None, f"{prefix} Home shortcut missing or not accessible"
+    assert target.attrib.get("clickable")=="true",f"{prefix} card is not clickable"
+    assert target.attrib.get("focusable")=="true",f"{prefix} card cannot receive focus"
+    bounds=target.attrib.get("bounds","")
+    found=re.fullmatch(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]",bounds)
+    assert found,f"Invalid Home shortcut bounds: {bounds!r}"
+    x1,y1,x2,y2=map(int,found.groups())
+    adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
+    for attempt in range(7):
+        time.sleep(.65)
+        if expected in labels(dump()):
+            print(f"SIGNED-SYNTHETIC SHORTCUT PASS: {prefix} card -> {expected}")
+            assert adb("shell","pidof",PKG).strip(),"App exited after Home card tap"
+            return
+    raise AssertionError(f"{prefix} Home shortcut did not navigate to {expected!r}")
+
+tap_home_card("Players","Actual payments, assessed dues and immutable member histories")
+tap("Home","Overview")
+tap_home_card("Receipts","Monthly receipts")
+print("SIGNED-v25-TO-v26: Home Players and Receipts full-card navigation PASSED")
