@@ -95,4 +95,11 @@ assert "preserveVerifiedLedgerDigest(db);" in tests
 assert "assertVerifiedLedgerDigestUnchanged(db);" in tests
 assert "assertFingerprintUnchanged(db);" in tests
 assert "BackupRecoveryV259.dryRun(" in tests
-print("v26 navigation / chronological closing / payment replay / receipt ZIP / full restore-metadata safety: PASS")
+assert "SYNTHETIC_ROSTER_SIZE=15" in tests
+assert "Original synthetic 15-player count" in tests
+assert "rejectedTampering" in tests
+navigation=Path("tools/v26-upgrade-test/check_populated_navigation.py").read_text(encoding="utf-8")
+assert 'last_member="CI Synthetic Player 15"' in navigation
+assert 'tap_home_card("Players"' in navigation
+assert 'tap_home_card("Receipts"' in navigation
+print("v26 navigation / 15-member signed upgrade / encrypted tamper / Home tap / chronological accounting safety: PASS")
