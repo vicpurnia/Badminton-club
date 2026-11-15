@@ -75,7 +75,7 @@ print("SIGNED-v25-TO-v26 populated synthetic ledger: five-tab UI navigation PASS
 # This runs against the signed, in-place-upgraded SYNTHETIC ledger, not real accounts.
 def tap_home_card(prefix,expected):
     size=adb("shell","wm","size")
-    match=re.search(r"(\\d+)x(\\d+)",size)
+    match=re.search(r"(\d+)x(\d+)",size)
     assert match,f"Cannot read emulator dimensions: {size!r}"
     width,height=map(int,match.groups())
     target=None
@@ -93,7 +93,7 @@ def tap_home_card(prefix,expected):
     assert target.attrib.get("clickable")=="true",f"{prefix} card is not clickable"
     assert target.attrib.get("focusable")=="true",f"{prefix} card cannot receive focus"
     bounds=target.attrib.get("bounds","")
-    found=re.fullmatch(r"\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]",bounds)
+    found=re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",bounds)
     assert found,f"Invalid Home shortcut bounds: {bounds!r}"
     x1,y1,x2,y2=map(int,found.groups())
     adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
