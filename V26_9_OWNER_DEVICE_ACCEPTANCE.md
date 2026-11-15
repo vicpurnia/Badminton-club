@@ -3,21 +3,21 @@
 **Purpose:** Permit a controlled test of the v26.9 candidate on the existing Badminton Premium package ID without mistaking a successful build for a completed release. This document contains no actual member identifiers beyond the previously documented historical acceptance landmarks.
 
 **Build source:** `dev/v26-0-to-26-9-20261114` (draft PR).  
-**Android application ID:** `com.vinayak.badminton.premiumv24` — unchanged from v25.9.  
+**Android application ID:** `com.vinayak.badminton.premiumv24` — unchanged from v25.9.1.  
 **Signing certificate:** the same permanent owner-controlled certificate, verified against `BADMINTON_EXPECTED_CERT_SHA256`.  
 **Candidate status:** owner-signed TEST build, NOT stable. It must never automatically replace the user's installed APK.
 
 ## Important safety rules
 
 1. Never uninstall Badminton Premium, choose Clear storage/data or import into a database that already contains a ledger.
-2. From the currently installed v25.9, make a fresh **verified external JSON backup** before accepting any test APK. Confirm both verification and a successful in-memory restore rehearsal.
+2. From the currently installed v25.9.1, make a fresh **verified external JSON backup** before accepting any test APK. Confirm both verification and a successful in-memory restore rehearsal.
 3. Retain a second, untouched copy outside app-private storage, plus the previously verified baseline backup. Do not publish a member ledger, PIN, password or `.p12` signing key to GitHub.
 4. **Only** the `Badminton-Premium-v26.9-SIGNED-TEST-CANDIDATE_NOT-PRODUCTION` artifact is eligible for owner-controlled same-package upgrade testing. The `DEVELOPMENT-DEBUG` artifact is not signed by the permanent release key and must never be offered as an in-place upgrade over the installed stable app.
 5. A TEST APK is not the final stable release. If a gate fails, stop and retain the original verified backups. Do not attempt uninstall/reinstall as a workaround.
 
-## A. Read-only pre-install snapshot — existing v25.9
+## A. Read-only pre-install snapshot — existing v25.9.1
 
-- [ ] Confirm current app is the previously accepted permanently signed v25.9.
+- [ ] Confirm current app is the previously accepted permanently signed v25.9.1.
 - [ ] Export verified external JSON (saved **outside** app-private storage) and reopen/verify it.
 - [ ] Complete `TEST RESTORE WITHOUT CHANGING DATA` on the backup.
 - [ ] Record the current count of original members (**documented baseline: 15**), latest genuine balance and last closed month.
@@ -31,14 +31,14 @@
 - [ ] Open the owner's GitHub Actions **Build Badminton Premium v26 SIGNED TEST Candidate (NOT STABLE)** workflow for the exact candidate SHA.
 - [ ] Confirm its automated checks: previous accounting regressions, v26 synthetic suite, Android build, APK package ID + version code, expected permanent signing certificate SHA-256 all **PASS**.
 - [ ] Verify the artifact name includes `SIGNED-TEST-CANDIDATE_NOT-PRODUCTION`.
-- [ ] Confirm the package ID is still `com.vinayak.badminton.premiumv24`, and candidate `versionCode` exceeds v25.9.
+- [ ] Confirm the package ID is still `com.vinayak.badminton.premiumv24`, and candidate `versionCode` exceeds the installed v25.9.1 code.
 - [ ] Do not install a debug artifact or a downloaded unsigned preview as an update to the signed app.
 
 ## C. Controlled device acceptance
 
 Prefer a spare Android phone with a verified restored **copy** of the ledger for destructive workflow tests. A replica must never be merged into or used to replace the production ledger.
 
-- [ ] Test the signed APK's in-place installation over a signed v25.9 installation **without uninstall/clear-data**.
+- [ ] Test the signed APK's in-place installation over a signed v25.9.1 installation **without uninstall/clear-data**.
 - [ ] App opens normally; no indefinite loading, crashes, frozen controls or lost ledger access.
 - [ ] The documented original 15 members, historic receipts, noncash donation, unresolved difference and latest closing balance are unchanged absent a deliberate test transaction.
 - [ ] Compare month-end and original Classic one-page A4 landscape PDF before/after.
@@ -100,7 +100,7 @@ Run this check **before entering any new payments or expenses** in the upgraded 
 
 ### Still required for production
 
-- Physically verified owner-device v25.9 → signed v26.9 test update without uninstall/clear-data
+- Physically verified owner-device v25.9.1 → signed v26.9 test update without uninstall/clear-data
 - Full 15-member real imported ledger, Kanishk February noncash +1 pack, unresolved February ₹1,000 difference and every historical record preserved
 - Exact pre/post-upgrade verified JSON comparison on device, before entering new data
 - WhatsApp/receipt/ZIP/PDF sharing, SAF folder exports, password recovery and cross-phone import acceptance
