@@ -18,6 +18,25 @@ required = [
 for item in required:
     assert item in source, f"Native-screen stale-result guard missing: {item}"
 
+# Regression protection for the signed v25.9.1 Players/Receipts shortcut hotfix.
+# The v26 candidate MUST retain these callbacks; a plain metric(...) is not tappable.
+for item in [
+    'dashboardShortcutMetric("Players"',
+    'dashboardShortcutMetric("Receipts"',
+    '"View all players",()->selectTab("Members")',
+    'this::openHomeMonthlyReceipts',
+    'focusMonthlyReceipts=true',
+    'card.setClickable(true)',
+    'card.setFocusable(true)',
+    'pressable(card,action)',
+    'pageScroll.scrollTo(0,0)',
+    'pageScroll.smoothScrollTo(',
+    'currentScreen(screen,"Collect",viewedMonth)&&monthlyReceiptAnchor.getParent()==content',
+]:
+    assert item in source, f"v25.9.1 Home shortcut regression: {item}"
+assert source.count('LinearLayout a=metric("Players"') == 0, "Players summary must be a shortcut"
+assert source.count('LinearLayout b=metric("Receipts"') == 0, "Receipts summary must be a shortcut"
+
 calls = []
 for number, line in enumerate(source.splitlines(), 1):
     if "private void selectTab(" in line:
