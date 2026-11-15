@@ -66,6 +66,19 @@ assert "PremiumV26StockGuard.requireEditableStockMonth(" in source
 # Financial mutation safety: an earlier open month cannot alter a later closed snapshot.
 assert "PremiumV26ClosingGuard.requireWritable(meta.inventoryStockJson" in source
 assert "PremiumV26PaymentOnce.alreadyCommitted(dao.contributions()" in source
+assert "PremiumV26State.requireActiveForCollection(" in source
+source_lines=source.splitlines()
+payment_start=source.index("private void persistPayment(")
+payment_end=source.index("private static boolean isShuttlePurchase(",payment_start)
+payment_section=source[payment_start:payment_end]
+assert payment_section.index("database.runInTransaction(")<payment_section.index(
+    "PremiumV26State.requireActiveForCollection(")<payment_section.index("dao.insertPayment(c)"),(
+    "Archived member recheck must occur inside the atomic payment transaction before insertion")
+model=Path("src/premium/v26_9/PremiumV26State.java").read_text(encoding="utf-8")
+assert 'static void requireActiveForCollection(' in model
+smoke=Path("src/premium/v26_9/tests/V26CoreSmoke.java").read_text(encoding="utf-8")
+assert '"A stale payment form must not create cash for an archived player"' in smoke
+assert '"Unknown member cannot receive a new cash entry"' in smoke
 assert 'final String submissionId="pay-"+UUID.randomUUID();' in source
 assert "reviewing.compareAndSet(false,true)" in source
 assert 'if(!created[0])' in source
