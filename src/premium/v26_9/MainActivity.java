@@ -30,7 +30,10 @@ public final class MainActivity extends Activity {
  private static final int PICK_LEDGER=2001, SAVE_VERIFIED=2002, SAVE_PDF=2003, PICK_BACKUP_TREE=2004, VERIFY_BACKUP=2005, TEST_RESTORE=2006;
  private LedgerDatabase database;
  private final ExecutorService io=Executors.newSingleThreadExecutor();
- private LinearLayout root,content,nav,header;private String tab="Home",reportMonth="2026-11",memberFilter="All";private String searchText="";
+ private LinearLayout root,content,nav,header;
+ private ScrollView pageScroll;
+ private boolean focusMonthlyReceipts=false;
+ private String tab="Home",reportMonth="2026-11",memberFilter="All";private String searchText="";
  private volatile int screenEpoch=0;
  private boolean currentScreen(int epoch,String expectedTab,String month){
   return screenEpoch==epoch&&expectedTab.equals(tab)&&month.equals(reportMonth);
@@ -91,6 +94,27 @@ public final class MainActivity extends Activity {
  private String rupee(long x){return (x<0?"−":"")+"₹"+String.format(new Locale("en","IN"),"%,d",Math.abs(x));}
  private String sign(long x){return x<0?"Deficit":"Available";}
  private LinearLayout metric(String label,String value,String symbol){LinearLayout c=col();c.setBackground(border(Color.WHITE,LINE,16));pad(c,13,15);c.addView(text(symbol,18,GREEN,true));gap(c,13);c.addView(text(label,11,GRAY,false));gap(c,5);c.addView(text(value,20,DARK,true));return c;}
+
+ /** v25.9.1 Home shortcut behavior; v26 uses guarded taps to avoid double navigation. */
+ private LinearLayout dashboardShortcutMetric(String label,String value,String symbol,
+    String hint,Runnable action){
+  LinearLayout card=metric(label,value,symbol);
+  gap(card,9);
+  card.addView(text(hint+"  ›",11,GREEN,true));
+  card.setContentDescription(label+": "+value+". "+hint);
+  card.setClickable(true);
+  card.setFocusable(true);
+  card.setClipToOutline(true);
+  card.setForeground(new android.graphics.drawable.RippleDrawable(
+    android.content.res.ColorStateList.valueOf(0x2412644E),null,null));
+  pressable(card,action);
+  return card;
+ }
+ private void openHomeMonthlyReceipts(){
+  focusMonthlyReceipts=true;
+  selectTab("Collect");
+ }
+
  private void shiftMonth(int n){
   try{
    String[] parts=reportMonth.split("-");
@@ -130,7 +154,7 @@ public final class MainActivity extends Activity {
  }
  private void layout(){root=col();root.setBackgroundColor(LIGHT);setContentView(root);if(Build.VERSION.SDK_INT>=35){root.setOnApplyWindowInsetsListener((view,insets)->{android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars());view.setPadding(0,bars.top,0,bars.bottom);return insets;});}getWindow().setStatusBarColor(DARK);getWindow().setNavigationBarColor(0xFFFFFFFF);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR);
   header=col();header.setBackground(gradient(DARK,0xFF154E3E,0));pad(header,21,15);LinearLayout top=row();LinearLayout brand=col();brand.addView(text("BADMINTON CLUB",10,GOLD,true));gap(brand,5);brand.addView(text("Smart Manager",23,Color.WHITE,true));gap(brand,3);brand.addView(text("v26.9 DEVELOPMENT CANDIDATE",10,0xFFD1EBDC,true));top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));TextView offline=pill("●  OFFLINE",0xFFBDEBCB,0xFF235A49);top.addView(offline);header.addView(top);root.addView(header,fill());
-  ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);content=col();pad(content,17,20);scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+  ScrollView scroll=new ScrollView(this);pageScroll=scroll;scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);content=col();pad(content,17,20);scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
   nav=row();nav.setBackgroundColor(Color.WHITE);nav.setElevation(dp(10));pad(nav,7,7);root.addView(nav,new LinearLayout.LayoutParams(-1,dp(76)));}
  private void drawNav(){nav.removeAllViews();for(String item:new String[]{"Home","Collect","Shuttles","Members","Reports"}){
    boolean active=tab.equals(item);boolean center=item.equals("Collect");LinearLayout tile=col();tile.setGravity(Gravity.CENTER);tile.setBackground(bg(center?GREEN:active?PALE:Color.WHITE,14));
@@ -140,7 +164,7 @@ public final class MainActivity extends Activity {
    LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-1,1);params.setMargins(dp(2),0,dp(2),0);nav.addView(tile,params);pressable(tile,()->selectTab(item));
   }}
  private void selectTab(String name){screenEpoch++;tab=name;drawNav();switch(name){case "Home":showHome();break;case "Collect":showPayments();break;case "Shuttles":showExpenses();break;case "Members":showMembers();break;default:showReports();}}
- private void title(String heading,String sub){content.removeAllViews();content.addView(text(heading,26,DARK,true));gap(content,5);content.addView(text(sub,13,GRAY,false));gap(content,19);}
+ private void title(String heading,String sub){content.removeAllViews();if(pageScroll!=null)pageScroll.scrollTo(0,0);content.addView(text(heading,26,DARK,true));gap(content,5);content.addView(text(sub,13,GRAY,false));gap(content,19);}
  private void notice(String header,String details){LinearLayout p=col();p.addView(text(header,15,DARK,true));gap(p,7);p.addView(text(details,12,GRAY,false));panel(content,p);}
  private void showHome(){
   final int screen=screenEpoch;
@@ -166,7 +190,7 @@ public final class MainActivity extends Activity {
     card.addView(text(rupee(latest.closing),39,Color.WHITE,true));gap(card,7);card.addView(text((latest.closing>=0?"● Credit available":"● Balance in deficit")+"  ·  Offline ledger",12,0xFFD2E7DA,false));gap(card,22);
     View divider=new View(this);divider.setBackgroundColor(0xFF376C5B);card.addView(divider,new LinearLayout.LayoutParams(-1,dp(1)));gap(card,16);
     LinearLayout totals=row();LinearLayout col1=col();col1.addView(text("FOR FEE PERIOD",10,0xFFB6D4C3,true));gap(col1,7);col1.addView(text(rupee(latest.collections),20,Color.WHITE,true));LinearLayout col2=col();col2.addView(text("EXPENSES",10,0xFFB6D4C3,true));gap(col2,7);col2.addView(text(rupee(latest.expenses),20,Color.WHITE,true));totals.addView(col1,new LinearLayout.LayoutParams(0,-2,1));totals.addView(col2,new LinearLayout.LayoutParams(0,-2,1));card.addView(totals);content.addView(card,fill());gap(content,14);
-    LinearLayout stats=row();LinearLayout a=metric("Players",String.valueOf(members.size()),"♙");LinearLayout b=metric("Receipts",String.valueOf(paymentCount),"▤");LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1);half.setMargins(0,0,dp(6),0);stats.addView(a,half);LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(0,-2,1);other.setMargins(dp(6),0,0,0);stats.addView(b,other);content.addView(stats);gap(content,15);
+    LinearLayout stats=row();LinearLayout a=dashboardShortcutMetric("Players",String.valueOf(members.size()),"♙","View all players",()->selectTab("Members"));LinearLayout b=dashboardShortcutMetric("Receipts",String.valueOf(paymentCount),"▤","View "+dateLabel(display)+" receipts",this::openHomeMonthlyReceipts);LinearLayout.LayoutParams half=new LinearLayout.LayoutParams(0,-2,1);half.setMargins(0,0,dp(6),0);stats.addView(a,half);LinearLayout.LayoutParams other=new LinearLayout.LayoutParams(0,-2,1);other.setMargins(dp(6),0,0,0);stats.addView(b,other);content.addView(stats);gap(content,15);
     sectionHeading("Backup health","Verified copies help protect your records");
     notice("Your backup status",BackupGuardian.status(this));
     notice("Recovery readiness",BackupGuardian.recoveryReadiness(this));
@@ -1024,7 +1048,11 @@ public final class MainActivity extends Activity {
   headline.addView(button("▤  Find or share any past receipt",this::showReceiptLibrary));
   content.addView(headline);gap(content,16);
   notice("Previously paid?", "Use the Receipt Library to search all recorded months by member and share or save the PDF. Imported 2025 period totals are labeled Historical Contribution Statements.");
-  sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));final String viewedMonth=reportMonth;
+  sectionHeading("Monthly receipts","Recorded for "+dateLabel(reportMonth));
+   final View monthlyReceiptAnchor=content.getChildAt(content.getChildCount()-2);
+   final boolean scrollToReceipts=focusMonthlyReceipts;
+   focusMonthlyReceipts=false;
+   final String viewedMonth=reportMonth;
   background(()->{LedgerMeta meta=database.dao().meta();
   if(meta==null)return;
   List<Contribution> rows=database.dao().contributions();
@@ -1033,7 +1061,15 @@ public final class MainActivity extends Activity {
    LinearLayout card=row();card.addView(avatar(m.name));LinearLayout info=col();pad(info,11,0);info.addView(text(m.name,14,DARK,true));gap(info,5);info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),11,GRAY,false));card.addView(info,new LinearLayout.LayoutParams(0,-2,1));LinearLayout right=col();right.setGravity(Gravity.END);long net=corrections.containsKey(c.id)?corrections.get(c.id).effective:c.amount;
    right.addView(text(net==0?"VOID":rupee(net),15,net==0?GRAY:GREEN,true));gap(right,6);
    right.addView(inlineButton(net==0?"Void record":"Receipt ▤",GREEN,()->shareRecordedReceipt(m,c)));card.addView(right);panel(content,card);if(++n==16)break;}
-   if(n==0)notice("No receipts this month","Choose another month above or collect a contribution.");});});
+   if(n==0)notice("No receipts this month","Choose another month above or collect a contribution.");
+    if(scrollToReceipts&&pageScroll!=null){
+     pageScroll.post(()->{
+      if(currentScreen(screen,"Collect",viewedMonth)&&monthlyReceiptAnchor.getParent()==content){
+       pageScroll.smoothScrollTo(0,Math.max(0,monthlyReceiptAnchor.getTop()-dp(12)));
+      }
+     });
+    }
+   });});
  }
  private void openPayment(String chosen){background(()->{requireImportedLedger();
     List<Member> all=database.dao().members();
