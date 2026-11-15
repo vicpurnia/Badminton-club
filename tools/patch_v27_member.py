@@ -5,14 +5,14 @@ root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
 source=root/"MainActivity.java"
 s=source.read_text()
 changes={
- 'String normal=n.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");':
- 'String normal=PremiumV27MemberNames.key(n);',
- 'effectiveName(other,profiles).trim().toLowerCase(Locale.ROOT).replaceAll("\\s+"," ").equals(normal)':
+ r'String normal=n.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");':
+ r'String normal=PremiumV27MemberNames.key(n);',
+ r'effectiveName(other,profiles).trim().toLowerCase(Locale.ROOT).replaceAll("\\s+"," ").equals(normal)':
  'PremiumV27MemberNames.key(effectiveName(other,profiles)).equals(normal)',
- 'String normalized=display.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");':
- 'String normalized=PremiumV27MemberNames.key(display);',
- 'String rival=effectiveName(other,profiles).toLowerCase(Locale.ROOT).trim().replaceAll("\\s+"," ");':
- 'String rival=PremiumV27MemberNames.key(effectiveName(other,profiles));'
+ r'String normalized=display.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");':
+ r'String normalized=PremiumV27MemberNames.key(display);',
+ r'String rival=effectiveName(other,profiles).toLowerCase(Locale.ROOT).trim().replaceAll("\\s+"," ");':
+ r'String rival=PremiumV27MemberNames.key(effectiveName(other,profiles));'
 }
 for old,new in changes.items():
  n=s.count(old)
