@@ -33,6 +33,13 @@ public final class V26CoreSmoke {
    "Other member keeps global fee");
   String afterWaiver=PremiumV26State.addWaiver(data,"synthetic-A","2026-03",300,
    "Approved member concession","waiver-1","2026-11-14",known);
+  // Replaying a prior review must not append an existing fee or concession ID.
+  reject(()->PremiumV26State.addPolicy(afterWaiver,"synthetic-A","2026-04",1900,
+    "Duplicate confirmed policy blocked","fee-2","2026-11-15",known),
+   "Previously committed fee-policy event ID cannot be replayed");
+  reject(()->PremiumV26State.addWaiver(afterWaiver,"synthetic-A","2026-04",100,
+    "Duplicate concession review blocked","waiver-1","2026-11-15",known),
+   "Previously committed concession event ID cannot be replayed");
   // A later lower fee rate cannot silently discard an authorized waiver.
   reject(()->PremiumV26State.addPolicy(afterWaiver,"synthetic-A","2026-03",200,
    "Proposed rate lower than approved concession","fee-unsafe","2026-11-14",known),
