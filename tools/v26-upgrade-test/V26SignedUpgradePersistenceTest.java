@@ -19,6 +19,8 @@ import static org.junit.Assert.*;
 public final class V26SignedUpgradePersistenceTest {
  private static final String DB_NAME="badminton_room_v18.db";
  private static final String MEMBER_ID="ci-upgrade-synthetic-member-20261114";
+ private static final int SYNTHETIC_ROSTER_SIZE=15;
+ private static String syntheticMemberId(int index){return "ci-upgrade-synthetic-roster-"+index;}
  private static final String PAYMENT_ID="pay-ci-upgrade-synthetic-20261114";
  private static final String NONCASH_ID="ci-upgrade-feb-2026-donated-pack";
  private static final String EXPENSE_ID="ci-upgrade-synthetic-expense-20261114";
@@ -100,7 +102,7 @@ public final class V26SignedUpgradePersistenceTest {
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   String exported=MigrationCodec.exportVerified(db);
   MigrationCodec.Preview preview=MigrationCodec.inspect(exported);
-  assertEquals("Only synthetic member must be exported",1,preview.players);
+  assertEquals("Complete synthetic 15-player roster must be exported",SYNTHETIC_ROSTER_SIZE,preview.players);
   assertEquals("Synthetic cash and February noncash pack must both be exported",2,preview.payments);
   assertEquals("Original historical legacy cash+noncash must be exported",2,
    preview.ledger.getJSONArray("legacy").length());
@@ -186,6 +188,14 @@ public final class V26SignedUpgradePersistenceTest {
    Member m=new Member();
    m.id=MEMBER_ID;m.name="CI Synthetic Member (no real club data)";
    dao.insertMember(m);
+   // Reproduce realistic club roster size with synthetic, payment-free members.
+   // Stable IDs, record order and the complete roster must survive an in-place APK update.
+   for(int index=2;index<=SYNTHETIC_ROSTER_SIZE;index++){
+    Member additional=new Member();
+    additional.id=syntheticMemberId(index);
+    additional.name=String.format(Locale.ROOT,"CI Synthetic Player %02d",index);
+    dao.insertMember(additional);
+   }
 
    Contribution c=new Contribution();
    c.id=PAYMENT_ID;c.memberId=MEMBER_ID;c.feeMonth=MONTH;
@@ -209,7 +219,7 @@ public final class V26SignedUpgradePersistenceTest {
    u.shuttles=7;u.note="CI-only synthetic shuttle use";
    dao.insertStock(Collections.singletonList(u));
 
-   assertEquals(1,dao.members().size());
+   assertEquals(SYNTHETIC_ROSTER_SIZE,dao.members().size());
    assertEquals(2,dao.contributions().size());
    assertEquals(1,dao.expenses().size());
    assertEquals(1,dao.stockUsages().size());
@@ -265,7 +275,7 @@ public final class V26SignedUpgradePersistenceTest {
    preserveFingerprint(db);
    preserveVerifiedLedgerDigest(db);
 
-   System.out.println("SYNTHETIC_V25_SEED_PASSED: member, cash, expense, usage, opening meta, controls, legacy, noncash pack and audit");
+   System.out.println("SYNTHETIC_V25_SEED_PASSED: 15 synthetic members, cash, expense, usage, opening meta, controls, legacy, noncash pack and audit");
   }finally{db.close();}
  }
 
@@ -274,10 +284,20 @@ public final class V26SignedUpgradePersistenceTest {
   try{
    LedgerDao dao=db.dao();
    assertRoomOne(db);
-   assertEquals("Original member count must not change",1,dao.members().size());
-   Member m=dao.members().get(0);
-   assertEquals(MEMBER_ID,m.id);
+   assertEquals("Original synthetic 15-player count must not change",
+    SYNTHETIC_ROSTER_SIZE,dao.members().size());
+   Map<String,Member> preservedMembers=new HashMap<>();
+   for(Member item:dao.members()){
+    assertNull("Duplicate or changed synthetic member ID",preservedMembers.put(item.id,item));
+   }
+   Member m=preservedMembers.get(MEMBER_ID);
+   assertNotNull("Original payment owner missing after signed upgrade",m);
    assertEquals("CI Synthetic Member (no real club data)",m.name);
+   for(int index=2;index<=SYNTHETIC_ROSTER_SIZE;index++){
+    Member player=preservedMembers.get(syntheticMemberId(index));
+    assertNotNull("Original synthetic player "+index+" missing",player);
+    assertEquals(String.format(Locale.ROOT,"CI Synthetic Player %02d",index),player.name);
+   }
 
    assertEquals("Cash and noncash original entries survive",2,dao.contributions().size());
    Contribution cash=null,donatedFeb=null;
@@ -387,7 +407,7 @@ public final class V26SignedUpgradePersistenceTest {
    }finally{
     Arrays.fill(privateTestPassword,(char)0);
    }
-   System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED synthetic member, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
+   System.out.println("SIGNED_V25_TO_V26_UPGRADE_PERSISTENCE_PASSED 15 synthetic members, fee-period cash, expense, usage, opening balance, monthly control, legacy cash, noncash donated pack and audit metadata; Room v1");
   }finally{db.close();}
  }
 }
