@@ -4,6 +4,8 @@ on:
   push:
     branches: [dev/v26-0-to-26-9-20261114]
     paths:
+      - 'src/premium/v26_9/**'
+      - 'tools/run_v26_emulator_smoke.sh'
       - '.github/workflows/v26-android-emulator-smoke.yml'
   workflow_dispatch:
 
