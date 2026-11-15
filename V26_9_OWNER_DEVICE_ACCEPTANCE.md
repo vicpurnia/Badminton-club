@@ -173,3 +173,13 @@ The following source changes are implemented on the **v26.9 development branch o
 **Spare-device tests still required:** try to save a member's stale open payment form after archiving that member, then reactivate and confirm a fresh legitimate payment; check fee/concession confirmation for accidental duplicate events, including rapid taps; open the Fees & Dues screen with the full roster and large text, switching tabs/months before calculations finish. Do not create synthetic fees, adjustments or payments in the actual production ledger.
 
 These changes require their corresponding post-change Android build and signed-upgrade runs to be marked **PASSED** before claiming new automated acceptance. The genuine owner-device acceptance checklist and release gate remain open.
+
+
+### Completed post-hardening Android evidence
+
+- **[Owner-signed TEST APK Build #16 — PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/43694039246).** The app ID and newer versionCode were verified, and the owner’s pinned release signing certificate matched. Financial regression, AES-GCM and compiled Android release checks passed. Artifact is clearly labeled **NOT PRODUCTION**.
+- **[Signed v25.9.1 → v26.9 in-place upgrade #37 — PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/43694090491).** Exact synthetic 15-member/Room/JSON preservation, encrypted recovery and tamper rejection, A4 and receipt PDF tests, five-tab navigation and the Players/Receipts Home shortcuts passed after the fee/payment changes.
+- **[Empty-ledger native Android runtime #7 — PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/43694049526).** The five primary navigation tabs opened and the app remained running.
+- **[Expanded signed Fee Centre emulator #38](https://github.com/vicpurnia/Badminton-club/actions/runs/43694508209)** additionally exercises Reports → Monthly Fees & Dues on the full synthetic 15-member roster; its final result must be checked separately. Do not infer a pass from prior successful upgrade runs.
+
+These automated outcomes never certify real owner-phone or genuine 15-member historical ledger acceptance.
