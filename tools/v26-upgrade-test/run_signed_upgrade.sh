@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Ephemeral GitHub Actions Android emulator ONLY. No actual member data.
-# Uses owner-signed v25.9 and owner-signed v26.9, never uninstalls or clears storage.
+# Uses owner-signed v25.9.1 and owner-signed v26.9, never uninstalls or clears storage.
 set -euo pipefail
 PKG=com.vinayak.badminton.premiumv24
 TEST_PKG="${PKG}.test"
@@ -25,14 +25,14 @@ def info(file):
 old=info(os.environ['OLD'])
 new=info(os.environ['NEW'])
 assert old[0]<new[0], f"VersionCode did not increase: {old} -> {new}"
-assert old[1].startswith("25.9."), "Selected historical APK is not v25.9 stable"
+assert old[1].startswith("25.9.1."), "Selected baseline is not the signed v25.9.1 stable APK"
 assert new[1].startswith("26.9-rc-test."), "Selected APK is not v26.9 TEST candidate"
 print("Verified SAME package; ascending owner-signed version: "+str(old)+" -> "+str(new))
 PY
 
 adb wait-for-device
 adb logcat -c || true
-echo "1. Install authentic owner-signed v25.9 stable APK in a clean emulator"
+echo "1. Install authentic owner-signed v25.9.1 stable APK in a clean emulator"
 adb install "$OLD"
 adb install "$TEST"
 
@@ -79,5 +79,5 @@ if ! adb exec-out screencap -p > "$EVIDENCE/v26-synthetic-post-upgrade.png" 2>/d
  rm -f "$EVIDENCE/v26-synthetic-post-upgrade.png"
  echo "::warning::Emulator screenshot unavailable; data-preservation checks passed."
 fi
-echo "SIGNED v25.9 -> v26.9, same-package in-place synthetic Room persistence PASSED."
+echo "SIGNED v25.9.1 -> v26.9, same-package in-place synthetic Room persistence PASSED."
 echo "Not a production ledger migration, actual real-phone testing, or restoration acceptance."
