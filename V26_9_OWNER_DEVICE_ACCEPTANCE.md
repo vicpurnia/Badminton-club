@@ -159,3 +159,17 @@ Before any on-phone upgrade, make and verify an external JSON backup. After an a
 - [Signed Android upgrade #28](https://github.com/vicpurnia/Badminton-club/actions/runs/43674254397): **PASS** after direct-activity startup and launcher-recovery hardening. Original owner-certificate v25.9.1 → v26.9 same-package installation, exact all-table Room and verified JSON preservation, 15 synthetic members including visible last row, authenticated encrypted-backup recovery and tamper rejection, A4 PDFs, FileProvider receipt, five-tab navigation and Home Players/Receipts taps all passed. The original stable application and real club accounts remain untouched.
 
 **Still NOT production acceptance:** the synthetic data intentionally represents 15 fake members, not the owner's genuine roster or financial history. The production phone, real 15-member source JSON, external SAF folder access, large-text/TalkBack and cross-phone recovery remain subject to the original owner-device gate.
+
+
+## Post-#28 candidate hardening — payment and fee-centre safety
+
+The following source changes are implemented on the **v26.9 development branch only**, without changing Room schema version 1 or original financial transactions:
+
+1. **Stale payment-form protection:** the payment transaction now rechecks the member ID and the member's current active/archived status immediately before insertion. A previously opened form must be rejected after the member is archived. Synthetic tests confirm that unrecognized IDs fail and audited reactivation restores normal eligibility.
+2. **Fee-centre responsiveness:** dues calculations finish on the background worker before updating Android views. A result generated for a previous tab/month is discarded and the modal limits the first rendered cards to 80, directing large rosters to Members search. The original 15-player fixture remains completely visible.
+3. **Fee/waiver confirmation replay:** each policy and authorized concession confirmation uses one stable audit event ID and an atomic one-shot callback. Repeated clicks cannot produce two authorization records from the same confirmation. Duplicate event IDs fail closed in the Java synthetic suite.
+4. **CI trigger coverage:** signed TEST APK, signed emulator persistence, and native emulator smoke workflows now watch their active v26 and shared v25 source dependencies. Development workflows use branch-scoped cancellation of superseded runs; the permanent stable main signing workflow is unchanged.
+
+**Spare-device tests still required:** try to save a member's stale open payment form after archiving that member, then reactivate and confirm a fresh legitimate payment; check fee/concession confirmation for accidental duplicate events, including rapid taps; open the Fees & Dues screen with the full roster and large text, switching tabs/months before calculations finish. Do not create synthetic fees, adjustments or payments in the actual production ledger.
+
+These changes require their corresponding post-change Android build and signed-upgrade runs to be marked **PASSED** before claiming new automated acceptance. The genuine owner-device acceptance checklist and release gate remain open.
