@@ -137,3 +137,44 @@ tap_home_card("Players","Actual payments, assessed dues and immutable member his
 tap("Home","Overview")
 tap_home_card("Receipts","Monthly receipts")
 print("SIGNED-v25-TO-v26: Home Players and Receipts full-card navigation PASSED")
+
+# Open the real 15-player Fee Centre in the upgraded Android UI.
+# This detects a frozen main thread, delayed stale dialog or missing member cards.
+# All inputs are synthetic and this section performs NO financial mutations.
+tap("Reports","Your club finances, beautifully presented")
+target_label="MONTHLY FEES & DUES"
+for attempt in range(9):
+    tree=dump()
+    matches=[node for node in tree.iter() if node.attrib.get("text","")==target_label]
+    if matches:
+        bounds=matches[-1].attrib.get("bounds","")
+        hit=re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",bounds)
+        assert hit,f"Fee Centre tile has unusable bounds: {bounds!r}"
+        x1,y1,x2,y2=map(int,hit.groups())
+        adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
+        break
+    adb("shell","input","swipe",str(screen_width//2),str(int(screen_height*.76)),
+        str(screen_width//2),str(int(screen_height*.32)),"330")
+    time.sleep(.6)
+else:
+    raise AssertionError("Fee Centre tile cannot be found on Reports screen")
+
+for attempt in range(12):
+    if "Fees, dues & arrears" in labels(dump()):
+        print("SIGNED-SYNTHETIC FEE CENTRE PASS: fee dialog opened without UI freeze")
+        break
+    time.sleep(.65)
+else:
+    raise AssertionError("Fee Centre never opened: possible blocked UI worker or stale dialog")
+
+# Verify the last synthetic member's fee card is reachable in the long dialog.
+for attempt in range(16):
+    if "CI Synthetic Player 15" in labels(dump()):
+        print("SIGNED-SYNTHETIC FEE CENTRE PASS: 15th member fee card accessible")
+        break
+    adb("shell","input","swipe",str(screen_width//2),str(int(screen_height*.77)),
+        str(screen_width//2),str(int(screen_height*.34)),"360")
+    time.sleep(.5)
+else:
+    raise AssertionError("Fee Centre does not expose the 15th synthetic member")
+assert adb("shell","pidof",PKG).strip(),"App exited while rendering fee assessments"
