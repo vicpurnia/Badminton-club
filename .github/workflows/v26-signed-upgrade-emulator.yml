@@ -407,15 +407,15 @@ jobs:
           EXPECTED_CERT_SHA256: ${{ vars.BADMINTON_EXPECTED_CERT_SHA256 }}
         shell: bash
         run: bash tools/check-stable-signature.sh app/build/outputs/apk/release/app-release.apk "$EXPECTED_CERT_SHA256"
-      - name: Fetch original owner-signed v25.9 STABLE artifact for isolated test emulator
+      - name: Fetch latest owner-signed v25.9.1 STABLE Build #21 for isolated test emulator
         uses: actions/download-artifact@v4
         with:
-          name: Badminton-Premium-v25.9-STABLE-signed
+          name: Badminton-Premium-v25.9.1-STABLE-signed
           repository: vicpurnia/Badminton-club
-          run-id: 43604537264
+          run-id: 43671619454
           github-token: ${{ github.token }}
           path: ${{ runner.temp }}/v25-signed
-      - name: Verify archived v25.9 STABLE APK is truly owner signed
+      - name: Verify archived v25.9.1 STABLE APK is truly owner signed
         env:
           EXPECTED_CERT_SHA256: ${{ vars.BADMINTON_EXPECTED_CERT_SHA256 }}
         shell: bash
