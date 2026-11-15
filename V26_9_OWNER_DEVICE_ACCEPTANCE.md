@@ -149,3 +149,13 @@ The original v26 roadmap was written while **v25.9** was the stable baseline. Th
 - Preserve the source development PR in **draft**, do not merge v26 into production main, and do not install this TEST APK on the only production phone merely because CI succeeds.
 
 Before any on-phone upgrade, make and verify an external JSON backup. After an accepted signed same-package upgrade, compare the exact verified ledger JSON before changing any accounts; then test Players, Receipts, member statements, closing, inventory and backup controls. Real-device acceptance remains mandatory.
+
+
+## Expanded synthetic Android acceptance — 15-member roster (15 Nov 2026)
+
+- [Signed Android upgrade #25](https://github.com/vicpurnia/Badminton-club/actions/runs/43674092016): **PASS**, 15 synthetic member IDs/names and verified Room/JSON fingerprints survived v25.9.1 → v26.9, while Android's actual AES-GCM cryptography rejected a deliberately tampered encrypted backup. Five tabs, home Players/Receipts shortcuts, FileProvider PDFs and non-destructive restore checks passed.
+- [Signed Android upgrade #26](https://github.com/vicpurnia/Badminton-club/actions/runs/43674171841): **PASS**, additionally used Android UIAutomator to scroll through the synthetic member list and locate the fifteenth player after installation, then successfully navigated through both Home shortcut cards.
+- Earlier [run #24](https://github.com/vicpurnia/Badminton-club/actions/runs/43673857216) passed its two database-preservation instrumentation methods but ended with a **Pixel Launcher ANR** at final UI inspection. It remains marked FAILED as run evidence rather than being relabeled a successful end-to-end check.
+- The test harness has since been hardened to launch the actual Badminton activity directly instead of relying on Pixel Launcher, with launcher-specific recovery but continued rejection of app crashes or record drift.
+
+**Still NOT production acceptance:** the synthetic data intentionally represents 15 fake members, not the owner's genuine roster or financial history. The production phone, real 15-member source JSON, external SAF folder access, large-text/TalkBack and cross-phone recovery remain subject to the original owner-device gate.
