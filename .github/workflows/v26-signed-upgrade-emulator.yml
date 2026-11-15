@@ -31,12 +31,12 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 # Keep only the newest development candidate running; never cancel stable main.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
-  actions: read
 
 jobs:
   build:
