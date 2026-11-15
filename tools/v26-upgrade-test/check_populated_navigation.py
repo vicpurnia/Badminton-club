@@ -71,6 +71,23 @@ for tab,expected in [
     tap(tab,expected)
 print("SIGNED-v25-TO-v26 populated synthetic ledger: five-tab UI navigation PASSED")
 
+# Exercise a 15-member populated screen, not merely the tab heading.
+# The final synthetic player must be accessible by vertical scrolling.
+tap("Members","Actual payments, assessed dues and immutable member histories")
+last_member="CI Synthetic Player 15"
+size_line=adb("shell","wm","size").strip().splitlines()[-1].split(":")[-1].strip()
+screen_width,screen_height=(int(n) for n in size_line.split("x"))
+for attempt in range(12):
+    if last_member in labels(dump()):
+        print("SIGNED-SYNTHETIC ROSTER PASS: all 15 players preserved; last member visible")
+        break
+    adb("shell","input","swipe",str(screen_width//2),str(int(screen_height*.77)),
+        str(screen_width//2),str(int(screen_height*.30)),"340")
+    time.sleep(.65)
+else:
+    raise AssertionError("15th synthetic member is not accessible in Members after upgrade")
+tap("Home","Overview")
+
 # Real Android accessibility-level verification of the v25.9.1 navigation hotfix.
 # This runs against the signed, in-place-upgraded SYNTHETIC ledger, not real accounts.
 def tap_home_card(prefix,expected):
