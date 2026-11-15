@@ -74,6 +74,13 @@ assert fee_screen.index("PremiumV26State.feeSummary(")<fee_screen.index("runOnUi
     "Fee assessment must finish on a worker before Android UI updates")
 assert 'screenEpoch!=requestedScreen||!requestedMonth.equals(reportMonth)' in fee_screen
 assert 'int visible=Math.min(80,rendered.size());' in fee_screen
+assert 'policySubmitted.compareAndSet(false,true)' in source
+assert 'waiverSubmitted.compareAndSet(false,true)' in source
+assert 'raw,scopeId,mm,amount,why,policyEventId,' in source
+assert 'raw,id,mm,amt,why,waiverEventId,' in source
+smoke=Path("src/premium/v26_9/tests/V26CoreSmoke.java").read_text(encoding="utf-8")
+assert '"Previously committed fee-policy event ID cannot be replayed"' in smoke
+assert '"Previously committed concession event ID cannot be replayed"' in smoke
 assert '" members. Open Members to search the complete roster."' in fee_screen
 source_lines=source.splitlines()
 payment_start=source.index("private void persistPayment(")
