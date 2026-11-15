@@ -93,6 +93,18 @@ public final class V26CoreSmoke {
    "profile-1","2026-11-14",known);
   yes(!PremiumV26State.profiles(data,known).get("synthetic-A").active,
    "Archiving must retain immutable member identity");
+  final String archivedForCollection=data;
+  reject(()->PremiumV26State.requireActiveForCollection(
+    archivedForCollection,"synthetic-A",known),
+   "A stale payment form must not create cash for an archived player");
+  PremiumV26State.requireActiveForCollection("{}","synthetic-B",known);
+  reject(()->PremiumV26State.requireActiveForCollection(
+    "{}","unregistered-member",known),
+   "Unknown member cannot receive a new cash entry");
+  String reactivated=PremiumV26State.addProfile(data,"synthetic-A",
+    "Synthetic A reactivated","123","","Audited member reactivation",true,
+    "profile-reactivated","2026-11-15",known);
+  PremiumV26State.requireActiveForCollection(reactivated,"synthetic-A",known);
   yes(PremiumV26State.billableMonth(data,"synthetic-A","2026-03"),"Earlier owed months must survive archiving");
   yes(!PremiumV26State.billableMonth(data,"synthetic-A","2027-02"),"Future months must not bill archived members");
   final String completed=data;
