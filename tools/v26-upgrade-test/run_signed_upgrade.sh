@@ -59,7 +59,9 @@ adb shell pm path "$PKG" | tee "$EVIDENCE/package-after-update.txt"
 echo "4. Open Room v1 after upgraded app, verify exact original synthetic records and counts"
 instrument verifyAfterSignedV26Upgrade verify-v26.txt
 adb shell am force-stop "$PKG" || true
-adb shell monkey -p "$PKG" -c android.intent.category.LAUNCHER 1
+# Launch the target activity directly. Monkey/launcher launch can provoke
+# a Pixel Launcher ANR in overloaded headless CI even when Room upgrade passes.
+adb shell am start -W -n "$PKG/com.vinayak.badminton.nativepreview.MainActivity"
 sleep 3
 adb shell pidof "$PKG" >/dev/null
 echo "5. Verify real Android navigation across populated synthetic ledger after upgrade"
