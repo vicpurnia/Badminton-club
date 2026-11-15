@@ -136,3 +136,16 @@ An audit-export defect was found during the deeper source audit and patched in v
 The suite is additionally being expanded for a **synthetic February INR 1,000 unreconciled difference, a distinct donated noncash pack, one-page A4 PDF output and FileProvider-based receipt sharing**. Those tests must be recorded as passed only when their specific workflows succeed.
 
 **Real-phone sign-off remains pending** for the actual 15-member financial ledger, Kanishk's authentic historical donation, the genuine February INR 1,000 difference, protected backups, receipt sharing and cross-phone migration. These synthetic results must not be interpreted as permission to promote v26.9 to stable automatically.
+
+
+## 15 November 2026 — v25.9.1-to-v26.9 release-candidate reconciliation
+
+The original v26 roadmap was written while **v25.9** was the stable baseline. The latest current owner-signed stable release is now **v25.9.1 Build #21**, retaining the same Android application ID and Room database. Do not treat the original v25.9 synthetic-emulator upgrade logs as acceptance against v25.9.1.
+
+- The previously missing **Players** and **Receipts** dashboard tap actions from v25.9.1 are present in the v26.9 candidate. The Receipts action scrolls to the current selected month's receipt list, and UI callbacks are guarded against stale screens.
+- [v26 source regression and Android compilation build #123](https://github.com/vicpurnia/Badminton-club/actions/runs/43673051909): **PASS**.
+- [v26.9 owner-signed TEST candidate Build #9](https://github.com/vicpurnia/Badminton-club/actions/runs/43672792964): **PASS**, artifact `Badminton-Premium-v26.9-SIGNED-TEST-CANDIDATE_NOT-PRODUCTION`. This is a signed **test** APK, not a stable release.
+- [Signed v25.9.1 Build #21 to v26.9 synthetic emulator run #23](https://github.com/vicpurnia/Badminton-club/actions/runs/43673045753): separate acceptance gate. Record its eventual result before claiming device-navigation acceptance.
+- Preserve the source development PR in **draft**, do not merge v26 into production main, and do not install this TEST APK on the only production phone merely because CI succeeds.
+
+Before any on-phone upgrade, make and verify an external JSON backup. After an accepted signed same-package upgrade, compare the exact verified ledger JSON before changing any accounts; then test Players, Receipts, member statements, closing, inventory and backup controls. Real-device acceptance remains mandatory.
