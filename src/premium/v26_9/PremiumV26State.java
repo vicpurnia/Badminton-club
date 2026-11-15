@@ -208,6 +208,18 @@ final class PremiumV26State {
   }
   return rate;
  }
+ /**
+  * Re-check member identity and current active status at the final cash write.
+  * The payment chooser already excludes archived players, but a form kept open
+  * during a profile change must not bypass that rule. No Room schema changes.
+  */
+ static void requireActiveForCollection(String raw,String member,Set<String> known){
+  validMember(member,known);
+  if(known==null)throw new IllegalArgumentException("Verified member roster is unavailable");
+  Profile profile=profiles(raw,known).get(member);
+  if(profile!=null&&!profile.active)
+   throw new IllegalStateException("This player was archived after collection review. No payment was recorded. Reactivate the member with an audited profile change first.");
+ }
  static boolean billableMonth(String raw,String member,String month){
   try{
    String selected=MigrationCodec.ym(month);
