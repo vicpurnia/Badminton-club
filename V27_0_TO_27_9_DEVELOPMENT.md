@@ -10,7 +10,7 @@
 | Version | Objective | Evidence / status |
 |---|---|---|
 | 27.0 | Isolated source release-safety branch; automated identity/history checks; build-time candidate version & APK debug CI; re-run previous Java regression and Android compile | **Code added; GitHub CI status must be checked. Not an installation sign-off.** |
-| 27.1 | Audited member workflow and lifecycle edge cases | Pending source implementation |
+| 27.1 | Unicode-normalized duplicate-member protection for new names and audited profile renames, without changing original IDs or stored names | **Implemented as additive Android build overlay; synthetic Java test + debug APK workflow passed (run 43777067582). Real-phone acceptance pending.** |
 | 27.2 | Precise monthly fee and arrears reconciliation and safer advance allocation | Pending source implementation |
 | 27.3 | Receipt PDF preview, offline share, and batch export resilience | Pending source implementation |
 | 27.4 | Expense voucher and optional compressed bill document workflow | Pending source implementation |
@@ -31,10 +31,16 @@ Do not treat version goals as finished implementations or invent signed APK arti
 - Preserve v26 guards for double-submission, stock physical anchor, chronological CLOSED month, AES-GCM backup authenticity, identity and dry-run restore.
 - Signed stable release requires the owner's existing private signing key, real installed v25.9.1 backup proof, signed in-place upgrade and real Android UI/storage/share/PDF review. A successful emulator/CI compilation cannot replace these gates.
 
-## v27.0 testing
+## v27.0–27.1 testing
 
 `.github/workflows/build-v27-candidate.yml` reconstructs the archived Android project, reuses v26 overlay and regression tests, verifies the safety anchors, compiles a separate **debug-only** `27.0-dev` APK artifact, and does not publish or merge production.
 
 `tools/check_v27_release_gate.py` fails on absent protected source contracts. The v26.9 source is preserved unchanged on this branch as a known-working fallback; build-time candidate labeling alone is not a v27.1+ feature.
 
 **Never install the debug APK over the signed production installation.**
+
+## Verified v27.1 CI record
+
+- [GitHub Actions v27.1 successful debug build](https://github.com/vicpurnia/Badminton-club/actions/runs/43777067582): prior v26 accounting/stock/AES synthetic tests, source-identity gates, Unicode duplicate identity test, Android debug compilation and artifact upload passed.
+- Development artifact: `Badminton-Premium-v27.1-MEMBER-SAFETY-DEBUG`. Do not install over the owner's signed stable app.
+- v27.2–v27.9 remain **planned**, not completed or claimed as shipped.
