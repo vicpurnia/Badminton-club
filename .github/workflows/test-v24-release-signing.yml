@@ -5,7 +5,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/premium/v25_9/**'
+      - 'src/premium/v25_9_1/**'
       - '.github/workflows/build-native-v24-stable.yml'
       - '.github/workflows/test-v24-release-signing.yml'
 
@@ -75,7 +75,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
-          p.write_text(Path("src/premium/v25_9/MainActivity.java").read_text())
+          p.write_text(Path("src/premium/v25_9_1/MainActivity.java").read_text())
           receipt=Path("src/premium/v25_3/HistoricalReceiptsV253.java")
           assert receipt.exists()
           receiptSource=receipt.read_text()
@@ -118,7 +118,19 @@ jobs:
           assert "warnOnBackupFailure()" in s
           assert "COMPARE SAVED JSON WITH CURRENT LEDGER" in s
           assert "BackupGuardian.verifySavedCopy(this,destination,file)" in s
-          assert "STABLE v25.9" in s
+          assert "STABLE v25.9.1" in s
+          assert 'dashboardShortcutMetric("Players"' in s
+          assert 'dashboardShortcutMetric("Receipts"' in s
+          assert '"View all players",()->selectTab("Members")' in s
+          assert 'this::openHomeMonthlyReceipts' in s
+          assert 'focusMonthlyReceipts=true' in s
+          assert 'pageScroll.smoothScrollTo' in s
+          assert 'monthlyReceiptAnchor.getParent()==content' in s
+          assert 'card.setClickable(true)' in s
+          assert 'card.setFocusable(true)' in s
+          assert 'RippleDrawable' in s
+          assert 'pageScroll.scrollTo(0,0)' in s
+          assert 'if(scrollToReceipts&&pageScroll!=null)' in s
           assert "verifyLatestExternal(this)" in s
           assert "TEST RESTORE WITHOUT CHANGING DATA" in s
           assert "BackupRecoveryV259.dryRun(this" in s
