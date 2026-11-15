@@ -1,4 +1,4 @@
-name: Validate Badminton Premium v27.0 Safety Candidate (debug only)
+name: Validate Badminton Premium v27.1 Safety Candidate (debug only)
 
 on:
   pull_request:
@@ -6,6 +6,8 @@ on:
     paths:
       - 'src/premium/v26_9/**'
       - 'tools/check_v27_release_gate.py'
+      - 'tools/patch_v27_member.py'
+      - 'src/premium/v27_1/**'
       - 'V27_0_TO_27_9_DEVELOPMENT.md'
       - '.github/workflows/build-v27-candidate.yml'
   workflow_dispatch:
@@ -223,8 +225,8 @@ jobs:
           s=s.replace("premiumv20","premiumv24")
           import os
           s=s.replace("versionCode 20","versionCode "+str(28000+int(os.environ["GITHUB_RUN_NUMBER"])))
-          s += '\nandroid { defaultConfig { versionName "27.0-dev.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
-          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.0 RELEASE-SAFETY CANDIDATE')
+          s += '\nandroid { defaultConfig { versionName "27.1-dev.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
+          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.1 MEMBER-SAFETY CANDIDATE')
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
@@ -294,6 +296,8 @@ jobs:
           python3 src/premium/v26_9/patch_v26.py
           grep -q 'PremiumV26State.validate' app/src/main/java/com/vinayak/badminton/nativepreview/MigrationCodec.java
           grep -q 'version=1' app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDatabase.java
+      - name: Integrate v27.1 Unicode-safe member identity guard
+        run: python3 tools/patch_v27_member.py
       - name: Verify changed source rules
         run: |
           python3 - <<'PY'
@@ -320,13 +324,18 @@ jobs:
           java -cp "$RUNNER_TEMP/stock-tests" com.vinayak.badminton.nativepreview.InventoryMathSmoke
       - name: Execute v26 synthetic financial / AES-GCM regression suite
         run: bash tools/run_v26_core_smoke.sh
+      - name: Execute v27.1 member Unicode identity smoke
+        run: |
+          mkdir -p "$RUNNER_TEMP/v27-member-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v27-member-classes" src/premium/v27_1/PremiumV27MemberNames.java src/premium/v27_1/tests/V27MemberNameSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v27-member-classes" com.vinayak.badminton.nativepreview.V27MemberNameSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
-        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 27.0-dev.
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 27.1-dev.
       - name: Upload non-release v26 candidate debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v27.0-SAFETY-DEBUG
+          name: Badminton-Premium-v27.1-MEMBER-SAFETY-DEBUG
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
