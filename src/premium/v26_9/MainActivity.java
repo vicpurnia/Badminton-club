@@ -2107,14 +2107,18 @@ public final class MainActivity extends Activity {
      long amount=Long.parseLong(rate.getText().toString().trim());
      String why=reason.getText().toString().trim();
      if(amount<0||amount>100000000L||why.length()<8||why.length()>200)throw new IllegalArgumentException("Invalid policy amount or audit reason");
+     final String policyEventId="fee-"+UUID.randomUUID();
+     final java.util.concurrent.atomic.AtomicBoolean policySubmitted=
+       new java.util.concurrent.atomic.AtomicBoolean(false);
      new AlertDialog.Builder(this).setTitle("Confirm effective-dated fee")
       .setMessage("Scope: "+(scopeId.equals("ALL")?"All members":members.get(scope.getSelectedItemPosition()-1).name)+
        "\nEffective from: "+mm+"\nFee per month: "+rupee(amount)+
        "\nReason: "+why+"\n\nOriginal receipts and cash balances are unchanged.")
-      .setNegativeButton("Cancel",null).setPositiveButton("Save policy",(dd,ww)->
+      .setNegativeButton("Cancel",null).setPositiveButton("Save policy",(dd,ww)->{
+       if(!policySubmitted.compareAndSet(false,true))return;
        commitV26Metadata("Fee policy",mm,raw->PremiumV26State.addPolicy(
-        raw,scopeId,mm,amount,why,"fee-"+UUID.randomUUID(),new Date().toString(),knownMembers())))
-      .show();
+        raw,scopeId,mm,amount,why,policyEventId,new Date().toString(),knownMembers()));
+      }).show();
     }catch(Exception ex){error(new IllegalArgumentException("Check fee, effective YYYY-MM and reason."));}
    }).show();
  }
@@ -2135,11 +2139,15 @@ public final class MainActivity extends Activity {
      long amt=Long.parseLong(amount.getText().toString().trim());
      String why=reason.getText().toString().trim();
      if(amt<=0||why.length()<8||why.length()>200)throw new IllegalArgumentException("Invalid concession");
+     final String waiverEventId="waiver-"+UUID.randomUUID();
+     final java.util.concurrent.atomic.AtomicBoolean waiverSubmitted=
+       new java.util.concurrent.atomic.AtomicBoolean(false);
      new AlertDialog.Builder(this).setTitle("Confirm concession, not a cash receipt")
       .setMessage(members.get(player.getSelectedItemPosition()).name+
        "\nFee month "+mm+"\nConcession "+rupee(amt)+"\n"+why+
        "\n\nNo cash transaction will be created.")
-      .setNegativeButton("Cancel",null).setPositiveButton("Record concession",(dd,ww)->
+      .setNegativeButton("Cancel",null).setPositiveButton("Record concession",(dd,ww)->{
+       if(!waiverSubmitted.compareAndSet(false,true))return;
        commitV26Metadata("Fee concession",mm,raw->{
         List<PremiumV26State.FeePolicy> policies=PremiumV26State.policies(raw,knownMembers());
         long due=PremiumV26State.rateFor(policies,id,mm),already=0;
@@ -2147,9 +2155,9 @@ public final class MainActivity extends Activity {
          if(x.member.equals(id)&&x.month.equals(mm))already=Math.addExact(already,x.amount);
         if(due<0||Math.addExact(already,amt)>due)
          throw new IllegalArgumentException("Fee must be configured and remaining concession cannot exceed its rate");
-        return PremiumV26State.addWaiver(raw,id,mm,amt,why,"waiver-"+UUID.randomUUID(),new Date().toString(),knownMembers());
-       }))
-      .show();
+        return PremiumV26State.addWaiver(raw,id,mm,amt,why,waiverEventId,new Date().toString(),knownMembers());
+       });
+      }).show();
     }catch(Exception ex){error(new IllegalArgumentException("Check concession, month and reason."));}
    }).show();
  }
