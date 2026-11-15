@@ -389,6 +389,18 @@ public final class V26SignedUpgradePersistenceTest {
     }catch(IllegalArgumentException expected){rejectedWrongPassword=true;}
     assertTrue("Wrong backup password must fail on real Android cryptographic provider",
      rejectedWrongPassword);
+    // Tampered ciphertext must be rejected by Android's real AES-GCM provider.
+    org.json.JSONObject tampered=new org.json.JSONObject(sealed);
+    String cipherPayload=tampered.getString("payload");
+    assertTrue("Encrypted payload must be present",cipherPayload.length()>20);
+    tampered.put("payload",(cipherPayload.charAt(0)=='A'?"B":"A")+
+      cipherPayload.substring(1));
+    boolean rejectedTampering=false;
+    try{
+     PremiumBackupCrypto.decrypt(tampered.toString(),privateTestPassword);
+    }catch(IllegalArgumentException expected){rejectedTampering=true;}
+    assertTrue("Altered encrypted backup must fail closed without ledger changes",
+      rejectedTampering);
     String intactBefore=fullRoomDigest(db);
     String rehearsal=BackupRecoveryV259.dryRun(
      InstrumentationRegistry.getInstrumentation().getTargetContext(),recovered);
