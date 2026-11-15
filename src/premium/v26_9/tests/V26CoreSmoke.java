@@ -9,7 +9,7 @@ public final class V26CoreSmoke {
   if(!value)throw new AssertionError(message);
  }
  static void reject(Runnable task,String message){
-  try{task.run();}catch(RuntimeException expected){return;}
+  try{task.run();}catch(IllegalArgumentException|IllegalStateException expected){return;}
   throw new AssertionError("Expected rejection: "+message);
  }
  static Contribution payment(String id,String month,long amount){
