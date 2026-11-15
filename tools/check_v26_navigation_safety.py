@@ -67,6 +67,14 @@ assert "PremiumV26StockGuard.requireEditableStockMonth(" in source
 assert "PremiumV26ClosingGuard.requireWritable(meta.inventoryStockJson" in source
 assert "PremiumV26PaymentOnce.alreadyCommitted(dao.contributions()" in source
 assert "PremiumV26State.requireActiveForCollection(" in source
+fee_start=source.index("private void showFeeCentre(){")
+fee_end=source.index("private void editFeePolicy(",fee_start)
+fee_screen=source[fee_start:fee_end]
+assert fee_screen.index("PremiumV26State.feeSummary(")<fee_screen.index("runOnUiThread("), (
+    "Fee assessment must finish on a worker before Android UI updates")
+assert 'screenEpoch!=requestedScreen||!requestedMonth.equals(reportMonth)' in fee_screen
+assert 'int visible=Math.min(80,rendered.size());' in fee_screen
+assert '" members. Open Members to search the complete roster."' in fee_screen
 source_lines=source.splitlines()
 payment_start=source.index("private void persistPayment(")
 payment_end=source.index("private static boolean isShuttlePurchase(",payment_start)
