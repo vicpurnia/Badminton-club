@@ -325,6 +325,11 @@ jobs:
           grep -q 'development TEST candidate only' src/premium/v26_9/MainActivity.java
           grep -q 'selectTab("Shuttles")' src/premium/v26_9/MainActivity.java
           grep -q 'currentScreen(screen,"Home",period)' src/premium/v26_9/MainActivity.java
+          # v25.9.1 stable Home navigation must survive the v26 signed candidate.
+          grep -q 'dashboardShortcutMetric("Players"' src/premium/v26_9/MainActivity.java
+          grep -q 'dashboardShortcutMetric("Receipts"' src/premium/v26_9/MainActivity.java
+          grep -q 'this::openHomeMonthlyReceipts' src/premium/v26_9/MainActivity.java
+          grep -q 'pageScroll.smoothScrollTo' src/premium/v26_9/MainActivity.java
           grep -q 'PremiumV26BackupCompare.compare(current.ledger,result.ledger)' src/premium/v26_9/MainActivity.java
           grep -q 'PremiumV26BackupCompare.java' src/premium/v26_9/patch_v26.py
           grep -q 'sourceAuditPresent=state.has("nativeAuditHistory")' src/premium/v26_9/patch_v26.py
