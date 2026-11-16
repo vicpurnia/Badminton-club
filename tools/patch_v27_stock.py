@@ -4,9 +4,9 @@ from pathlib import Path
 root=Path("app/src/main/java/com/vinayak/badminton/nativepreview")
 p=root/"MainActivity.java"
 s=p.read_text()
-old='''         " individual shuttles\nStock reconciliation difference: "+difference+
+old=r'''         " individual shuttles\nStock reconciliation difference: "+difference+
          "\nReason: "+reason+'''
-new='''         " individual shuttles\nStock reconciliation: "+PremiumV27StockVariance.describe(estimated,quantity)+
+new=r'''         " individual shuttles\nStock reconciliation: "+PremiumV27StockVariance.describe(estimated,quantity)+
          "\nReason: "+reason+'''
 if s.count(old)!=1: raise AssertionError("Physical reconciliation preview source anchor changed")
 s=s.replace(old,new,1)
