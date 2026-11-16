@@ -234,10 +234,6 @@ jobs:
           assert 'setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())' in s
           assert 'new FileOutputStream(destination.getFileDescriptor())' in s
           assert 'callback.onLayoutFailed("Please select A4 landscape instead of portrait")' in s
-          # Label the actual Android activity, not Gradle metadata; tracked v26 source stays unchanged.
-          assert s.count('v26.9 DEVELOPMENT CANDIDATE')>=1
-          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.9 DEVELOPMENT CANDIDATE')
-          p.write_text(s)
           p=Path("app/build.gradle")
           s=p.read_text()
           assert "premiumv20" in s, "Unknown v20 application identity"
@@ -314,6 +310,15 @@ jobs:
           python3 src/premium/v26_9/patch_v26.py
           grep -q 'PremiumV26State.validate' app/src/main/java/com/vinayak/badminton/nativepreview/MigrationCodec.java
           grep -q 'version=1' app/src/main/java/com/vinayak/badminton/nativepreview/LedgerDatabase.java
+      - name: Label integrated v27.9 candidate after v26 source validation
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
+          text=p.read_text()
+          assert text.count("v26.9 DEVELOPMENT CANDIDATE")>=1
+          p.write_text(text.replace("v26.9 DEVELOPMENT CANDIDATE","v27.9 DEVELOPMENT CANDIDATE"))
+          PY
       - name: Integrate v27.1 Unicode-safe member identity guard
         run: python3 tools/patch_v27_member.py
       - name: Integrate v27.2 read-only fee reconciliation
