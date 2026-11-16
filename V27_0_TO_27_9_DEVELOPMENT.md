@@ -13,9 +13,9 @@
 | 27.1 | Unicode-normalized duplicate-member protection for new names and audited profile renames, without changing original IDs or stored names | **Implemented as additive Android build overlay; synthetic Java test + debug APK workflow passed (run 43777067582). Real-phone acceptance pending.** |
 | 27.2 | Split read-only assigned versus unassessed/non-billable cash; display concessions, arrears and original-period surplus independently; no automated advance reassignment | **Implemented; debug Android and synthetic test CI PASS, run 43777620179.** |
 | 27.3 | Stage member receipt ZIP, stream-verify all entries, enforce safe names/sizes/count and promote before share; existing PDF engine unchanged | **Implemented; Android/debug and ZIP integrity CI PASS, run 43777786150.** |
-| 27.4 | Internal PDF expense voucher offered after successful shuttle purchase, explicitly not a vendor invoice and never a second expense | **Implemented; Android CI pending. External bill scan/attachment not implemented.** |
+| 27.4 | Internal PDF expense voucher offered after successful shuttle purchase, explicitly not a vendor invoice and never a second expense | **Implemented; Android CI PASS run 43778261075. External bill scan/attachment not implemented.** |
 | 27.5 | Distinguish verified stock-count match, excess and shortfall in confirmation screen; existing immutable physical-count ledger and audit retained | **Implemented in overlay; GitHub CI pending.** |
-| 27.6 | Financial month closing and immutable audit verification | Pending source implementation |
+| 27.6 | Compare reviewed metadata SHA-256 with live metadata inside month-close transaction before closing/reopening, in addition to existing accounting snapshot check | **Implemented; Android CI pending.** |
 | 27.7 | Premium responsive analytics and independent exports | Pending source implementation |
 | 27.8 | One-tap external verified backups and cross-phone recovery rehearsal | Pending source implementation |
 | 27.9 | Visual accessibility and performance finalization, complete regression and physical owner-phone acceptance | Pending source implementation |
