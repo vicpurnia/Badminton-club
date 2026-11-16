@@ -16,9 +16,9 @@
 | 27.4 | Internal PDF expense voucher offered after successful shuttle purchase, explicitly not a vendor invoice and never a second expense | **Implemented; Android CI PASS run 43778261075. External bill scan/attachment not implemented.** |
 | 27.5 | Distinguish verified stock-count match, excess and shortfall in confirmation screen; existing immutable physical-count ledger and audit retained | **Implemented in overlay; GitHub CI pending.** |
 | 27.6 | Compare reviewed metadata SHA-256 with live metadata inside month-close transaction before closing/reopening, in addition to existing accounting snapshot check | **Implemented; Android CI pending.** |
-| 27.7 | Premium responsive analytics and independent exports | Pending source implementation |
-| 27.8 | One-tap external verified backups and cross-phone recovery rehearsal | Pending source implementation |
-| 27.9 | Visual accessibility and performance finalization, complete regression and physical owner-phone acceptance | Pending source implementation |
+| 27.7 | Fail-closed month-order and duplicate-period checks before independent dashboard CSV exports; existing dashboard layout preserved | **Implemented additive audit; Android CI pending.** |
+| 27.8 | Byte-level encrypted staging verification before sharing; existing encrypted dry-run and empty-app-only import retained | **Implemented additive audit; Android CI pending. Does not add automatic cloud sync or full one-tap transfer.** |
+| 27.9 | Integrated additive builds with identity/Room/Classic PDF contracts, individual Java regression suites and Android debug compilation | **Integration candidate, validation pending; real-device/accessibility approval and production signing still outstanding.** |
 
 Do not treat version goals as finished implementations or invent signed APK artifacts. Never silently reassign fee payments to a different month, re-create a cash payment, synthesize missing receipt dates, or retroactively change a closed accounting period.
 
