@@ -511,6 +511,8 @@ jobs:
           set -euo pipefail
           mkdir -p app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           cp tools/v26-upgrade-test/V26SignedUpgradePersistenceTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
+          cp tools/v27-upgrade-test/V27ArtifactsAfterUpgradeTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
+          grep -q 'verifyReadOnlyArtifactsAfterSignedUpgrade' app/src/androidTest/java/com/vinayak/badminton/nativepreview/V27ArtifactsAfterUpgradeTest.java
           cat >> app/build.gradle <<'GRADLE'
           android {
             defaultConfig {
