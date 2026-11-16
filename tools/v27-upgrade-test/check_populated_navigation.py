@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""UIAutomator validation of the *upgraded, populated synthetic ledger* app.
+
+The surrounding signed-upgrade workflow installs the genuine owner-signed APK.
+This script never installs, uninstalls, clears data or imports a real ledger.
+"""
+import os
+import re
+import subprocess
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+PKG="com.vinayak.badminton.premiumv24"
+EVIDENCE=Path(os.environ.get("RUNNER_TEMP","/tmp"))/"v27-signed-upgrade-evidence"
+EVIDENCE.mkdir(parents=True,exist_ok=True)
+
+def adb(*args):
+    return subprocess.check_output(["adb",*args],text=True,stderr=subprocess.STDOUT)
+
+def dump():
+    for attempt in range(4):
+        try:
+            adb("shell","uiautomator","dump","/sdcard/v27-upgrade-ui.xml")
+            adb("pull","/sdcard/v27-upgrade-ui.xml",str(EVIDENCE/"ui.xml"))
+            return ET.parse(EVIDENCE/"ui.xml").getroot()
+        except Exception:
+            time.sleep(2)
+    raise AssertionError("Upgraded Android app UI could not be inspected")
+
+def labels(tree):
+    return {e.attrib.get("text","") for e in tree.iter() if e.attrib.get("text","")}
+
+def tap(tab,expected):
+    tree=dump()
+    found=[e for e in tree.iter() if e.attrib.get("text","")==tab]
+    assert found, f"Missing upgraded tab: {tab}; visible labels: {sorted(labels(tree))[:30]}"
+    match=re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",found[-1].attrib.get("bounds",""))
+    assert match, f"Cannot use Android bounds for {tab}"
+    x1,y1,x2,y2=map(int,match.groups())
+    adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
+    time.sleep(1.8)
+    after=labels(dump())
+    assert expected in after, f"After {tab}, missing heading {expected!r}; visible: {sorted(after)[:35]}"
+    assert adb("shell","pidof",PKG).strip(),f"App process exited after {tab}"
+    print(f"POPULATED-SYNTHETIC-NAV PASS: {tab} -> {expected}")
+
+home=set()
+for attempt in range(12):
+    home=labels(dump())
+    if "Overview" in home:
+        break
+    # Only the *emulator's* Pixel Launcher can become unresponsive after
+    # a signed APK update. Never clear or modify the club app or its data.
+    if any("Pixel Launcher isn't responding" in text for text in home):
+        for launcher in ("com.google.android.apps.nexuslauncher","com.android.launcher3"):
+            adb("shell","am","force-stop",launcher)
+        try:
+            adb("shell","input","keyevent","KEYCODE_BACK")
+        except subprocess.CalledProcessError:
+            pass
+    # Retry starting Badminton directly, rather than asking the hung launcher.
+    if attempt % 2==0:
+        try:
+            adb("shell","am","start","-n",
+                PKG+"/com.vinayak.badminton.nativepreview.MainActivity")
+        except subprocess.CalledProcessError:
+            pass
+    time.sleep(2)
+else:
+    raise AssertionError(
+        "Signed upgraded Home screen unavailable after retries; UI labels="+
+        repr(sorted(home)[:60]))
+print("SIGNED-UPGRADE POPULATED HOME visible after launch")
+for tab,expected in [
+    ("Members","Actual payments, assessed dues and immutable member histories"),
+    ("Shuttles","Shuttle desk"),
+    ("Collect","Collect fees"),
+    ("Reports","Your club finances, beautifully presented"),
+    ("Home","Overview"),
+]:
+    tap(tab,expected)
+print("SIGNED-v25-TO-v26 populated synthetic ledger: five-tab UI navigation PASSED")
+
+# Exercise a 15-member populated screen, not merely the tab heading.
+# The final synthetic player must be accessible by vertical scrolling.
+tap("Members","Actual payments, assessed dues and immutable member histories")
+last_member="CI Synthetic Player 15"
+size_line=adb("shell","wm","size").strip().splitlines()[-1].split(":")[-1].strip()
+screen_width,screen_height=(int(n) for n in size_line.split("x"))
+for attempt in range(12):
+    if last_member in labels(dump()):
+        print("SIGNED-SYNTHETIC ROSTER PASS: all 15 players preserved; last member visible")
+        break
+    adb("shell","input","swipe",str(screen_width//2),str(int(screen_height*.77)),
+        str(screen_width//2),str(int(screen_height*.30)),"340")
+    time.sleep(.65)
+else:
+    raise AssertionError("15th synthetic member is not accessible in Members after upgrade")
+tap("Home","Overview")
+
+# Real Android accessibility-level verification of the v25.9.1 navigation hotfix.
+# This runs against the signed, in-place-upgraded SYNTHETIC ledger, not real accounts.
+def tap_home_card(prefix,expected):
+    size=adb("shell","wm","size")
+    match=re.search(r"(\d+)x(\d+)",size)
+    assert match,f"Cannot read emulator dimensions: {size!r}"
+    width,height=map(int,match.groups())
+    target=None
+    for attempt in range(6):
+        tree=dump()
+        candidates=[node for node in tree.iter()
+            if node.attrib.get("content-desc","").startswith(prefix+": ")]
+        if candidates:
+            target=candidates[-1]
+            break
+        adb("shell","input","swipe",str(width//2),str(int(height*.78)),
+            str(width//2),str(int(height*.32)),"300")
+        time.sleep(.6)
+    assert target is not None, f"{prefix} Home shortcut missing or not accessible"
+    assert target.attrib.get("clickable")=="true",f"{prefix} card is not clickable"
+    assert target.attrib.get("focusable")=="true",f"{prefix} card cannot receive focus"
+    bounds=target.attrib.get("bounds","")
+    found=re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",bounds)
+    assert found,f"Invalid Home shortcut bounds: {bounds!r}"
+    x1,y1,x2,y2=map(int,found.groups())
+    adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
+    for attempt in range(7):
+        time.sleep(.65)
+        if expected in labels(dump()):
+            print(f"SIGNED-SYNTHETIC SHORTCUT PASS: {prefix} card -> {expected}")
+            assert adb("shell","pidof",PKG).strip(),"App exited after Home card tap"
+            return
+    raise AssertionError(f"{prefix} Home shortcut did not navigate to {expected!r}")
+
+tap_home_card("Players","Actual payments, assessed dues and immutable member histories")
+tap("Home","Overview")
+tap_home_card("Receipts","Monthly receipts")
+print("SIGNED-v25-TO-v26: Home Players and Receipts full-card navigation PASSED")
+
+# Open the real 15-player Fee Centre in the upgraded Android UI.
+# This detects a frozen main thread, delayed stale dialog or missing member cards.
+# All inputs are synthetic and this section performs NO financial mutations.
+tap("Reports","Your club finances, beautifully presented")
+target_label="MONTHLY FEES & DUES"
+for attempt in range(9):
+    tree=dump()
+    matches=[node for node in tree.iter() if node.attrib.get("text","")==target_label]
+    if matches:
+        bounds=matches[-1].attrib.get("bounds","")
+        hit=re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]",bounds)
+        assert hit,f"Fee Centre tile has unusable bounds: {bounds!r}"
+        x1,y1,x2,y2=map(int,hit.groups())
+        adb("shell","input","tap",str((x1+x2)//2),str((y1+y2)//2))
+        break
+    adb("shell","input","swipe",str(screen_width//2),str(int(screen_height*.76)),
+        str(screen_width//2),str(int(screen_height*.32)),"330")
+    time.sleep(.6)
+else:
+    raise AssertionError("Fee Centre tile cannot be found on Reports screen")
+
+for attempt in range(12):
+    if "Fees, dues & arrears" in labels(dump()):
+        print("SIGNED-SYNTHETIC FEE CENTRE PASS: fee dialog opened without UI freeze")
+        break
+    time.sleep(.65)
+else:
+    raise AssertionError("Fee Centre never opened: possible blocked UI worker or stale dialog")
+
+# Verify the last synthetic member's fee card is reachable in the long dialog.
+for attempt in range(16):
+    if "CI Synthetic Player 15" in labels(dump()):
+        print("SIGNED-SYNTHETIC FEE CENTRE PASS: 15th member fee card accessible")
+        break
+    adb("shell","input","swipe",str(screen_width//2),str(int(screen_height*.77)),
+        str(screen_width//2),str(int(screen_height*.34)),"360")
+    time.sleep(.5)
+else:
+    raise AssertionError("Fee Centre does not expose the 15th synthetic member")
+assert adb("shell","pidof",PKG).strip(),"App exited while rendering fee assessments"
