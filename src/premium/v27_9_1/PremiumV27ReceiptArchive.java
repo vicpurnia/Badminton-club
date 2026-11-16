@@ -22,6 +22,7 @@ final class PremiumV27ReceiptArchive {
   // truncated. Those often fail when saved/opened by Android or desktop ZIP apps.
   // ZipFile requires a valid end-of-central-directory and entry index first.
   final Set<String> indexedNames=new HashSet<>();
+  final Map<String,Long> indexedCrc=new HashMap<>(),indexedSizes=new HashMap<>();
   try(ZipFile index=new ZipFile(archive)){
    if(index.size()!=expectedEntries)
     throw new IOException("Receipt ZIP central directory entry count mismatch");
@@ -34,6 +35,8 @@ final class PremiumV27ReceiptArchive {
        !indexedNames.add(name)||item.getSize()<100||
        item.getSize()>MAX_ARCHIVE_BYTES||item.getCrc()<0)
      throw new IOException("Invalid receipt ZIP central directory entry");
+    indexedCrc.put(name,item.getCrc());
+    indexedSizes.put(name,item.getSize());
    }
   }
   int count=0;
@@ -49,12 +52,16 @@ final class PremiumV27ReceiptArchive {
        !seen.add(name)||!indexedNames.contains(name))
      throw new IOException("Unexpected/duplicated receipt entry");
     long fileBytes=0;int n;
+    CRC32 crc=new CRC32();
     while((n=input.read(buffer))!=-1){
      fileBytes=Math.addExact(fileBytes,n);
      unpacked=Math.addExact(unpacked,n);
+     crc.update(buffer,0,n);
      if(unpacked>MAX_ARCHIVE_BYTES)throw new IOException("Receipt archive exceeds safe unpacked size");
     }
     if(fileBytes<100)throw new IOException("Incomplete receipt PDF");
+    if(fileBytes!=indexedSizes.get(name)||crc.getValue()!=indexedCrc.get(name))
+     throw new IOException("Receipt ZIP central directory CRC or entry size does not match contents");
     input.closeEntry(); // ZipInputStream validates CRC where supported.
    }
   }
