@@ -65,13 +65,14 @@ adb shell am instrument -w -r -e class "$EXTRA_CLASS" "$TEST_PKG/$RUNNER" \
 grep -q "INSTRUMENTATION_CODE: -1" "$EVIDENCE/v27-artifacts-after-upgrade.txt" || {
  echo "v27 Android artifact/recovery test did not pass";exit 1;
 }
-for check in V27_TEST_VOUCHER_PDF_FILEPROVIDER_PASS V27_TEST_RECEIPT_PDF_FILEPROVIDER_PASS \
- V27_TEST_ARCHIVE_ZIP_FILEPROVIDER_PASS V27_TEST_ENCRYPTED_STAGING_PASS \
- V27_TEST_FINANCE_STOCK_READ_ONLY_GUARDS_PASS V27_ARTIFACTS_AFTER_SIGNED_UPGRADE_PASS; do
- grep -q "$check" "$EVIDENCE/v27-artifacts-after-upgrade.txt" || {
-  echo "Missing required v27 Android assertion: $check";exit 1;
- }
-done
+# AndroidJUnitRunner captures System.out in Android logcat, not in the
+# 'am instrument -w' result stream. Require the actual JUnit test name,
+# completed status and one passing test, rather than non-streamed print markers.
+grep -q 'INSTRUMENTATION_STATUS: test=verifyReadOnlyArtifactsAfterSignedUpgrade' \
+ "$EVIDENCE/v27-artifacts-after-upgrade.txt"
+grep -q 'INSTRUMENTATION_STATUS_CODE: 0' \
+ "$EVIDENCE/v27-artifacts-after-upgrade.txt"
+grep -q 'OK (1 test)' "$EVIDENCE/v27-artifacts-after-upgrade.txt"
 if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed" \
  "$EVIDENCE/v27-artifacts-after-upgrade.txt"; then
  echo "v27 Android output test failed";exit 1;
