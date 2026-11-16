@@ -52,7 +52,7 @@ def main():
     workflow=read(".github/workflows/build-v27-candidate.yml")
     assert "build-v26-candidate.yml" not in workflow.split("paths:",1)[-1].split("permissions:",1)[0]
     for term in ("src/premium/v26_9/**","tools/check_v27_release_gate.py",
-                 "27.5-dev.","28000+int(os.environ"):
+                 "27.6-dev.","28000+int(os.environ"):
         if term not in workflow:
             raise AssertionError("v27 CI missing "+term)
     assert "android:label=" in workflow
