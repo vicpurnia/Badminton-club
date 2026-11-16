@@ -58,6 +58,24 @@ adb shell pm path "$PKG" | tee "$EVIDENCE/package-after-update.txt"
 
 echo "4. Open Room v1 after upgraded app, verify exact original synthetic records and counts"
 instrument verifyAfterSignedV26Upgrade verify-v26.txt
+echo "4b. Android 35: verify real PDF rendering, FileProvider, receipt ZIP, AES staging and unchanged ledger"
+EXTRA_CLASS="com.vinayak.badminton.nativepreview.V27ArtifactsAfterUpgradeTest#verifyReadOnlyArtifactsAfterSignedUpgrade"
+adb shell am instrument -w -r -e class "$EXTRA_CLASS" "$TEST_PKG/$RUNNER" \
+ | tee "$EVIDENCE/v27-artifacts-after-upgrade.txt"
+grep -q "INSTRUMENTATION_CODE: -1" "$EVIDENCE/v27-artifacts-after-upgrade.txt" || {
+ echo "v27 Android artifact/recovery test did not pass";exit 1;
+}
+for check in V27_TEST_VOUCHER_PDF_FILEPROVIDER_PASS V27_TEST_RECEIPT_PDF_FILEPROVIDER_PASS \
+ V27_TEST_ARCHIVE_ZIP_FILEPROVIDER_PASS V27_TEST_ENCRYPTED_STAGING_PASS \
+ V27_TEST_FINANCE_STOCK_READ_ONLY_GUARDS_PASS V27_ARTIFACTS_AFTER_SIGNED_UPGRADE_PASS; do
+ grep -q "$check" "$EVIDENCE/v27-artifacts-after-upgrade.txt" || {
+  echo "Missing required v27 Android assertion: $check";exit 1;
+ }
+done
+if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed" \
+ "$EVIDENCE/v27-artifacts-after-upgrade.txt"; then
+ echo "v27 Android output test failed";exit 1;
+fi
 adb shell am force-stop "$PKG" || true
 # Launch the target activity directly. Monkey/launcher launch can provoke
 # a Pixel Launcher ANR in overloaded headless CI even when Room upgrade passes.
@@ -66,7 +84,7 @@ sleep 3
 adb shell pidof "$PKG" >/dev/null
 echo "5. Verify real Android navigation across populated synthetic ledger after upgrade"
 python3 tools/v27-upgrade-test/check_populated_navigation.py
-# Both instrumentation invocations above are mandatory pass/fail. The emulator
+# All three instrumentation invocations above are mandatory pass/fail. The emulator
 # can transiently go offline when taking screenshots at shutdown; diagnostics are
 # best-effort and must not erase two independently passing persistence checks.
 if adb logcat -d -v brief > "$EVIDENCE/post-upgrade-logcat.txt" 2>/dev/null;then
