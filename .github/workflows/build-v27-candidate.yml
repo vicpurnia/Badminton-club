@@ -234,6 +234,10 @@ jobs:
           assert 'setMediaSize(PrintAttributes.MediaSize.ISO_A4.asLandscape())' in s
           assert 'new FileOutputStream(destination.getFileDescriptor())' in s
           assert 'callback.onLayoutFailed("Please select A4 landscape instead of portrait")' in s
+          # Label the actual Android activity, not Gradle metadata; tracked v26 source stays unchanged.
+          assert s.count('v26.9 DEVELOPMENT CANDIDATE')>=1
+          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.9 DEVELOPMENT CANDIDATE')
+          p.write_text(s)
           p=Path("app/build.gradle")
           s=p.read_text()
           assert "premiumv20" in s, "Unknown v20 application identity"
@@ -241,7 +245,6 @@ jobs:
           import os
           s=s.replace("versionCode 20","versionCode "+str(28000+int(os.environ["GITHUB_RUN_NUMBER"])))
           s += '\nandroid { defaultConfig { versionName "27.9-dev.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
-          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.9 DEVELOPMENT CANDIDATE')
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
