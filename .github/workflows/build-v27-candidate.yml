@@ -17,6 +17,8 @@ on:
       - 'src/premium/v27_8/**'
       - 'tools/patch_v27_trend.py'
       - 'tools/patch_v27_backup.py'
+      - 'tools/patch_v27_archive_index.py'
+      - 'src/premium/v27_9_1/**'
       - 'tools/check_v27_integrated.py'
       - 'tools/patch_v27_close.py'
       - 'tools/patch_v27_stock.py'
@@ -338,6 +340,8 @@ jobs:
         run: python3 tools/patch_v27_trend.py
       - name: Integrate v27.8 encrypted backup staged-byte verification
         run: python3 tools/patch_v27_backup.py
+      - name: Harden receipt ZIP central directory / CRC before sharing
+        run: python3 tools/patch_v27_archive_index.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -401,6 +405,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v27-backup-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v27-backup-classes" src/premium/v27_8/PremiumV27BackupStaging.java src/premium/v27_8/tests/V27BackupStagingSmoke.java
           java -ea -cp "$RUNNER_TEMP/v27-backup-classes" com.vinayak.badminton.nativepreview.V27BackupStagingSmoke
+      - name: Regression-test truncated central-directory and mismatched receipt ZIP CRC
+        run: |
+          mkdir -p "$RUNNER_TEMP/v2791-archive-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v2791-archive-classes" src/premium/v27_9_1/PremiumV27ReceiptArchive.java src/premium/v27_9_1/tests/V2791ArchiveSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v2791-archive-classes" com.vinayak.badminton.nativepreview.V2791ArchiveSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
