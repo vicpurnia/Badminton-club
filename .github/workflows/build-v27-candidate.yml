@@ -1,4 +1,4 @@
-name: Validate Badminton Premium v27.4 Expense Voucher Candidate (debug only)
+name: Validate Badminton Premium v27.5 Stock Variance Candidate (debug only)
 
 on:
   pull_request:
@@ -11,6 +11,8 @@ on:
       - 'src/premium/v27_2/**'
       - 'src/premium/v27_3/**'
       - 'src/premium/v27_4/**'
+      - 'src/premium/v27_5/**'
+      - 'tools/patch_v27_stock.py'
       - 'tools/patch_v27_voucher.py'
       - 'tools/patch_v27_receipts.py'
       - 'tools/patch_v27_fee.py'
@@ -231,8 +233,8 @@ jobs:
           s=s.replace("premiumv20","premiumv24")
           import os
           s=s.replace("versionCode 20","versionCode "+str(28000+int(os.environ["GITHUB_RUN_NUMBER"])))
-          s += '\nandroid { defaultConfig { versionName "27.4-dev.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
-          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.4 EXPENSE-VOUCHER CANDIDATE')
+          s += '\nandroid { defaultConfig { versionName "27.5-dev.'+os.environ["GITHUB_RUN_NUMBER"]+'" } }\n'
+          s=s.replace('v26.9 DEVELOPMENT CANDIDATE','v27.5 STOCK-VARIANCE CANDIDATE')
           p.write_text(s)
           manifest=Path("app/src/main/AndroidManifest.xml")
           text=manifest.read_text()
@@ -313,6 +315,8 @@ jobs:
           python3 tools/patch_v27_voucher.py
           grep -q 'PremiumV27ExpenseVoucher.make(this,e)' app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java
           grep -q 'SELF-GENERATED RECORD' app/src/main/java/com/vinayak/badminton/nativepreview/PremiumV27ExpenseVoucher.java
+      - name: Integrate v27.5 physical stock variance descriptor
+        run: python3 tools/patch_v27_stock.py
       - name: Verify changed source rules
         run: |
           python3 - <<'PY'
@@ -354,13 +358,18 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v27-receipt-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v27-receipt-classes" src/premium/v27_3/PremiumV27ReceiptArchive.java src/premium/v27_3/tests/V27ReceiptArchiveSmoke.java
           java -ea -cp "$RUNNER_TEMP/v27-receipt-classes" com.vinayak.badminton.nativepreview.V27ReceiptArchiveSmoke
+      - name: Execute v27.5 stock-variance contract
+        run: |
+          mkdir -p "$RUNNER_TEMP/v27-stock-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v27-stock-classes" src/premium/v27_5/PremiumV27StockVariance.java src/premium/v27_5/tests/V27StockVarianceSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v27-stock-classes" com.vinayak.badminton.nativepreview.V27StockVarianceSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
-        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 27.4-dev.
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 27.5-dev.
       - name: Upload non-release v26 candidate debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v27.4-EXPENSE-VOUCHER-DEBUG
+          name: Badminton-Premium-v27.5-STOCK-VARIANCE-DEBUG
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
