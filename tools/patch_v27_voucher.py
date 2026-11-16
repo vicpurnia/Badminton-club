@@ -12,7 +12,7 @@ new='''       runOnUiThread(()->{
          .setMessage("Recorded expense "+e.id+" · "+rupee(e.amount)+
           "\\nAn internal voucher can be shared. This is not a supplier bill and does not record another expense.")
          .setNegativeButton("Done",null)
-         .setPositiveButton("Share internal voucher",(dd,ww)->
+         .setPositiveButton("Share internal voucher",(voucherDialog,voucherButton)->
           sharePdf("Internal_Expense_Voucher_"+e.id+".pdf",()->
            PremiumV27ExpenseVoucher.make(this,e))).show();
        });'''
