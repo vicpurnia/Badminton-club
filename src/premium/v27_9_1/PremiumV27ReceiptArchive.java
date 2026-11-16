@@ -30,7 +30,7 @@ final class PremiumV27ReceiptArchive {
     ZipEntry item=registered.nextElement();
     String name=item.getName();
     if(item.isDirectory()||name==null||
-       !name.matches("[0-9]{3}_[0-9]{4}-[0-9]{2}_[A-Za-z0-9_-]+\\\\.pdf")||
+       !name.matches("[0-9]{3}_[0-9]{4}-[0-9]{2}_[A-Za-z0-9_-]+\\.pdf")||
        !indexedNames.add(name)||item.getSize()<100||
        item.getSize()>MAX_ARCHIVE_BYTES||item.getCrc()<0)
      throw new IOException("Invalid receipt ZIP central directory entry");
