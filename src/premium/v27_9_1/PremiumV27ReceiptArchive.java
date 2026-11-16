@@ -69,11 +69,16 @@ final class PremiumV27ReceiptArchive {
    throw new IOException("Receipt ZIP stream and directory disagree");
  }
  static File promote(File staged,File destination,int expectedEntries)throws IOException {
-  verify(staged,expectedEntries);
-  if(destination==null||destination.exists()||!staged.renameTo(destination)){
-   staged.delete();
-   throw new IOException("Could not finalize receipt ZIP safely");
+  try{
+   verify(staged,expectedEntries);
+   if(destination==null||destination.exists()||!staged.renameTo(destination))
+    throw new IOException("Could not finalize receipt ZIP safely");
+   return destination;
+  }catch(IOException|RuntimeException problem){
+   // A failed CRC/index validation must not leave a malformed .partial
+   // file in the receipts/share folder, nor alter any existing archive.
+   if(staged!=null)staged.delete();
+   throw problem;
   }
-  return destination;
  }
 }
