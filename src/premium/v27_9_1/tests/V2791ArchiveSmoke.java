@@ -55,6 +55,15 @@ public final class V2791ArchiveSmoke {
    }
    yes(streamed==512,"This fixture must demonstrate the unsafe stream-only acceptance");
    reject(noIndex,1,"Central-directory-less ZIP must be rejected");
+   File rejectedStage=dir.resolve("malformed-stage.partial").toFile();
+   Files.write(rejectedStage.toPath(),Arrays.copyOf(full,central));
+   File unusedTarget=dir.resolve("must-not-be-created.zip").toFile();
+   boolean failedPromotion=false;
+   try{PremiumV27ReceiptArchive.promote(rejectedStage,unusedTarget,1);}
+   catch(IOException expected){failedPromotion=true;}
+   yes(failedPromotion,"Incomplete stage must not be promoted");
+   yes(!rejectedStage.exists()&&!unusedTarget.exists(),
+    "Failed validation must clean the staged archive without creating an output");
    reject(valid,2,"ZIP with unexpected entry count must be rejected");
    reject(make(dir,"unsafe.zip","../unsafe.pdf"),1,"Path traversal must be rejected");
    // Corrupt the central-directory CRC while preserving a valid local record.
