@@ -14,7 +14,13 @@ public final class V27ReceiptArchiveSmoke {
   try(ZipOutputStream out=new ZipOutputStream(new FileOutputStream(file))){
    out.putNextEntry(new ZipEntry(entry));
    byte[] content=new byte[bytes];
-   for(int i=0;i<bytes;i++)content[i]=(byte)(i%97);
+   for(int i=0;i<bytes;i++)content[i]=(byte)(32+i%90);
+   byte[] header="%PDF-1.4\\n".replace("\\n","\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+   byte[] end="\\n%%EOF\\n".replace("\\n","\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+   if(bytes>header.length+end.length){
+    System.arraycopy(header,0,content,0,header.length);
+    System.arraycopy(end,0,content,bytes-end.length,end.length);
+   }
    out.write(content);
    out.closeEntry();
   }
