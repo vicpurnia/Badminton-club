@@ -83,6 +83,19 @@ new=''' private void shareAnalyticsCsv(List<PremiumV26Analytics.Month> data,Stri
   });
  }
 '''
+# The earlier v27.7 build overlay already inserts an authoritative
+# chronological/duplicate-period check in both entry methods. Keep it intact.
+chronology='''   String[] checkedMonths=new String[data.size()];
+   for(int i=0;i<data.size();i++)checkedMonths[i]=data.get(i).month;
+   PremiumV27TrendAudit.requireOrdered(checkedMonths);
+'''
+base_start="  background(()->{\n   File file="
+safe_start="  background(()->{\n   final PremiumV2797CsvShare.Share attachment="
+if old.count(base_start)!=2 or new.count(safe_start)!=2:
+ raise AssertionError("CSV overlay method count is unexpected")
+old=old.replace(base_start,"  background(()->{\n"+chronology+"   File file=")
+new=new.replace(safe_start,"  background(()->{\n"+chronology+"   final PremiumV2797CsvShare.Share attachment=")
+
 if s.count(old)!=1:
  raise AssertionError(f"CSV share source contract changed; found {s.count(old)}")
 s=s.replace(old,new,1)
