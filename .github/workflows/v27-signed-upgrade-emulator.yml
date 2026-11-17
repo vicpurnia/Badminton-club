@@ -28,6 +28,8 @@ on:
       - 'src/premium/v27_9_5/**'
       - 'src/premium/v27_9_6/**'
       - 'src/premium/v27_9_7/**'
+      - 'src/premium/v27_9_8/**'
+      - 'tools/patch_v2798_archive_pdf.py'
       - 'tools/patch_v2797_csv_share.py'
       - 'tools/patch_v2796_encrypted_picker.py'
       - 'tools/patch_v2795_plain_json.py'
@@ -377,6 +379,8 @@ jobs:
         run: python3 tools/patch_v2796_encrypted_picker.py
       - name: Integrate independent SHA-verified dashboard CSV share files
         run: python3 tools/patch_v2797_csv_share.py
+      - name: Validate receipt ZIP PDF payload before Android share
+        run: python3 tools/patch_v2798_archive_pdf.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -475,6 +479,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v2797-csv-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v2797-csv-classes" src/premium/v27_9_7/PremiumV2797CsvShare.java src/premium/v27_9_7/tests/V2797CsvShareSmoke.java
           java -ea -cp "$RUNNER_TEMP/v2797-csv-classes" com.vinayak.badminton.nativepreview.V2797CsvShareSmoke
+      - name: Regression-test receipt ZIP PDF headers, EOF and post-promotion integrity
+        run: |
+          mkdir -p "$RUNNER_TEMP/v2798-archive-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v2798-archive-classes" src/premium/v27_9_8/PremiumV27ReceiptArchive.java src/premium/v27_9_8/tests/V2798ArchivePdfSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v2798-archive-classes" com.vinayak.badminton.nativepreview.V2798ArchivePdfSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
