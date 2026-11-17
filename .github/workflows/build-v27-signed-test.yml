@@ -30,6 +30,8 @@ on:
       - 'src/premium/v27_9_7/**'
       - 'src/premium/v27_9_8/**'
       - 'src/premium/v27_9_9/**'
+      - 'src/premium/v27_9_10/**'
+      - 'tools/patch_v27100_print.py'
       - 'tools/patch_v2799_pdf_share.py'
       - 'tools/patch_v2798_archive_pdf.py'
       - 'tools/patch_v2797_csv_share.py'
@@ -380,6 +382,8 @@ jobs:
         run: python3 tools/patch_v2798_archive_pdf.py
       - name: Snapshot immutable SHA-pinned PDFs before Android sharing
         run: python3 tools/patch_v2799_pdf_share.py
+      - name: Enforce exact Classic A4 landscape print media and immutable spool
+        run: python3 tools/patch_v27100_print.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -488,6 +492,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v2799-pdf-share"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v2799-pdf-share" src/premium/v27_9_9/PremiumV2799PdfShare.java src/premium/v27_9_9/tests/V2799PdfShareSmoke.java
           java -ea -cp "$RUNNER_TEMP/v2799-pdf-share" com.vinayak.badminton.nativepreview.V2799PdfShareSmoke
+      - name: Regression-test exact A4 landscape print media
+        run: |
+          mkdir -p "$RUNNER_TEMP/v27100-print-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v27100-print-classes" src/premium/v27_9_10/PremiumV27100A4PrintGuard.java src/premium/v27_9_10/tests/V27100PrintSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v27100-print-classes" com.vinayak.badminton.nativepreview.V27100PrintSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
