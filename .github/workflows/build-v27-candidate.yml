@@ -21,6 +21,8 @@ on:
       - 'src/premium/v27_9_1/**'
       - 'src/premium/v27_9_2/**'
       - 'src/premium/v27_9_3/**'
+      - 'src/premium/v27_9_4/**'
+      - 'tools/patch_v2794_pdf_save.py'
       - 'tools/patch_v2793_export.py'
       - 'tools/run_v26_core_smoke.sh'
       - 'tools/patch_v2792_import.py'
@@ -351,6 +353,8 @@ jobs:
         run: python3 tools/patch_v2792_import.py
       - name: Integrate encrypted migration export single-flight and unique staging
         run: python3 tools/patch_v2793_export.py
+      - name: Integrate byte-verified PDF Documents Save and one-at-a-time picker
+        run: python3 tools/patch_v2794_pdf_save.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -429,6 +433,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v2793-export-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v2793-export-classes" src/premium/v27_9_3/PremiumV2793ExportGate.java src/premium/v27_9_3/tests/V2793ExportGateSmoke.java
           java -ea -cp "$RUNNER_TEMP/v2793-export-classes" com.vinayak.badminton.nativepreview.V2793ExportGateSmoke
+      - name: Regression-test PDF save source identity and SHA-256 readback
+        run: |
+          mkdir -p "$RUNNER_TEMP/v2794-pdf-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v2794-pdf-classes" src/premium/v27_9_4/PremiumV2794PdfSaveGuard.java src/premium/v27_9_4/tests/V2794PdfSaveSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v2794-pdf-classes" com.vinayak.badminton.nativepreview.V2794PdfSaveSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
