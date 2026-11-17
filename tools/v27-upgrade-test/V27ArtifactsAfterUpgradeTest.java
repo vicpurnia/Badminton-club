@@ -73,7 +73,7 @@ public final class V27ArtifactsAfterUpgradeTest {
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,DB)
    .allowMainThreadQueries().build();
-  File receipt=null,voucher=null,stagedZip=null,finalZip=null,encryptedCopy=null;
+  File receipt=null,voucher=null,stagedZip=null,finalZip=null,encryptedCopy=null,stagedJson=null,savedJson=null;
   try{
    LedgerDao dao=db.dao();
    assertNotNull("Synthetic ledger seed must have survived signed upgrade",dao.meta());
@@ -93,6 +93,35 @@ public final class V27ArtifactsAfterUpgradeTest {
    assertEquals(2067L,expense.amount);
    String original=MigrationCodec.exportVerified(db);
    String verifiedBefore=MigrationCodec.canonical(MigrationCodec.inspect(original).ledger);
+
+   // v27.9.5 verified plain-JSON document export: preserve exact source hash
+   // through a simulated save, then verify provider readback using the same
+   // BackupGuardian logic as the user's actual Documents workflow.
+   File jsonDir=new File(context.getCacheDir(),"pdfs");
+   assertTrue(jsonDir.isDirectory()||jsonDir.mkdirs());
+   stagedJson=new File(jsonDir,"ci-v2795-staged-"+UUID.randomUUID()+".json");
+   savedJson=new File(jsonDir,"ci-v2795-saved-"+UUID.randomUUID()+".json");
+   try(OutputStream out=new FileOutputStream(stagedJson)){
+    out.write(original.getBytes(StandardCharsets.UTF_8));
+   }
+   PremiumV2795JsonExportGuard jsonSession=new PremiumV2795JsonExportGuard();
+   assertTrue("First JSON export reserves Documents picker",jsonSession.begin());
+   assertFalse("Second overlapping JSON export blocked",jsonSession.begin());
+   try{
+    jsonSession.stage(stagedJson);
+    jsonSession.requireUnchanged(stagedJson);
+    try(InputStream input=new FileInputStream(stagedJson);
+        OutputStream output=new FileOutputStream(savedJson)){
+     byte[] chunk=new byte[16384];int n;
+     while((n=input.read(chunk))!=-1)if(n>0)output.write(chunk,0,n);
+    }
+    Uri verifiedUri=FileProvider.getUriForFile(
+     context,context.getPackageName()+".files",savedJson);
+    BackupGuardian.verifySavedCopy(context,verifiedUri,stagedJson);
+    jsonSession.requireUnchanged(stagedJson);
+   }finally{jsonSession.finish();}
+   assertFalse("Verified JSON picker must be released",jsonSession.active());
+   System.out.println("V27_TEST_PLAIN_JSON_EXPORT_READBACK_PASS");
 
    // v27.4: supplementary voucher is a portrait PDF, not a new expense.
    voucher=PremiumV27ExpenseVoucher.make(context,expense);
@@ -186,6 +215,8 @@ public final class V27ArtifactsAfterUpgradeTest {
    if(stagedZip!=null)stagedZip.delete();
    if(finalZip!=null)finalZip.delete();
    if(encryptedCopy!=null)encryptedCopy.delete();
+   if(stagedJson!=null)stagedJson.delete();
+   if(savedJson!=null)savedJson.delete();
    db.close();
   }
  }
