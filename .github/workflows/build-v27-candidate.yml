@@ -19,6 +19,8 @@ on:
       - 'tools/patch_v27_backup.py'
       - 'tools/patch_v27_archive_index.py'
       - 'src/premium/v27_9_1/**'
+      - 'src/premium/v27_9_2/**'
+      - 'tools/patch_v2792_import.py'
       - 'tools/check_v27_integrated.py'
       - 'tools/patch_v27_close.py'
       - 'tools/patch_v27_stock.py'
@@ -342,6 +344,8 @@ jobs:
         run: python3 tools/patch_v27_backup.py
       - name: Harden receipt ZIP central directory / CRC before sharing
         run: python3 tools/patch_v27_archive_index.py
+      - name: Integrate exact-review one-time encrypted/plain JSON import protection
+        run: python3 tools/patch_v2792_import.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -410,6 +414,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v2791-archive-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v2791-archive-classes" src/premium/v27_9_1/PremiumV27ReceiptArchive.java src/premium/v27_9_1/tests/V2791ArchiveSmoke.java
           java -ea -cp "$RUNNER_TEMP/v2791-archive-classes" com.vinayak.badminton.nativepreview.V2791ArchiveSmoke
+      - name: Regression-test stale and overlapping backup import confirmations
+        run: |
+          mkdir -p "$RUNNER_TEMP/v2792-import-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v2792-import-classes" src/premium/v27_9_2/PremiumV2792ImportGate.java src/premium/v27_9_2/tests/V2792ImportGateSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v2792-import-classes" com.vinayak.badminton.nativepreview.V2792ImportGateSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
