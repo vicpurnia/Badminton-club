@@ -23,6 +23,8 @@ on:
       - 'tools/patch_v27_archive_index.py'
       - 'src/premium/v27_9_1/**'
       - 'src/premium/v27_9_2/**'
+      - 'src/premium/v27_9_3/**'
+      - 'tools/patch_v2793_export.py'
       - 'tools/patch_v2792_import.py'
       - 'tools/check_v27_integrated.py'
       - 'tools/check-stable-signature.sh'
@@ -351,6 +353,8 @@ jobs:
         run: python3 tools/patch_v27_archive_index.py
       - name: Integrate exact-review one-time encrypted/plain JSON import protection
         run: python3 tools/patch_v2792_import.py
+      - name: Integrate encrypted migration export single-flight and unique staging
+        run: python3 tools/patch_v2793_export.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -424,6 +428,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v2792-import-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v2792-import-classes" src/premium/v27_9_2/PremiumV2792ImportGate.java src/premium/v27_9_2/tests/V2792ImportGateSmoke.java
           java -ea -cp "$RUNNER_TEMP/v2792-import-classes" com.vinayak.badminton.nativepreview.V2792ImportGateSmoke
+      - name: Regression-test single-flight encrypted backup Documents export
+        run: |
+          mkdir -p "$RUNNER_TEMP/v2793-export-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v2793-export-classes" src/premium/v27_9_3/PremiumV2793ExportGate.java src/premium/v27_9_3/tests/V2793ExportGateSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v2793-export-classes" com.vinayak.badminton.nativepreview.V2793ExportGateSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
