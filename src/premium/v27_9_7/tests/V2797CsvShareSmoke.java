@@ -35,7 +35,7 @@ public final class V2797CsvShareSmoke{
     "Missing CSV blocked");
    reject(()->PremiumV2797CsvShare.create(dir.toFile(),"Prem","=HYPERLINK(\"x\")\r\n"),
     "Formula-leading body cannot be shared");
-   Files.writeString(first.toPath(),"x",StandardCharsets.UTF_8);
+   Files.writeString(first.file.toPath(),"x",StandardCharsets.UTF_8);
    reject(()->PremiumV2797CsvShare.verify(first),"Changed share file must fail SHA-256 check");
    System.out.println("PASS v27.9.7 independent monthly/yearly CSV share, no overwrite");
   }finally {
