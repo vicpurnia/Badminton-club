@@ -73,7 +73,7 @@ public final class V27ArtifactsAfterUpgradeTest {
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,DB)
    .allowMainThreadQueries().build();
-  File receipt=null,voucher=null,stagedZip=null,finalZip=null,encryptedCopy=null,stagedJson=null,savedJson=null;
+  File receipt=null,voucher=null,stagedZip=null,finalZip=null,invalidPdfZip=null,encryptedCopy=null,stagedJson=null,savedJson=null;
   PremiumV2797CsvShare.Share monthlyCsv=null,yearlyCsv=null;
   try{
    LedgerDao dao=db.dao();
@@ -186,6 +186,21 @@ public final class V27ArtifactsAfterUpgradeTest {
    assertFalse("Staging file must be removed after success",stagedZip.exists());
    PremiumV27ReceiptArchive.verify(finalZip,1);
    assertFileProviderRead(context,finalZip);
+   // ZIP structural integrity alone is insufficient: reject non-PDF payloads
+   // even when ZIP CRC and central directory are internally consistent.
+   invalidPdfZip=new File(dir,"ci-v2798-nonpdf-"+UUID.randomUUID()+".zip");
+   try(ZipOutputStream fake=new ZipOutputStream(new FileOutputStream(invalidPdfZip))){
+    fake.putNextEntry(new ZipEntry("001_"+PERIOD+"_ci-not-really-pdf.pdf"));
+    byte[] wrong=new byte[256];
+    Arrays.fill(wrong,(byte)'X');
+    fake.write(wrong);
+    fake.closeEntry();
+   }
+   boolean rejectedNonPdf=false;
+   try{PremiumV27ReceiptArchive.verify(invalidPdfZip,1);}
+   catch(IOException expected){rejectedNonPdf=true;}
+   assertTrue("Consistent CRC must not let a non-PDF receipt through",rejectedNonPdf);
+   System.out.println("V27_TEST_ARCHIVE_ZIP_PDF_PAYLOAD_PASS");
    System.out.println("V27_TEST_ARCHIVE_ZIP_FILEPROVIDER_PASS");
 
    // v27.8: use actual Android AES-GCM for a verified export, confirm staged
@@ -254,6 +269,7 @@ public final class V27ArtifactsAfterUpgradeTest {
    if(voucher!=null)voucher.delete();
    if(stagedZip!=null)stagedZip.delete();
    if(finalZip!=null)finalZip.delete();
+   if(invalidPdfZip!=null)invalidPdfZip.delete();
    if(encryptedCopy!=null)encryptedCopy.delete();
    if(stagedJson!=null)stagedJson.delete();
    if(savedJson!=null)savedJson.delete();
