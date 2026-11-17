@@ -74,6 +74,7 @@ public final class V27ArtifactsAfterUpgradeTest {
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,DB)
    .allowMainThreadQueries().build();
   File receipt=null,voucher=null,stagedZip=null,finalZip=null,encryptedCopy=null,stagedJson=null,savedJson=null;
+  PremiumV2797CsvShare.Share monthlyCsv=null,yearlyCsv=null;
   try{
    LedgerDao dao=db.dao();
    assertNotNull("Synthetic ledger seed must have survived signed upgrade",dao.meta());
@@ -122,6 +123,25 @@ public final class V27ArtifactsAfterUpgradeTest {
    }finally{jsonSession.finish();}
    assertFalse("Verified JSON picker must be released",jsonSession.active());
    System.out.println("V27_TEST_PLAIN_JSON_EXPORT_READBACK_PASS");
+
+   // v27.9.7: two reports for the same fee month cannot overwrite an
+   // attachment already offered to Android's share sheet.
+   File shareDir=new File(context.getCacheDir(),"pdfs");
+   assertTrue(shareDir.isDirectory()||shareDir.mkdirs());
+   PremiumV2797CsvShare.Share earlier=PremiumV2797CsvShare.create(
+    shareDir,"Premium_Dashboard_2026-08",
+    "Fee_Period,Recognized_Contributions_INR\\r\\n2026-08,1379\\r\\n".replace("\\r","\r").replace("\\n","\n"));
+   monthlyCsv=earlier;
+   yearlyCsv=PremiumV2797CsvShare.create(
+    shareDir,"Premium_Dashboard_2026-08",
+    "Fee_Period,Recognized_Contributions_INR\\r\\n2026-08,2500\\r\\n".replace("\\r","\r").replace("\\n","\n"));
+   assertFalse("Same-month CSV share filename collision",
+    monthlyCsv.file.getAbsolutePath().equals(yearlyCsv.file.getAbsolutePath()));
+   PremiumV2797CsvShare.verify(monthlyCsv);
+   PremiumV2797CsvShare.verify(yearlyCsv);
+   assertFileProviderRead(context,monthlyCsv.file);
+   assertFileProviderRead(context,yearlyCsv.file);
+   System.out.println("V27_TEST_CSV_UNIQUE_FILEPROVIDER_PASS");
 
    // v27.4: supplementary voucher is a portrait PDF, not a new expense.
    voucher=PremiumV27ExpenseVoucher.make(context,expense);
@@ -237,6 +257,8 @@ public final class V27ArtifactsAfterUpgradeTest {
    if(encryptedCopy!=null)encryptedCopy.delete();
    if(stagedJson!=null)stagedJson.delete();
    if(savedJson!=null)savedJson.delete();
+   if(monthlyCsv!=null)monthlyCsv.file.delete();
+   if(yearlyCsv!=null)yearlyCsv.file.delete();
    db.close();
   }
  }
