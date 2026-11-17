@@ -12,8 +12,16 @@ import java.util.*;
 final class PremiumV2797CsvShare {
  static final int MAX_CSV_BYTES=4_000_000;
  private PremiumV2797CsvShare(){}
+ static final class Share {
+  final File file;
+  final long bytes;
+  final byte[] digest;
+  Share(File file,long bytes,byte[] digest){
+   this.file=file;this.bytes=bytes;this.digest=digest;
+  }
+ }
 
- static File create(File dir,String prefix,String csv)throws IOException {
+ static Share create(File dir,String prefix,String csv)throws IOException {
   if(dir==null||!dir.isDirectory())throw new IOException("Private share folder unavailable");
   if(prefix==null||!prefix.matches("[A-Za-z0-9_-]{3,96}"))
    throw new IOException("Unsafe CSV export filename prefix");
@@ -34,17 +42,20 @@ final class PremiumV2797CsvShare {
    if(file.length()!=bytes.length||!MessageDigest.isEqual(expected,actual))
     throw new IOException("CSV was not written or reopened accurately");
    verified=true;
-   return file;
+   return new Share(file,bytes.length,expected);
   }finally{
    Arrays.fill(bytes,(byte)0);
    if(!verified)file.delete();
   }
  }
 
- static void verify(File csv)throws IOException {
-  if(csv==null||!csv.isFile()||csv.length()==0||csv.length()>MAX_CSV_BYTES||
-     !csv.getName().endsWith(".csv"))
-   throw new IOException("CSV share file missing or outside allowed bounds");
+ static void verify(Share share)throws IOException {
+  if(share==null||share.file==null)
+   throw new IOException("Verified CSV share session unavailable");
+  File csv=share.file;
+  if(!csv.isFile()||csv.length()==0||csv.length()>MAX_CSV_BYTES||
+     !csv.getName().endsWith(".csv")||csv.length()!=share.bytes)
+   throw new IOException("CSV share file missing, replaced or outside allowed bounds");
   byte[] block=new byte[8192];
   int n;
   long length=0;
@@ -54,7 +65,8 @@ final class PremiumV2797CsvShare {
     if(length>MAX_CSV_BYTES)throw new IOException("CSV share exceeds limit");
    }
   }
-  if(length!=csv.length())throw new IOException("CSV share content was truncated");
+  if(length!=share.bytes||!MessageDigest.isEqual(hash(csv),share.digest))
+   throw new IOException("CSV attachment changed before Android sharing");
  }
 
  private static byte[] hash(byte[] source)throws IOException{
