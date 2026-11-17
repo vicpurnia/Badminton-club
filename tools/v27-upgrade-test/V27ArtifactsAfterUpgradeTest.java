@@ -73,8 +73,9 @@ public final class V27ArtifactsAfterUpgradeTest {
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,DB)
    .allowMainThreadQueries().build();
-  File receipt=null,voucher=null,stagedZip=null,finalZip=null,invalidPdfZip=null,encryptedCopy=null,stagedJson=null,savedJson=null;
+  File receipt=null,voucher=null,stagedZip=null,finalZip=null,invalidPdfZip=null,encryptedCopy=null,stagedJson=null,savedJson=null,sourcePdf=null;
   PremiumV2797CsvShare.Share monthlyCsv=null,yearlyCsv=null;
+  PremiumV2799PdfShare.Share firstPdfShare=null,secondPdfShare=null;
   try{
    LedgerDao dao=db.dao();
    assertNotNull("Synthetic ledger seed must have survived signed upgrade",dao.meta());
@@ -169,6 +170,29 @@ public final class V27ArtifactsAfterUpgradeTest {
    assertFalse("PDF Save session must be released",pdfSession.active());
    System.out.println("V27_TEST_PDF_SAVE_SHA_READBACK_PASS");
    System.out.println("V27_TEST_RECEIPT_PDF_FILEPROVIDER_PASS");
+
+   // v27.9.9: an older share must stay readable if another report renderer
+   // writes a different valid PDF at the exact same temporary source path.
+   File shareFolder=new File(context.getCacheDir(),"pdfs");
+   assertTrue(shareFolder.isDirectory()||shareFolder.mkdirs());
+   sourcePdf=new File(shareFolder,"ci-v2799-reused-renderer-"+UUID.randomUUID()+".pdf");
+   java.nio.file.Files.copy(receipt.toPath(),sourcePdf.toPath(),
+    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+   firstPdfShare=PremiumV2799PdfShare.snapshot(shareFolder,sourcePdf);
+   assertValidPdf(firstPdfShare.file,595,842);
+   assertFileProviderRead(context,firstPdfShare.file);
+   java.nio.file.Files.copy(voucher.toPath(),sourcePdf.toPath(),
+    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+   secondPdfShare=PremiumV2799PdfShare.snapshot(shareFolder,sourcePdf);
+   assertValidPdf(secondPdfShare.file,595,842);
+   assertFileProviderRead(context,secondPdfShare.file);
+   assertFalse("Two PDF shares must not reuse the same FileProvider path",
+    firstPdfShare.file.getCanonicalPath().equals(secondPdfShare.file.getCanonicalPath()));
+   PremiumV2799PdfShare.verify(firstPdfShare);
+   PremiumV2799PdfShare.verify(secondPdfShare);
+   assertTrue("PDF share snapshot should not be the mutable renderer file",
+    !firstPdfShare.file.getCanonicalPath().equals(sourcePdf.getCanonicalPath()));
+   System.out.println("V27_TEST_INDEPENDENT_PDF_SHARE_FILEPROVIDER_PASS");
 
    // v27.3: exercise actual ZIP staging, payload integrity and Android sharing.
    File dir=new File(context.getCacheDir(),"pdfs");
@@ -275,6 +299,9 @@ public final class V27ArtifactsAfterUpgradeTest {
    if(savedJson!=null)savedJson.delete();
    if(monthlyCsv!=null)monthlyCsv.file.delete();
    if(yearlyCsv!=null)yearlyCsv.file.delete();
+   if(sourcePdf!=null)sourcePdf.delete();
+   if(firstPdfShare!=null)firstPdfShare.file.delete();
+   if(secondPdfShare!=null)secondPdfShare.file.delete();
    db.close();
   }
  }
