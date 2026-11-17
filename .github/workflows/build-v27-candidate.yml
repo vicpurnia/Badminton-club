@@ -22,6 +22,7 @@ on:
       - 'src/premium/v27_9_2/**'
       - 'src/premium/v27_9_3/**'
       - 'tools/patch_v2793_export.py'
+      - 'tools/run_v26_core_smoke.sh'
       - 'tools/patch_v2792_import.py'
       - 'tools/check_v27_integrated.py'
       - 'tools/patch_v27_close.py'
