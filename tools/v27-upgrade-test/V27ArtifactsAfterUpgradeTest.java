@@ -104,6 +104,21 @@ public final class V27ArtifactsAfterUpgradeTest {
    receipt=HistoricalReceiptsV253.payment(context,member,payment,dao.meta());
    assertValidPdf(receipt,595,842);
    assertFileProviderRead(context,receipt);
+   // Verify that a real Android FileProvider input stream reads back the exact
+   // previously reviewed PDF. SAF picker itself still needs physical-phone QA.
+   PremiumV2794PdfSaveGuard pdfSession=new PremiumV2794PdfSaveGuard();
+   assertTrue("PDF Save should reserve first Documents picker",pdfSession.begin());
+   assertFalse("Second simultaneous PDF picker must be blocked",pdfSession.begin());
+   try{
+    pdfSession.stage(receipt);
+    Uri receiptUri=FileProvider.getUriForFile(
+     context,context.getPackageName()+".files",receipt);
+    try(InputStream readback=context.getContentResolver().openInputStream(receiptUri)){
+     pdfSession.verify(receipt,readback);
+    }
+   }finally{pdfSession.finish();}
+   assertFalse("PDF Save session must be released",pdfSession.active());
+   System.out.println("V27_TEST_PDF_SAVE_SHA_READBACK_PASS");
    System.out.println("V27_TEST_RECEIPT_PDF_FILEPROVIDER_PASS");
 
    // v27.3: exercise actual ZIP staging, payload integrity and Android sharing.
