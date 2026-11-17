@@ -188,6 +188,26 @@ public final class V27ArtifactsAfterUpgradeTest {
     System.out.println("V27_TEST_ENCRYPTED_STAGING_PASS");
    }finally{Arrays.fill(password,(char)0);}
 
+   // v27.9.6: another encrypted picker cannot change the selected user's
+   // TEST-ONLY intention while its password dialog or decryption is active.
+   PremiumV2796EncryptedPickerGate recoveryPicker=new PremiumV2796EncryptedPickerGate();
+   assertTrue("Read-only encrypted restore may start",recoveryPicker.begin(false));
+   assertFalse("Overlapping import picker must be blocked",recoveryPicker.begin(true));
+   PremiumV2796EncryptedPickerGate.Review testOnly=recoveryPicker.pickerReturned();
+   assertNotNull("First picker result must belong to original session",testOnly);
+   assertFalse("Overlapping request must not turn TEST ONLY into import",testOnly.allowImport);
+   assertTrue("Reviewed session may decrypt once",recoveryPicker.beginVerification(testOnly.id));
+   assertFalse("Decrypt cannot be initiated twice",recoveryPicker.beginVerification(testOnly.id));
+   assertFalse("Another picker blocked throughout decryption",recoveryPicker.begin(true));
+   assertTrue("Verification completion releases picker",recoveryPicker.finish(testOnly.id));
+   assertTrue("New import-if-empty picker permitted afterward",recoveryPicker.begin(true));
+   PremiumV2796EncryptedPickerGate.Review importIfEmpty=recoveryPicker.pickerReturned();
+   assertNotNull("New picker result exists",importIfEmpty);
+   assertTrue("New picker retains its own import-if-empty setting",importIfEmpty.allowImport);
+   assertFalse("Old verification cannot release new picker",recoveryPicker.finish(testOnly.id));
+   assertTrue("Owner can cancel new picker",recoveryPicker.finish(importIfEmpty.id));
+   System.out.println("V27_TEST_ENCRYPTED_PICKER_MODE_OWNERSHIP_PASS");
+
    // Read-only closing and export gates must reject stale or repeated input.
    String currentMeta=dao.meta().inventoryStockJson;
    String hash=PremiumV27CloseReview.fingerprint(currentMeta);
