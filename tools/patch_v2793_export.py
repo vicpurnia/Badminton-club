@@ -40,9 +40,9 @@ once('''.setView(form).setNegativeButton("Cancel",null).setPositiveButton("Encry
    .setOnCancelListener(d->encryptedExportGate.finish())
    .setPositiveButton("Encrypt & save",(d,w)->{''')
 
-once('''     Arrays.fill(first,'\u0000');Arrays.fill(confirm,'\u0000');
+once(r'''     Arrays.fill(first,'\u0000');Arrays.fill(confirm,'\u0000');
      error(new IllegalArgumentException("Passwords must match and contain at least 12 characters."));return;''',
-     '''     Arrays.fill(first,'\u0000');Arrays.fill(confirm,'\u0000');
+     r'''     Arrays.fill(first,'\u0000');Arrays.fill(confirm,'\u0000');
      encryptedExportGate.finish();
      error(new IllegalArgumentException("Passwords must match and contain at least 12 characters."));return;''')
 
@@ -58,10 +58,10 @@ once('''       catch(Exception ex){pendingEncryptedExport=null;error(new IOExcep
         error(new IOException("Secure file picker unavailable."));
        }''')
 
-once('''     }finally{Arrays.fill(first,'\u0000');}
+once(r'''     }finally{Arrays.fill(first,'\u0000');}
     });
    }).show();''',
-     '''     }catch(Exception ex){
+     r'''     }catch(Exception ex){
       encryptedExportGate.finish();
       throw ex;
      }finally{Arrays.fill(first,'\u0000');}
