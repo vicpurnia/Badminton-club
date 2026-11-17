@@ -73,9 +73,9 @@ public final class V27ArtifactsAfterUpgradeTest {
   Context context=InstrumentationRegistry.getInstrumentation().getTargetContext();
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,DB)
    .allowMainThreadQueries().build();
-  File receipt=null,voucher=null,stagedZip=null,finalZip=null,invalidPdfZip=null,encryptedCopy=null,stagedJson=null,savedJson=null,sourcePdf=null;
+  File receipt=null,voucher=null,stagedZip=null,finalZip=null,invalidPdfZip=null,encryptedCopy=null,stagedJson=null,savedJson=null,sourcePdf=null,classicPrintSource=null;
   PremiumV2797CsvShare.Share monthlyCsv=null,yearlyCsv=null;
-  PremiumV2799PdfShare.Share firstPdfShare=null,secondPdfShare=null;
+  PremiumV2799PdfShare.Share firstPdfShare=null,secondPdfShare=null,classicPrintCopy=null;
   try{
    LedgerDao dao=db.dao();
    assertNotNull("Synthetic ledger seed must have survived signed upgrade",dao.meta());
@@ -95,6 +95,41 @@ public final class V27ArtifactsAfterUpgradeTest {
    assertEquals(2067L,expense.amount);
    String original=MigrationCodec.exportVerified(db);
    String verifiedBefore=MigrationCodec.canonical(MigrationCodec.inspect(original).ledger);
+
+   // v27.9.10: Android print sheet must remain exact ISO A4 landscape even
+   // after a user changes print settings to Letter landscape or A4 portrait.
+   android.print.PrintAttributes.MediaSize a4=
+    android.print.PrintAttributes.MediaSize.ISO_A4.asLandscape();
+   PremiumV27100A4PrintGuard.requireExact(
+    a4.getId(),a4.getWidthMils(),a4.getHeightMils(),
+    a4.getId(),a4.getWidthMils(),a4.getHeightMils());
+   android.print.PrintAttributes.MediaSize letter=
+    android.print.PrintAttributes.MediaSize.NA_LETTER.asLandscape();
+   boolean rejectedLetter=false;
+   try{
+    PremiumV27100A4PrintGuard.requireExact(
+     letter.getId(),letter.getWidthMils(),letter.getHeightMils(),
+     a4.getId(),a4.getWidthMils(),a4.getHeightMils());
+   }catch(IOException expected){rejectedLetter=true;}
+   assertTrue("Landscape US Letter must not silently rescale Classic A4",rejectedLetter);
+   android.print.PrintAttributes.MediaSize portrait=
+    android.print.PrintAttributes.MediaSize.ISO_A4.asPortrait();
+   boolean rejectedPortrait=false;
+   try{
+    PremiumV27100A4PrintGuard.requireExact(
+     portrait.getId(),portrait.getWidthMils(),portrait.getHeightMils(),
+     a4.getId(),a4.getWidthMils(),a4.getHeightMils());
+   }catch(IOException expected){rejectedPortrait=true;}
+   assertTrue("A4 portrait must be rejected by Classic print guard",rejectedPortrait);
+   File printDir=new File(context.getCacheDir(),"pdfs");
+   assertTrue(printDir.isDirectory()||printDir.mkdirs());
+   classicPrintSource=ClassicLedgerV231.master(context,dao,PERIOD);
+   assertValidPdf(classicPrintSource,842,595);
+   classicPrintCopy=PremiumV2799PdfShare.snapshot(printDir,classicPrintSource);
+   PremiumV2799PdfShare.verify(classicPrintCopy);
+   assertValidPdf(classicPrintCopy.file,842,595);
+   assertFileProviderRead(context,classicPrintCopy.file);
+   System.out.println("V27_TEST_EXACT_A4_LANDSCAPE_PRINT_SPOOL_PASS");
 
    // v27.9.5 verified plain-JSON document export: preserve exact source hash
    // through a simulated save, then verify provider readback using the same
@@ -302,6 +337,8 @@ public final class V27ArtifactsAfterUpgradeTest {
    if(sourcePdf!=null)sourcePdf.delete();
    if(firstPdfShare!=null)firstPdfShare.file.delete();
    if(secondPdfShare!=null)secondPdfShare.file.delete();
+   if(classicPrintSource!=null)classicPrintSource.delete();
+   if(classicPrintCopy!=null)classicPrintCopy.file.delete();
    db.close();
   }
  }
