@@ -21,7 +21,11 @@ public final class V2791ArchiveSmoke {
   try(ZipOutputStream zip=new ZipOutputStream(new FileOutputStream(output))){
    zip.putNextEntry(new ZipEntry(entry));
    byte[] pdf=new byte[512];
-   Arrays.fill(pdf,(byte)37);
+   Arrays.fill(pdf,(byte)32);
+   byte[] header="%PDF-1.4\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+   byte[] end="\n%%EOF\n".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+   System.arraycopy(header,0,pdf,0,header.length);
+   System.arraycopy(end,0,pdf,pdf.length-end.length,end.length);
    zip.write(pdf);
    zip.closeEntry();
   }
