@@ -27,6 +27,8 @@ on:
       - 'src/premium/v27_9_4/**'
       - 'src/premium/v27_9_5/**'
       - 'src/premium/v27_9_6/**'
+      - 'src/premium/v27_9_7/**'
+      - 'tools/patch_v2797_csv_share.py'
       - 'tools/patch_v2796_encrypted_picker.py'
       - 'tools/patch_v2795_plain_json.py'
       - 'tools/patch_v2794_pdf_save.py'
@@ -373,6 +375,8 @@ jobs:
         run: python3 tools/patch_v2795_plain_json.py
       - name: Bind encrypted recovery test/import mode to exact picker
         run: python3 tools/patch_v2796_encrypted_picker.py
+      - name: Integrate independent SHA-verified dashboard CSV share files
+        run: python3 tools/patch_v2797_csv_share.py
       - name: Verify v27.9 integrated source safety
         run: python3 tools/check_v27_integrated.py
       - name: Verify changed source rules
@@ -466,6 +470,11 @@ jobs:
           mkdir -p "$RUNNER_TEMP/v2796-picker-classes"
           javac -encoding UTF-8 -d "$RUNNER_TEMP/v2796-picker-classes" src/premium/v27_9_6/PremiumV2796EncryptedPickerGate.java src/premium/v27_9_6/tests/V2796EncryptedPickerSmoke.java
           java -ea -cp "$RUNNER_TEMP/v2796-picker-classes" com.vinayak.badminton.nativepreview.V2796EncryptedPickerSmoke
+      - name: Regression-test monthly/yearly CSV sharing without filename collisions
+        run: |
+          mkdir -p "$RUNNER_TEMP/v2797-csv-classes"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/v2797-csv-classes" src/premium/v27_9_7/PremiumV2797CsvShare.java src/premium/v27_9_7/tests/V2797CsvShareSmoke.java
+          java -ea -cp "$RUNNER_TEMP/v2797-csv-classes" com.vinayak.badminton.nativepreview.V2797CsvShareSmoke
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
