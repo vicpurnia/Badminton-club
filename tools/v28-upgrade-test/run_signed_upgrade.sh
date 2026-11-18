@@ -11,6 +11,11 @@ NEW="app/build/outputs/apk/release/app-release.apk"
 TEST="app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk"
 EVIDENCE="$RUNNER_TEMP/v28-signed-upgrade-evidence"
 mkdir -p "$EVIDENCE"
+collect_photo_ui_evidence(){
+ adb pull "/sdcard/Android/data/$PKG/files/photo-ui-evidence/." \
+  "$EVIDENCE/" >/dev/null 2>&1 || true
+}
+trap collect_photo_ui_evidence EXIT
 test -s "$OLD" && test -s "$NEW" && test -s "$TEST"
 AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
 export OLD NEW AAPT
@@ -103,8 +108,6 @@ if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed" \
  "$EVIDENCE/v28-member-list-photo-ui.txt"; then
  echo "v28 direct member-list photo UI test failed"; exit 1
 fi
-adb pull "/sdcard/Android/data/$PKG/files/photo-ui-evidence/." \
- "$EVIDENCE/" >/dev/null 2>&1 || echo "::warning::Synthetic photo UI screenshots unavailable"
 adb shell am force-stop "$PKG" || true
 # Launch the target activity directly. Monkey/launcher launch can provoke
 # a Pixel Launcher ANR in overloaded headless CI even when Room upgrade passes.

@@ -298,8 +298,10 @@ public final class V28MemberListPhotoUiTest {
      boolean done=false;
      for(AccessibilityNodeInfo node:matches){
       try {
-       boolean exact=label.contentEquals(node.getText()==null?"":node.getText())||
-        label.contentEquals(node.getContentDescription()==null?"":node.getContentDescription());
+       // Native AlertDialog themes may expose button text in ALL CAPS.
+       // Keep an exact whole-label match while ignoring that visual casing.
+       boolean exact=label.equalsIgnoreCase(node.getText()==null?"":node.getText().toString())||
+        label.equalsIgnoreCase(node.getContentDescription()==null?"":node.getContentDescription().toString());
        if(exact&&(!click||(node.isClickable()&&node.performAction(AccessibilityNodeInfo.ACTION_CLICK))))done=true;
       } finally {node.recycle();}
      }
@@ -308,6 +310,26 @@ public final class V28MemberListPhotoUiTest {
    }
    Thread.sleep(100);
   } while(SystemClock.elapsedRealtime()<deadline);
-  fail((click?"Cannot click ":"Cannot find ")+"visible dialog control: "+label);
+  StringBuilder diagnostic=new StringBuilder();
+  AccessibilityNodeInfo root=instrumentation.getUiAutomation().getRootInActiveWindow();
+  if(root!=null){
+   try {describeNodes(root,diagnostic,new int[]{35},0);}finally{root.recycle();}
+  } else diagnostic.append("No active accessibility window");
+  screenshot(instrumentation,instrumentation.getTargetContext(),"member-photo-ui-failure.png");
+  fail((click?"Cannot click ":"Cannot find ")+"visible dialog control: "+label+"\n"+diagnostic);
+ }
+ private static void describeNodes(AccessibilityNodeInfo node,StringBuilder out,int[] remaining,int depth){
+  if(node==null||remaining[0]--<=0||depth>10)return;
+  out.append(depth).append(' ').append(node.getClassName()).append(" id=").append(node.getViewIdResourceName())
+   .append(" text=").append(shortLabel(node.getText())).append(" desc=").append(shortLabel(node.getContentDescription()))
+   .append(" clickable=").append(node.isClickable()).append(" enabled=").append(node.isEnabled()).append('\n');
+  for(int i=0;i<node.getChildCount()&&remaining[0]>0;i++){
+   AccessibilityNodeInfo child=node.getChild(i);
+   if(child!=null){try{describeNodes(child,out,remaining,depth+1);}finally{child.recycle();}}
+  }
+ }
+ private static String shortLabel(CharSequence value){
+  String label=value==null?"":value.toString().replace('\n',' ');
+  return label.length()>100?label.substring(0,100)+"…":label;
  }
 }
