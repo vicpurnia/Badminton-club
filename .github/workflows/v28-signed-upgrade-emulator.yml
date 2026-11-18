@@ -1,7 +1,7 @@
 # Owner-authorized, GitHub Actions-secret-signed test build only.
 # No key bytes or passwords are committed; no production upload, merge or installation.
 # Requires an independently verified external ledger backup and on-device acceptance.
-name: Badminton v28.1 Signed v25-to-v28 Upgrade Emulator (SYNTHETIC)
+name: Badminton v28.2 Signed v25-to-v28 Upgrade Emulator (SYNTHETIC)
 
 on:
   push:
@@ -357,7 +357,7 @@ jobs:
         run: python3 tools/patch_v28_member_photos.py
       - name: Integrate read-only v28 backup and ledger acceptance audit
         run: python3 tools/patch_v28_readiness.py
-      - name: Label isolated v28.1 development build without changing stable app identity
+      - name: Label isolated v28.2 development build without changing stable app identity
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -365,13 +365,13 @@ jobs:
           src=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
           a=src.read_text(encoding="utf-8")
           assert a.count("v27.9 DEVELOPMENT CANDIDATE")>=1
-          src.write_text(a.replace("v27.9 DEVELOPMENT CANDIDATE","v28.1 DEVELOPMENT CANDIDATE"),encoding="utf-8")
+          src.write_text(a.replace("v27.9 DEVELOPMENT CANDIDATE","v28.2 DEVELOPMENT CANDIDATE"),encoding="utf-8")
           build=Path("app/build.gradle")
           g=build.read_text(encoding="utf-8")
           old_code="versionCode "+str(28000+int(os.environ["GITHUB_RUN_NUMBER"]))
           new_code="versionCode "+str(29000+int(os.environ["GITHUB_RUN_NUMBER"]))
           assert g.count(old_code)==1 and g.count("27.9-dev.")==1, "v27 baseline version gate changed"
-          g=g.replace(old_code,new_code).replace("27.9-dev.","28.1-dev.")
+          g=g.replace(old_code,new_code).replace("27.9-dev.","28.2-dev.")
           build.write_text(g,encoding="utf-8")
           PY
       - name: Verify v28 member photos and readonly recovery audit integration
@@ -490,15 +490,15 @@ jobs:
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
-        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 28.1-dev.
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 28.2-dev.
       - name: Mark final release APK as supervised signed TEST candidate
         run: |
           python3 - <<'PY'
           from pathlib import Path
           file=Path("app/build.gradle")
           text=file.read_text()
-          assert text.count('28.1-dev.')==1, "Only tested v28.1 dev source may become signed TEST"
-          file.write_text(text.replace('28.1-dev.','28.1-rc-test.'))
+          assert text.count('28.2-dev.')==1, "Only tested v28.2 dev source may become signed TEST"
+          file.write_text(text.replace('28.2-dev.','28.2-rc-test.'))
           PY
       - name: Require persistent private signing key
         shell: bash
@@ -538,14 +538,14 @@ jobs:
             }
           }
           GRADLE
-      - name: Compile owner-signed v28.1 TEST APK
+      - name: Compile owner-signed v28.2 TEST APK
         env:
           BADMINTON_KEYSTORE_PASSWORD: ${{ secrets.BADMINTON_KEYSTORE_PASSWORD }}
           BADMINTON_KEY_ALIAS: ${{ secrets.BADMINTON_KEY_ALIAS }}
           BADMINTON_KEY_PASSWORD: ${{ secrets.BADMINTON_KEY_PASSWORD }}
         run: gradle --no-daemon :app:assembleRelease
       - name: Verify TEST APK retains exact stable app ID and higher upgrade code
-        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/release/app-release.apk 28.1-rc-test.
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/release/app-release.apk 28.2-rc-test.
       - name: Verify TEST APK signature matches original owner's permanent certificate
         env:
           EXPECTED_CERT_SHA256: ${{ vars.BADMINTON_EXPECTED_CERT_SHA256 }}
@@ -554,7 +554,7 @@ jobs:
       - name: Upload signed TEST candidate (not a stable release)
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v28.1-OWNER-SIGNED-TEST_NOT-PRODUCTION
+          name: Badminton-Premium-v28.2-OWNER-SIGNED-TEST_NOT-PRODUCTION
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 7
           if-no-files-found: error
@@ -589,6 +589,7 @@ jobs:
           cp tools/v26-upgrade-test/V26SignedUpgradePersistenceTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           cp tools/v27-upgrade-test/V27ArtifactsAfterUpgradeTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           cp tools/v28-upgrade-test/V28PhotosAndReadinessTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
+          cp tools/v28-upgrade-test/V28MemberListPhotoUiTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           grep -q 'verifyReadOnlyArtifactsAfterSignedUpgrade' app/src/androidTest/java/com/vinayak/badminton/nativepreview/V27ArtifactsAfterUpgradeTest.java
           cat >> app/build.gradle <<'GRADLE'
           android {
@@ -620,7 +621,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Perform owner-signed v25.9 -> v28.1 in-place upgrade with synthetic Room rows
+      - name: Perform owner-signed v25.9 -> v28.2 in-place upgrade with synthetic Room rows
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -634,7 +635,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-v28.1-Signed-Photo-Recovery-Upgrade-Evidence
+          name: Badminton-v28.2-Signed-Photo-Recovery-Upgrade-Evidence
           path: ${{ runner.temp }}/v28-signed-upgrade-evidence/
           retention-days: 7
           if-no-files-found: warn

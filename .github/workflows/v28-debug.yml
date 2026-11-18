@@ -1,4 +1,4 @@
-name: Validate Badminton Premium v28.1 Photo & Recovery Candidate (debug only)
+name: Validate Badminton Premium v28.2 Photo & Recovery Candidate (debug only)
 
 on:
   push:
@@ -352,7 +352,7 @@ jobs:
         run: python3 tools/patch_v28_member_photos.py
       - name: Integrate read-only v28 backup and ledger acceptance audit
         run: python3 tools/patch_v28_readiness.py
-      - name: Label isolated v28.1 development build without changing stable app identity
+      - name: Label isolated v28.2 development build without changing stable app identity
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -360,13 +360,13 @@ jobs:
           src=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
           a=src.read_text(encoding="utf-8")
           assert a.count("v27.9 DEVELOPMENT CANDIDATE")>=1
-          src.write_text(a.replace("v27.9 DEVELOPMENT CANDIDATE","v28.1 DEVELOPMENT CANDIDATE"),encoding="utf-8")
+          src.write_text(a.replace("v27.9 DEVELOPMENT CANDIDATE","v28.2 DEVELOPMENT CANDIDATE"),encoding="utf-8")
           build=Path("app/build.gradle")
           g=build.read_text(encoding="utf-8")
           old_code="versionCode "+str(28000+int(os.environ["GITHUB_RUN_NUMBER"]))
           new_code="versionCode "+str(29000+int(os.environ["GITHUB_RUN_NUMBER"]))
           assert g.count(old_code)==1 and g.count("27.9-dev.")==1, "v27 baseline version gate changed"
-          g=g.replace(old_code,new_code).replace("27.9-dev.","28.1-dev.")
+          g=g.replace(old_code,new_code).replace("27.9-dev.","28.2-dev.")
           build.write_text(g,encoding="utf-8")
           PY
       - name: Verify v28 member photos and readonly recovery audit integration
@@ -485,10 +485,10 @@ jobs:
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
-        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 28.1-dev.
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 28.2-dev.
       - name: Upload non-release v26 candidate debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v28.1-MEMBER-PHOTOS-RECOVERY-DEBUG
+          name: Badminton-Premium-v28.2-MEMBER-PHOTOS-RECOVERY-DEBUG
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

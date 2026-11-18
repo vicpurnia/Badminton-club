@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Ephemeral GitHub Actions Android emulator ONLY. No actual member data.
-# Uses owner-signed v25.9.1 and owner-signed v28.1, never uninstalls or clears storage.
+# Uses owner-signed v25.9.1 and owner-signed v28.2, never uninstalls or clears storage.
 set -euo pipefail
 PKG=com.vinayak.badminton.premiumv24
 TEST_PKG="${PKG}.test"
@@ -26,7 +26,7 @@ old=info(os.environ['OLD'])
 new=info(os.environ['NEW'])
 assert old[0]<new[0], f"VersionCode did not increase: {old} -> {new}"
 assert old[1].startswith("25.9.1."), "Selected baseline is not the signed v25.9.1 stable APK"
-assert new[1].startswith("28.1-rc-test."), "Selected APK is not v28.1 TEST candidate"
+assert new[1].startswith("28.2-rc-test."), "Selected APK is not v28.2 TEST candidate"
 print("Verified SAME package; ascending owner-signed version: "+str(old)+" -> "+str(new))
 PY
 
@@ -90,6 +90,21 @@ if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed" \
  "$EVIDENCE/v28-member-photo-release-audit.txt"; then
  echo "v28 Android portrait/release-audit test failed"; exit 1
 fi
+echo "4d. Android 35: direct member-list photo action, picker cancellation, replacement and removal"
+PHOTO_UI_CLASS="com.vinayak.badminton.nativepreview.V28MemberListPhotoUiTest#memberListPhotoActionsPreserveIdentityAndLedger"
+adb shell am instrument -w -r -e class "$PHOTO_UI_CLASS" "$TEST_PKG/$RUNNER" \
+ | tee "$EVIDENCE/v28-member-list-photo-ui.txt"
+grep -q "INSTRUMENTATION_CODE: -1" "$EVIDENCE/v28-member-list-photo-ui.txt"
+grep -q 'INSTRUMENTATION_STATUS: test=memberListPhotoActionsPreserveIdentityAndLedger' \
+ "$EVIDENCE/v28-member-list-photo-ui.txt"
+grep -q 'INSTRUMENTATION_STATUS_CODE: 0' "$EVIDENCE/v28-member-list-photo-ui.txt"
+grep -q 'OK (1 test)' "$EVIDENCE/v28-member-list-photo-ui.txt"
+if grep -Eq "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=|Process crashed" \
+ "$EVIDENCE/v28-member-list-photo-ui.txt"; then
+ echo "v28 direct member-list photo UI test failed"; exit 1
+fi
+adb pull "/sdcard/Android/data/$PKG/files/photo-ui-evidence/." \
+ "$EVIDENCE/" >/dev/null 2>&1 || echo "::warning::Synthetic photo UI screenshots unavailable"
 adb shell am force-stop "$PKG" || true
 # Launch the target activity directly. Monkey/launcher launch can provoke
 # a Pixel Launcher ANR in overloaded headless CI even when Room upgrade passes.
@@ -98,7 +113,7 @@ sleep 3
 adb shell pidof "$PKG" >/dev/null
 echo "5. Verify real Android navigation across populated synthetic ledger after upgrade"
 python3 tools/v27-upgrade-test/check_populated_navigation.py
-# All four instrumentation invocations above are mandatory pass/fail. The emulator
+# All instrumentation invocations above are mandatory pass/fail. The emulator
 # can transiently go offline when taking screenshots at shutdown; diagnostics are
 # best-effort and must not erase two independently passing persistence checks.
 if adb logcat -d -v brief > "$EVIDENCE/post-upgrade-logcat.txt" 2>/dev/null;then
@@ -113,5 +128,5 @@ if ! adb exec-out screencap -p > "$EVIDENCE/v28-synthetic-post-upgrade.png" 2>/d
  rm -f "$EVIDENCE/v28-synthetic-post-upgrade.png"
  echo "::warning::Emulator screenshot unavailable; data-preservation checks passed."
 fi
-echo "SIGNED v25.9.1 -> v28.1, same-package in-place synthetic Room persistence PASSED."
+echo "SIGNED v25.9.1 -> v28.2, same-package in-place synthetic Room persistence PASSED."
 echo "Not a production ledger migration, actual real-phone testing, or restoration acceptance."
