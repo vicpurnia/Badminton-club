@@ -14,6 +14,9 @@ helper = root / 'PremiumV283Ui.java'
 helper_source = Path('src/premium/v28_3/PremiumV283Ui.java')
 assert helper.is_file() and helper_source.is_file(), 'Premium UI helper was not assembled'
 assert helper.read_bytes() == helper_source.read_bytes(), 'Assembled premium UI helper differs from reviewed source'
+form_helper = root / 'PremiumV283FormBuilder.java'
+assert form_helper.read_bytes() == Path('src/premium/v28_3/PremiumV283FormBuilder.java').read_bytes(), (
+    'Retained form helper differs from reviewed source')
 assert 'PremiumV283Ui' in activity, 'Native activity does not use the premium UI helper'
 assert 'v28.3 DEVELOPMENT CANDIDATE' in activity, 'v28.3 build identity is missing'
 
@@ -37,7 +40,9 @@ for term in ('restorePremiumUiState(b)', '"v283.ui.tab"', '"v283.ui.month"',
     assert term in activity, 'Missing reviewed state/accessibility/photo behavior: ' + term
 assert 'private void error(Exception e){if(isFinishing()||isDestroyed())return;' in activity, (
     'An obsolete Activity must not attach an error dialog after recreation')
-assert activity.count('.setView(premiumForm(') == 5, 'All five long custom forms must scroll'
+assert activity.count('.setView(premiumForm(') == 6, 'All six input forms must scroll'
+assert activity.count('new PremiumV283FormBuilder(this)') == 6, 'All six input editors must retain rejected drafts'
+assert 'private void savePremiumForm(' in activity, 'Input editors must track transaction completion'
 
 styles = Path('app/src/main/res/values/premium_v283_styles.xml')
 assert styles.read_bytes() == Path('src/premium/v28_3/styles.xml').read_bytes(), (

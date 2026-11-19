@@ -201,6 +201,12 @@ instrument_premium_case "$ACCESSIBILITY_CLASS" largeTextOnNarrowScreenKeepsActio
  v283-narrow-large-text.txt
 restore_test_display
 adb shell am force-stop "$PKG"
+echo "9. Verify retained form errors, Cancel/Back, and exactly-once synthetic metadata retries"
+# This case intentionally commits two non-financial metadata events. Keep it
+# after every original-fixture assertion and after restoring the display.
+instrument_premium_case "com.vinayak.badminton.nativepreview.V283FormWorkflowTest" \
+ rejectedFormsRetainValuesAndSafeRetriesCommitOnce v283-retained-form-workflows.txt
+adb shell am force-stop "$PKG"
 adb shell am start -W -n "$PKG/com.vinayak.badminton.nativepreview.MainActivity"
 # All instrumentation invocations above are mandatory pass/fail. The emulator
 # can transiently go offline when taking screenshots at shutdown; diagnostics are

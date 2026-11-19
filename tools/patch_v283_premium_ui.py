@@ -647,26 +647,149 @@ colors = {
 for old, new in colors.items():
     s = s.replace(old, new)
 
-# Native AlertDialog buttons stay outside the scrollable custom body. Long
-# forms can therefore reach their final field with large text or an open IME.
+# Keep editors alive through validation and review. A committed transaction is
+# distinct from its subsequent backup: backup trouble must never offer the
+# already accepted mutation as an unsaved retry.
+original = method("private void commitV26Metadata(")
+transaction_start = original.index("   database.runInTransaction(()->{")
+transaction_end = original.index("   BackupGuardian.save(")
+transaction = original[transaction_start:transaction_end]
+replace_method("private void commitV26Metadata(", '''
+private void commitV26Metadata(String action,String affectedMonth,java.util.function.Function<String,String> edit){
+ commitV26Metadata(null,action,affectedMonth,edit);
+}
+private void commitV26Metadata(android.content.DialogInterface editor,String action,String affectedMonth,
+ java.util.function.Function<String,String> edit){
+ savePremiumForm(editor,()->{
+''' + transaction + '''
+ },"v26-"+action.toLowerCase(Locale.ROOT).replace(' ','-'),()->{
+  Toast.makeText(this,"Saved with audit history",Toast.LENGTH_LONG).show();
+  if(tab.equals("Members"))showMembers();else if(tab.equals("Reports"))showReports();
+ });
+}
+private void savePremiumForm(android.content.DialogInterface editor,CheckedJob transaction,
+ String backupReason,Runnable completed){
+ if(isFinishing()||isDestroyed())return;
+ if(editor!=null&&!PremiumV283FormBuilder.beginSave(editor))return;
+ try{
+  io.execute(()->{
+   try{transaction.run();}
+   catch(Exception issue){
+    runOnUiThread(()->{PremiumV283FormBuilder.failed(editor);error(issue);});
+    return;
+   }
+   // This completion belongs to the transaction, even if the backup later fails.
+   runOnUiThread(()->{
+    PremiumV283FormBuilder.saved(editor);
+    if(isFinishing()||isDestroyed())return;
+    completed.run();
+   });
+   try{
+    BackupGuardian.save(getApplicationContext(),database,backupReason,true);
+    warnOnBackupFailure();
+   }catch(Exception backupIssue){
+    runOnUiThread(()->{
+     if(isFinishing()||isDestroyed())return;
+     new AlertDialog.Builder(this).setTitle("Saved · backup needs attention")
+      .setMessage("Your change was saved. Do not submit it again. Check backups in Reports.\\n\\n"+backupIssue.getMessage())
+      .setPositiveButton("OK",null).show();
+    });
+   }
+  });
+ }catch(java.util.concurrent.RejectedExecutionException issue){
+  PremiumV283FormBuilder.failed(editor);error(issue);
+ }
+}''')
+
+original = method("private void addMember(")
+revised = original.replace("new AlertDialog.Builder(this)", "new PremiumV283FormBuilder(this)", 1)
+revised = revised.replace('.setPositiveButton("Add",(d,w)->background(()->{',
+                          '.setPositiveButton("Add",(d,w)->{')
+revised = revised.replace('    if(n.isEmpty()||n.length()>100)throw new IllegalArgumentException("Name must be 1–100 characters");',
+                         '    if(n.isEmpty()||n.length()>100){error(new IllegalArgumentException("Name must be 1–100 characters"));return;}\n'
+                         '    savePremiumForm(d,()->{')
+revised = revised.replace('    BackupGuardian.save(this,database,"member-added",true);warnOnBackupFailure();\n'
+                          '    runOnUiThread(this::showMembers);\n'
+                          '   })).show();',
+                         '    },"member-added",()->{if("Members".equals(tab))showMembers();});\n'
+                         '   }).show();')
+assert revised != original and 'savePremiumForm(d,' in revised
+once(original, revised)
+
+for signature, title, action in (
+    ("private void editFeePolicy(", "Audited fee policy", "Fee policy"),
+    ("private void editFeeWaiver(", "Record authorized noncash concession", "Fee concession"),
+    ("private void openMemberProfile(", "Member profile · audited", "Member profile"),
+    ("private void openStockThreshold(", "Low-stock alert · recorded counts only", "Shuttle threshold"),
+):
+    original = method(signature)
+    builder = 'new AlertDialog.Builder(this).setTitle("' + title + '")'
+    assert original.count(builder) == 1
+    revised = original.replace(builder, builder.replace("AlertDialog.Builder", "PremiumV283FormBuilder"))
+    revised = revised.replace('commitV26Metadata("' + action + '",', 'commitV26Metadata(d,"' + action + '",')
+    if action == "Member profile":
+        revised = revised.replace('      boolean enabled=active.isChecked();',
+                                  '      boolean enabled=active.isChecked();\n'
+                                  '      final String profileEventId="profile-"+UUID.randomUUID();')
+        revised = revised.replace('          "profile-"+UUID.randomUUID(),new Date().toString(),knownMembers());',
+                                  '          profileEventId,new Date().toString(),knownMembers());')
+    if action == "Shuttle threshold":
+        revised = revised.replace('       new AlertDialog.Builder(this).setTitle("Confirm reorder threshold")',
+                                  '       final String thresholdEventId="threshold-"+UUID.randomUUID();\n'
+                                  '       new AlertDialog.Builder(this).setTitle("Confirm reorder threshold")')
+        revised = revised.replace('PremiumV26State.setReorder(raw,value,why,"threshold-"+UUID.randomUUID(),new Date().toString())',
+                                  'PremiumV26State.setReorder(raw,value,why,thresholdEventId,new Date().toString())')
+    once(original, revised)
+
+original = method("private void startEncryptedExport(")
+revised = original.replace('new AlertDialog.Builder(this).setTitle("Encrypt verified migration backup")',
+                          'new PremiumV283FormBuilder(this).setTitle("Encrypt verified migration backup")')
+revised = revised.replace('.setNegativeButton("Cancel",(d,w)->encryptedExportGate.finish())',
+                          '.setNegativeButton("Cancel",(d,w)->{one.setText("");two.setText("");encryptedExportGate.finish();})')
+revised = revised.replace('.setOnCancelListener(d->encryptedExportGate.finish())',
+                          '.setOnCancelListener(d->{one.setText("");two.setText("");encryptedExportGate.finish();})')
+revised = revised.replace('    one.setText("");two.setText("");\n', '', 1)
+revised = revised.replace('     encryptedExportGate.finish();\n     error(new IllegalArgumentException("Passwords must match',
+                          '     error(new IllegalArgumentException("Passwords must match', 1)
+revised = revised.replace("    Arrays.fill(confirm,'\\u0000');\n    background(()->{", '''    Arrays.fill(confirm,'\\u0000');
+    if(!PremiumV283FormBuilder.beginSave(d)){Arrays.fill(first,'\\u0000');return;}
+    one.setText("");two.setText("");
+    PremiumV283FormBuilder.saved(d);
+    try{io.execute(()->{''', 1)
+revised = revised.replace('      runOnUiThread(()->{\n       Intent save=', '''      runOnUiThread(()->{
+       if(isFinishing()||isDestroyed()){
+        pendingEncryptedExport=null;file.delete();encryptedExportGate.finish();return;
+       }
+       Intent save=''', 1)
+revised = revised.replace('      throw ex;\n     }finally{Arrays.fill(first,',
+                          '      runOnUiThread(()->error(ex));\n     }finally{Arrays.fill(first,', 1)
+revised = revised.replace("    });\n   }).show();", '''    });}catch(java.util.concurrent.RejectedExecutionException issue){
+     Arrays.fill(first,'\\u0000');encryptedExportGate.finish();error(issue);
+    }
+   }).show();''', 1)
+assert revised != original and 'if(!PremiumV283FormBuilder.beginSave(d))' in revised
+once(original, revised)
+
+# Only the form body scrolls. The retained builder constrains its viewport to
+# the usable dialog window, keeping native Review/Cancel actions above the IME.
 for signature, body in (("private void editFeePolicy(", "f"),
                         ("private void editFeeWaiver(", "f"),
                         ("private void openMemberProfile(", "v"),
                         ("private void openStockThreshold(", "v"),
+                        ("private void addMember(", "e"),
                         ("private void startEncryptedExport(", "form")):
     original = method(signature)
     old_view = ".setView(" + body + ")"
     assert original.count(old_view) == 1, "Unexpected form container: " + signature
     once(original, original.replace(old_view, ".setView(premiumForm(" + body + "))"))
 once("private Button button(", '''private ScrollView premiumForm(View body){
- ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);
- scroll.setClipToPadding(false);scroll.addView(body);
- return scroll;
+ return PremiumV283FormBuilder.body(this,body);
 }
 private Button button(''')
 
 activity.write_text(s, encoding="utf-8")
 shutil.copyfile("src/premium/v28_3/PremiumV283Ui.java", root / "PremiumV283Ui.java")
+shutil.copyfile("src/premium/v28_3/PremiumV283FormBuilder.java", root / "PremiumV283FormBuilder.java")
 theme = Path("app/src/main/res/values/premium_v283_styles.xml")
 theme.parent.mkdir(parents=True, exist_ok=True)
 shutil.copyfile("src/premium/v28_3/styles.xml", theme)
