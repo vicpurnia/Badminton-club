@@ -36,9 +36,24 @@ V283WorkflowUiTest.premiumScreensAndActionsRemainUsable exercises the actual nav
 
 The existing signed upgrade, complete-field ledger, encrypted-backup, photo and navigation suites remain in the workflow. Emulator screenshots are retained for all five main tabs.
 
-All 38 source reconstruction and integration steps pass locally, along with 19 portable Java regression suites. Android compilation and runtime acceptance are recorded in the branch's GitHub Actions runs; final run references will be added after completion.
+All 38 source reconstruction and integration steps pass locally, along with 19 portable Java regression suites. The final CI also passed the complete financial/AES suite, both Android builds, all six instrumentation invocations, and the existing populated navigation checks. All five main screens were visually reviewed; the corrected collection card passed measured visibility assertions for its amount and Receipt button.
 
 ## Scope
 
 This is an owner-signed preview APK, retaining the existing package and Room schema.
 Device gallery providers, recipient apps, physical printers and installation on the owner's phone require actual-device acceptance. Member photos remain local to the phone and are not included in financial JSON or encrypted ledger backups.
+
+## Accepted build — 19 November 2026
+
+- Application source and tests: 60cb6f1c777311f0d4e3f5da4e357fab038afc4d.
+- Signed preview: 28.3-rc-test.8, versionCode 30008.
+- Package: com.vinayak.badminton.premiumv24, with the original permanent signing certificate.
+- [Signed upgrade and Android workflow acceptance: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44453907610).
+- [Debug build and regression checks: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44453907674).
+- Signed APK artifact: 14496342931. Runtime evidence artifact: 14496413318.
+- APK size: 2,185,304 bytes.
+- APK SHA-256: c37d9e626ba97407b0b8de3f1bda18469fe86cdcf7f90816385b1f507631f597.
+
+The accepted runtime log includes V283_COLLECT_RECEIPT_FOOTER_VISIBLE_PASS, V283_PREMIUM_WORKFLOW_UI_PASS, V283_DUPLICATE_PAYMENT_BACK_RETRY_PASS, V283_REPORTS_RECEIPT_LIBRARY_BACK_PASS and V283_REPORT_SEARCH_AND_CATEGORIES_PASS. The inventory confirms 23 always-visible report entry points, with external-folder disconnection remaining conditional.
+
+Test synchronization waits for dialog focus and dismissal before sending another Back key. A single, explicitly identified Pixel Launcher ANR can be closed in the synthetic photo test; Badminton and other error dialogs are never dismissed by that recovery. Every original photo, identity, financial and failure assertion remains enforced.
