@@ -36,7 +36,7 @@ V283WorkflowUiTest.premiumScreensAndActionsRemainUsable exercises the actual nav
 
 The existing signed upgrade, complete-field ledger, encrypted-backup, photo and navigation suites remain in the workflow. Emulator screenshots are retained for all five main tabs.
 
-All 38 source reconstruction and integration steps pass locally, along with 19 portable Java regression suites. The final CI also passed the complete financial/AES suite, both Android builds, all six instrumentation invocations, and the existing populated navigation checks. All five main screens were visually reviewed; the corrected collection card passed measured visibility assertions for its amount and Receipt button.
+All 38 source reconstruction and integration steps pass locally. The final CI passed the existing Java regressions, complete financial/AES suite, both Android builds, all nine instrumentation invocations, and populated navigation checks. All five normal screens and the new enlarged-text evidence were visually reviewed; receipt amounts and actions passed measured visibility assertions.
 
 ## Scope
 
@@ -53,19 +53,25 @@ Device gallery providers, recipient apps, physical printers and installation on 
 - Photo mutation work is serialized across Activity recreation. Completion refreshes the live member list, and invalid-image errors cannot attach a window to the destroyed Activity.
 - All eight EXIF orientations are normalized before saving; malformed replacements preserve the existing photo.
 
-Focused acceptance adds real accessibility-node actions, recreation and filter restoration, 320 dp / 2.0 font layout, keyboard/form reachability, queued photo operations across recreation and coloured-quadrant EXIF fixtures. The source reconstruction checks continue to pin the six accounting/schema/Classic PDF modules above. Runtime acceptance for this follow-on revision is recorded below once the candidate passes.
+Focused acceptance adds real accessibility-node actions, recreation and filter restoration, 320 dp / 2.0 font layout, keyboard/form reachability, queued photo operations across recreation and coloured-quadrant EXIF fixtures. The source reconstruction checks continue to pin the six accounting/schema/Classic PDF modules above. The follow-on revision passed the signed runtime audit and final visual review below.
 
 ## Accepted build — 19 November 2026
 
-- Application source and tests: 60cb6f1c777311f0d4e3f5da4e357fab038afc4d.
-- Signed preview: 28.3-rc-test.8, versionCode 30008.
+- Application source and tests: b2481c29faa876250420692c99aa7a62cad730b6.
+- Signed preview: 28.3-rc-test.10, versionCode 30010.
 - Package: com.vinayak.badminton.premiumv24, with the original permanent signing certificate.
-- [Signed upgrade and Android workflow acceptance: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44453907610).
-- [Debug build and regression checks: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44453907674).
-- Signed APK artifact: 14496342931. Runtime evidence artifact: 14496413318.
-- APK size: 2,185,304 bytes.
-- APK SHA-256: c37d9e626ba97407b0b8de3f1bda18469fe86cdcf7f90816385b1f507631f597.
+- Certificate SHA-256: 0e1c35c2da5a0582cc0e3be45319b027a38fbfe9d04ad78df89e10126a40ca8e.
+- [Signed upgrade and Android workflow acceptance: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44546654031).
+- [Debug build and regression checks: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44546654036).
+- Signed APK artifact: 14540034088. Runtime evidence artifact: 14541448021.
+- APK size: 2,186,716 bytes.
+- APK SHA-256: 1de61b9572f06415c79c404995b26ea4ec0b88fb6b9d7d602708b4eabe2626df.
+- Evidence ZIP SHA-256: 6e4f8d7dbaa5aa9d51fe54536e5bc466b6e351860e80aa50f56f266953dff71b.
 
-The accepted runtime log includes V283_COLLECT_RECEIPT_FOOTER_VISIBLE_PASS, V283_PREMIUM_WORKFLOW_UI_PASS, V283_DUPLICATE_PAYMENT_BACK_RETRY_PASS, V283_REPORTS_RECEIPT_LIBRARY_BACK_PASS and V283_REPORT_SEARCH_AND_CATEGORIES_PASS. The inventory confirms 23 always-visible report entry points, with external-folder disconnection remaining conditional.
+The signed v25.9.1.21 / code 24021 to v28.3-rc-test.10 / code 30010 in-place update preserved the complete synthetic ledger. All nine named instrumentation invocations passed, and the captured logcat contains no FATAL EXCEPTION.
 
-Test synchronization waits for dialog focus and dismissal before sending another Back key. A single, explicitly identified Pixel Launcher ANR can be closed in the synthetic photo test; Badminton and other error dialogs are never dismissed by that recovery. Every original photo, identity, financial and failure assertion remains enforced.
+The accepted runtime log includes the original premium workflow, receipt-footer, duplicate Back/retry and report-filter markers, plus V283_ACCESSIBILITY_AND_SCREEN_STATE_PASS, V283_PHOTO_LIFECYCLE_PASS, V28_PHOTO_ALL_EXIF_ORIENTATIONS_PASS, V28_PHOTO_INVALID_REPLACEMENT_PRESERVED_PASS, V283_NARROW_PROFILE_KEYBOARD_REACHABILITY_PASS and V283_NARROW_320DP_LARGE_TEXT_200_PERCENT_PASS.
+
+Compact-layout acceptance verifies a single-line club title and complete navigation labels at 320 dp / 200% text. Real Android screenshots wait for a hardware frame commit and record target bounds/scroll positions. The member name, photo action, receipt amount/action and profile Active field above the keyboard were inspected visually; transient test Toasts are drained before capture.
+
+The inventory confirms 23 always-visible report entry points, with external-folder disconnection remaining conditional. A single explicitly identified Pixel Launcher ANR can be closed in the synthetic photo test; Badminton and other error dialogs are never dismissed by that recovery. Every financial, photo, identity and failure assertion remains enforced.
