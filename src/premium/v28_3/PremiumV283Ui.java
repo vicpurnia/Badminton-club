@@ -61,7 +61,7 @@ final class PremiumV283Ui {
  }
  static String category(String title){
   String name=title.toLowerCase(Locale.ROOT);
-  if(name.contains("backup")||name.contains("restore")||name.contains("export")||
+  if(name.contains("backup")||name.contains("back up")||name.contains("restore")||name.contains("export")||
      name.contains("external folder")||name.contains("saved json"))return "Backups";
   if(name.contains("fees")||name.contains("receipt library")||name.contains("kanishk"))return "Club";
   return "Reports";

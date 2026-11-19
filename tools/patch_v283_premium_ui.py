@@ -234,6 +234,11 @@ once(
     '  content.addView(secondaryButton("Monthly fee rules, dues & concessions",this::showFeeCentre));gap(content,14);\n'
     '  LinearLayout results=col();results.addView(text("Loading members…",13,GRAY,false));content.addView(results);')
 once(
+    'if(generation==memberRenderGeneration&&currentScreen(screen,"Members",viewedMonth))notice("No verified ledger","Import your saved club ledger first.");',
+    'if(generation==memberRenderGeneration&&currentScreen(screen,"Members",viewedMonth)){\n'
+    '       results.removeAllViews();panel(results,blockHeader("No verified ledger","Import your saved club ledger first."));\n'
+    '      }')
+once(
     '''LinearLayout card=row();
       card.addView(memberAvatar(item.member,item.name));
       LinearLayout labels=col();pad(labels,11,0);
