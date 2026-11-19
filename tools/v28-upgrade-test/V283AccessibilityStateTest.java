@@ -10,11 +10,13 @@ import android.view.Choreographer;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inspector.WindowInspector;
 import android.widget.DatePicker;
 import android.widget.EditText;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.room.Room;
 import androidx.test.core.app.ActivityScenario;
@@ -23,11 +25,13 @@ import androidx.test.platform.app.InstrumentationRegistry;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.lang.reflect.Field;
+import java.nio.charset.StandardCharsets;
 import java.time.YearMonth;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import org.junit.Test;
@@ -95,7 +99,7 @@ public final class V283AccessibilityStateTest {
      assertFalse("Nonmatching cashbook stays filtered",reportShown("Monthly Cashbook"));
      assertNavigation("Reports");
     });
-    screenshot("premium-restored-reports.png");
+    captureEvidence("premium-restored-reports.png",()->tag("reports:search"));
     assertEquals("Navigation and recreation cannot alter ledger",before,canonical(db));
     System.out.println("V283_ACCESSIBILITY_AND_SCREEN_STATE_PASS");
    }catch(Exception|AssertionError issue){screenshot("premium-state-failure.png");throw issue;}
@@ -120,13 +124,14 @@ public final class V283AccessibilityStateTest {
      assertTrue("Runner must use a narrow 320dp screen, actual="+width,width>=310&&width<=330);
     });
     await("Narrow screen owns focus",()->activity.hasWindowFocus());
+    drainPriorToasts();
     chooseHistoricalMonth();
     for(String destination:TABS){
      selectTab(destination);
      await("Loaded narrow "+destination,()->screenReady(destination));
      twoFrames();
-     onMain(()->assertNavigation(destination));
-     screenshot("premium-large-text-"+destination.toLowerCase(java.util.Locale.ROOT)+".png");
+     onMain(()->{assertNavigation(destination);assertCompactBrand();});
+     captureEvidence("premium-large-text-"+destination.toLowerCase(java.util.Locale.ROOT)+".png",()->tag("brand:title"));
     }
     selectTab("Members");
     await("Member name is ready",()->tag("member-name:"+MEMBER)!=null);
@@ -136,6 +141,7 @@ public final class V283AccessibilityStateTest {
      assertEquals("Member identity is readable",NAME,name.getText().toString());
      assertVisible(name,"Enlarged member name");assertTextFits(name,"Enlarged member name");
     });
+    captureEvidence("premium-large-text-member-name.png",()->tag("member-name:"+MEMBER));
     scroll(()->tag("member-photo-action:"+MEMBER));
     onMain(()->{
      View photo=tag("member-photo-action:"+MEMBER);
@@ -143,7 +149,7 @@ public final class V283AccessibilityStateTest {
      assertTextFits((TextView)photo,"Member photo action");
      assertTrue("Photo action retains complete member name",photo.getContentDescription().toString().contains(NAME));
     });
-    screenshot("premium-large-text-member-card.png");
+    captureEvidence("premium-large-text-member-card.png",()->tag("member-photo-action:"+MEMBER));
     checkProfileWithKeyboard();
 
     selectTab("Collect");
@@ -159,7 +165,7 @@ public final class V283AccessibilityStateTest {
      TextView action=(TextView)tag("receipt-action:"+cashId);
      assertVisible(action,"Receipt action");assertTextFits(action,"Receipt action");assertTouch(action,"Receipt action");
     });
-    screenshot("premium-large-text-receipt.png");
+    captureEvidence("premium-large-text-receipt.png",()->tag("receipt-action:"+cashId));
     assertEquals("Large-text navigation and canceled editing preserve every ledger field",before,canonical(db));
     System.out.println("V283_NARROW_320DP_LARGE_TEXT_200_PERCENT_PASS");
    }catch(Exception|AssertionError issue){screenshot("premium-large-text-failure.png");throw issue;}
@@ -213,7 +219,7 @@ public final class V283AccessibilityStateTest {
    TextView active=(TextView)findText(requireDialog("Member profile · audited"),"Active club member");
    assertVisible(active,"Active member control above keyboard");assertTextFits(active,"Active member control");
   });
-  screenshot("premium-large-text-profile-keyboard.png");
+  captureEvidence("premium-large-text-profile-keyboard.png",()->findText(requireDialog("Member profile · audited"),"Active club member"));
   click(()->requireDialog("Member profile · audited").findViewById(android.R.id.button2),"Cancel profile edit");
   await("Profile cancellation closes form",()->dialog("Member profile · audited")==null);
   twoFrames();
@@ -263,7 +269,15 @@ public final class V283AccessibilityStateTest {
    assertEquals(name+" selected state",name.equals(selected),navigation.isSelected());if(navigation.isSelected())count++;
    TextView label=(TextView)findText(navigation,name);assertNotNull(name+" label",label);
    assertVisible(label,name+" label");assertTextFits(label,name+" label");
+   if(activity.getResources().getConfiguration().fontScale>=1.95f)
+    assertEquals(name+" must remain one readable word at200% fonts",1,label.getLayout().getLineCount());
   }assertEquals("Exactly one selected navigation destination",1,count);
+ }
+ private void assertCompactBrand(){
+  TextView title=(TextView)tag("brand:title");assertNotNull("Compact brand title",title);
+  assertEquals("Complete club title","Badminton Club",title.getText().toString());
+  assertVisible(title,"Compact brand title");assertTextFits(title,"Compact brand title");
+  assertEquals("Club title must stay on one line at320dp/200% fonts",1,title.getLayout().getLineCount());
  }
  private void assertTouch(View view,String label){
   assertTrue(label+" is enabled and clickable",view.isEnabled()&&view.isClickable());
@@ -368,6 +382,61 @@ public final class V283AccessibilityStateTest {
   assertTrue("UI draws two frames",frames.await(5,TimeUnit.SECONDS));instrumentation.waitForIdleSync();
  }
  private static String canonical(LedgerDatabase db)throws Exception{return MigrationCodec.canonical(MigrationCodec.inspect(MigrationCodec.exportVerified(db)).ledger);}
+ private void drainPriorToasts()throws Exception {
+  // Photo lifecycle checks deliberately exercise busy feedback. Allow that
+  // existing system Toast queue to finish before recording this test's UI.
+  AtomicLong lastToast=new AtomicLong(SystemClock.elapsedRealtime());
+  instrumentation.getUiAutomation().setOnAccessibilityEventListener(event->{
+   if(event.getEventType()==AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED&&
+     event.getClassName()!=null&&event.getClassName().toString().contains("Toast"))
+    lastToast.set(SystemClock.elapsedRealtime());
+  });
+  long deadline=SystemClock.elapsedRealtime()+20000;
+  try{
+   while(SystemClock.elapsedRealtime()-lastToast.get()<4000){
+    assertTrue("Prior transient Toast queue must settle before screenshots",SystemClock.elapsedRealtime()<deadline);
+    Thread.sleep(100);
+   }
+  }finally{instrumentation.getUiAutomation().setOnAccessibilityEventListener(null);}
+ }
+ private void captureEvidence(String filename,Finder target)throws Exception {
+  // Geometry changes can precede the RenderThread/compositor. Require an
+  // actual committed hardware frame of the relevant activity/dialog root.
+  CountDownLatch committed=new CountDownLatch(1);
+  onMain(()->{
+   View view=target.find();assertNotNull("Evidence target "+filename,view);
+   View window=view.getRootView();assertTrue("Evidence root is hardware accelerated",window.isHardwareAccelerated());
+   window.getViewTreeObserver().registerFrameCommitCallback(committed::countDown);
+   window.postInvalidateOnAnimation();
+  });
+  assertTrue("Rendered frame commits before "+filename,committed.await(5,TimeUnit.SECONDS));
+  instrumentation.getUiAutomation().waitForIdle(250,5000);
+  instrumentation.waitForIdleSync();
+  AtomicReference<String> geometry=new AtomicReference<>();
+  onMain(()->{
+   View view=target.find();assertVisible(view,"Capture target "+filename);
+   int[] position=new int[2];view.getLocationOnScreen(position);
+   StringBuilder record=new StringBuilder("file=").append(filename)
+    .append("\nfontScale=").append(activity.getResources().getConfiguration().fontScale)
+    .append("\nwidthDp=").append(activity.getResources().getConfiguration().screenWidthDp)
+    .append("\ntarget=").append(view.getTag()==null?view.getContentDescription():view.getTag())
+    .append("\nscreenBounds=").append(new Rect(position[0],position[1],position[0]+view.getWidth(),position[1]+view.getHeight()));
+   for(View ancestor=view;ancestor!=null;ancestor=ancestor.getParent() instanceof View?(View)ancestor.getParent():null)
+    if(ancestor instanceof ScrollView)record.append("\nscrollY=").append(ancestor.getScrollY()).append("; viewportHeight=").append(ancestor.getHeight());
+   geometry.set(record.append('\n').toString());
+  });
+  Bitmap image=instrumentation.getUiAutomation().takeScreenshot();
+  assertNotNull("Actual Android screenshot "+filename,image);
+  try{
+   File directory=context.getExternalFilesDir("premium-ui-evidence");assertNotNull("Evidence directory",directory);
+   assertTrue("Evidence directory is available",directory.isDirectory()||directory.mkdirs());
+   try(FileOutputStream output=new FileOutputStream(new File(directory,filename))){
+    assertTrue("Actual Android screenshot encodes",image.compress(Bitmap.CompressFormat.PNG,100,output));
+   }
+   try(FileOutputStream output=new FileOutputStream(new File(directory,filename+".txt"))){output.write(geometry.get().getBytes(StandardCharsets.UTF_8));}
+   System.out.println("V283_SCREENSHOT_CAPTURE "+geometry.get().replace('\n',' '));
+  }finally{image.recycle();}
+ }
  private void screenshot(String filename){
   Bitmap image=null;
   try{

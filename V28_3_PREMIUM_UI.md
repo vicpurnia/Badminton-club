@@ -48,6 +48,7 @@ Device gallery providers, recipient apps, physical printers and installation on 
 - Month arrows are exposed as actionable accessibility controls; decorative icons remain excluded.
 - Selected tab, reporting month, member search/filter and report search/category survive Activity recreation.
 - Member status is below the name. At narrow widths or enlarged text, full member names and stacked receipt amount/actions remain readable.
+- Compact headers give the club name its own row. Enlarged navigation uses two rows of labelled buttons so words remain whole at 320 dp / 200% text.
 - Profile, fee policy, concession, stock threshold and encrypted-export form bodies scroll while their native dialog buttons remain available.
 - Photo mutation work is serialized across Activity recreation. Completion refreshes the live member list, and invalid-image errors cannot attach a window to the destroyed Activity.
 - All eight EXIF orientations are normalized before saving; malformed replacements preserve the existing photo.

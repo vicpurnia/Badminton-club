@@ -269,16 +269,28 @@ private void layout(){
  androidx.core.view.WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView())
   .setAppearanceLightNavigationBars(true);
  header=col();header.setBackgroundColor(LIGHT);pad(header,18,10);
+ boolean compactHeader=PremiumV283Ui.compact(this);
  LinearLayout top=row();
  ImageView brandIcon=PremiumV283Ui.icon(this,"court",DARK,32);
  brandIcon.setBackground(bg(GOLD,11));pad(brandIcon,6,6);
- top.addView(brandIcon,new LinearLayout.LayoutParams(dp(40),dp(40)));
+ int brandSize=compactHeader?32:40;
+ top.addView(brandIcon,new LinearLayout.LayoutParams(dp(brandSize),dp(brandSize)));
  LinearLayout brand=col();pad(brand,11,0);
- brand.addView(text("Badminton Club",17,DARK,true));gap(brand,4);
- brand.addView(text("__VERSION__".replace(" DEVELOPMENT CANDIDATE"," · Preview"),11,GRAY,false));
+ TextView brandTitle=text("Badminton Club",compactHeader?16:17,DARK,true);
+ brandTitle.setTag("brand:title");brand.addView(brandTitle);
+ if(!compactHeader){gap(brand,4);
+  brand.addView(text("__VERSION__".replace(" DEVELOPMENT CANDIDATE"," · Preview"),11,GRAY,false));
+ }
  top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
- top.addView(pill("Offline",PremiumV283Ui.SUCCESS,PremiumV283Ui.SUCCESS_SOFT));
- header.addView(top);root.addView(header,fill());
+ if(!compactHeader)top.addView(pill("Offline",PremiumV283Ui.SUCCESS,PremiumV283Ui.SUCCESS_SOFT));
+ header.addView(top);
+ if(compactHeader){
+  gap(header,6);LinearLayout meta=row();
+  meta.addView(text("__VERSION__".replace(" DEVELOPMENT CANDIDATE"," Preview"),11,GRAY,false),
+   new LinearLayout.LayoutParams(0,-2,1));
+  meta.addView(pill("Offline",PremiumV283Ui.SUCCESS,PremiumV283Ui.SUCCESS_SOFT));header.addView(meta);
+ }
+ root.addView(header,fill());
  ScrollView scroll=new ScrollView(this);pageScroll=scroll;
  scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
  content=col();pad(content,16,16);scroll.addView(content);
@@ -289,17 +301,25 @@ private void layout(){
 replace_method("private void drawNav()", """
 private void drawNav(){
  nav.removeAllViews();
+ boolean compactNav=PremiumV283Ui.compact(this);
+ nav.setOrientation(compactNav?LinearLayout.VERTICAL:LinearLayout.HORIZONTAL);
+ LinearLayout line=nav;
+ if(compactNav){line=row();nav.addView(line,fill());}
+ int position=0;
  for(String item:new String[]{"Home","Collect","Shuttles","Members","Reports"}){
+  if(compactNav&&position==3){gap(nav,4);line=row();nav.addView(line,fill());}
   boolean active=tab.equals(item);LinearLayout tile=col();tile.setGravity(Gravity.CENTER);
   tile.setBackground(bg(active?PALE:Color.WHITE,14));pad(tile,2,8);
   tile.setTag("nav:"+item);tile.setSelected(active);tile.setContentDescription(item);
-  tile.addView(PremiumV283Ui.icon(this,PremiumV283Ui.iconKey(item),active?GREEN:GRAY,24),
-   new LinearLayout.LayoutParams(dp(24),dp(24)));
-  gap(tile,5);TextView caption=text(item,11,active?GREEN:GRAY,active);
+  if(!compactNav){
+   tile.addView(PremiumV283Ui.icon(this,PremiumV283Ui.iconKey(item),active?GREEN:GRAY,24),
+    new LinearLayout.LayoutParams(dp(24),dp(24)));gap(tile,5);
+  }
+  TextView caption=text(item,11,active?GREEN:GRAY,active);
   caption.setTextSize(11);caption.setGravity(Gravity.CENTER);tile.addView(caption);
   LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);
-  params.setMargins(dp(2),0,dp(2),0);nav.addView(tile,params);
-  pressable(tile,()->selectTab(item));tile.setMinimumHeight(dp(68));
+  params.setMargins(dp(2),0,dp(2),0);line.addView(tile,params);
+  pressable(tile,()->selectTab(item));tile.setMinimumHeight(dp(compactNav?52:68));position++;
  }
 }""")
 replace_method("private void monthPicker()", """
