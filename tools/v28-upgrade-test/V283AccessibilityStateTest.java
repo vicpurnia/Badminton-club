@@ -1,5 +1,6 @@
 package com.vinayak.badminton.nativepreview;
 
+import android.accessibilityservice.AccessibilityServiceInfo;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.graphics.Bitmap;
@@ -11,9 +12,12 @@ import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.WindowInsets;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.view.accessibility.AccessibilityWindowInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.view.inspector.WindowInspector;
 import android.widget.Button;
@@ -54,6 +58,7 @@ public final class V283AccessibilityStateTest {
  private Instrumentation instrumentation;
  private Context context;
  private MainActivity activity;
+ private int profileKeyboardAttempts;
 
  @Test public void accessibilityAndScreenStateSurviveRecreation()throws Exception {
   init();LedgerDatabase db=syntheticLedger();
@@ -177,7 +182,13 @@ public final class V283AccessibilityStateTest {
   }finally{db.close();}
  }
 
- private void init(){instrumentation=InstrumentationRegistry.getInstrumentation();context=instrumentation.getTargetContext();}
+ private void init(){
+  instrumentation=InstrumentationRegistry.getInstrumentation();context=instrumentation.getTargetContext();
+  AccessibilityServiceInfo service=instrumentation.getUiAutomation().getServiceInfo();
+  assertNotNull("UI automation accessibility service",service);
+  service.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
+  instrumentation.getUiAutomation().setServiceInfo(service);
+ }
  private LedgerDatabase syntheticLedger(){
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,"badminton_room_v18.db").allowMainThreadQueries().build();
   try {
@@ -243,37 +254,204 @@ public final class V283AccessibilityStateTest {
   System.out.println("V283_NARROW_PROFILE_KEYBOARD_REACHABILITY_PASS");
  }
  private void showProfileKeyboard()throws Exception {
-  await("Profile owns keyboard focus",()->requireDialog(PROFILE).hasWindowFocus());
-  scroll(()->findHint(requireDialog(PROFILE),"Optional notes"));
-  onMain(()->assertTrue("Notes accepts keyboard focus",findHint(requireDialog(PROFILE),"Optional notes").requestFocus()));
-  twoFrames();
-  onMain(()->{
-   InputMethodManager keyboard=(InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-   assertNotNull("System keyboard service",keyboard);
-   keyboard.showSoftInput(findHint(requireDialog(PROFILE),"Optional notes"),InputMethodManager.SHOW_IMPLICIT);
-  });
+  final int attempt=++profileKeyboardAttempts;
+  AtomicReference<View> observedProfile=new AtomicReference<>();
+  AtomicReference<ViewTreeObserver> observer=new AtomicReference<>();
+  AtomicLong layoutCount=new AtomicLong(),lastLayoutAt=new AtomicLong();
+  ViewTreeObserver.OnGlobalLayoutListener layouts=()->{
+   layoutCount.incrementAndGet();lastLayoutAt.set(SystemClock.elapsedRealtime());
+  };
+  AtomicReference<String> lastObservation=new AtomicReference<>("Keyboard wait not started");
   AtomicReference<String> previous=new AtomicReference<>();AtomicLong stableSince=new AtomicLong();
-  await("Visible keyboard and both complete profile actions have stable bounds",()->{
-   View profile=requireDialog(PROFILE);WindowInsets insets=profile.getRootWindowInsets();
-   View review=profile.findViewById(android.R.id.button1),cancel=profile.findViewById(android.R.id.button2);
-   if(!profile.hasWindowFocus()||!imeVisible(insets)||!fullyVisible(review)||!fullyVisible(cancel)){
-    previous.set(null);return false;
+  try{
+   await("Profile owns keyboard focus",()->requireDialog(PROFILE).hasWindowFocus());
+   onMain(()->{
+    View profile=requireDialog(PROFILE);observedProfile.set(profile);
+    ViewTreeObserver tree=profile.getViewTreeObserver();observer.set(tree);tree.addOnGlobalLayoutListener(layouts);
+   });
+   scroll(()->findHint(requireDialog(PROFILE),"Optional notes"));
+   onMain(()->assertTrue("Notes accepts keyboard focus",findHint(requireDialog(PROFILE),"Optional notes").requestFocus()));
+   twoFrames();
+   onMain(()->{
+    InputMethodManager keyboard=(InputMethodManager)activity.getSystemService(Context.INPUT_METHOD_SERVICE);
+    assertNotNull("System keyboard service",keyboard);
+    keyboard.showSoftInput(findHint(requireDialog(PROFILE),"Optional notes"),InputMethodManager.SHOW_IMPLICIT);
+   });
+   await("Visible keyboard and both complete profile actions have stable bounds",()->{
+    View profile=requireDialog(PROFILE);WindowInsets insets=profile.getRootWindowInsets();
+    View review=profile.findViewById(android.R.id.button1),cancel=profile.findViewById(android.R.id.button2);
+    Rect imeBounds=inputMethodWindowBounds();
+    boolean focused=profile.hasWindowFocus(),ime=imeVisible(insets)&&validInputMethodBounds(imeBounds);
+    boolean reviewVisible=fullyVisible(review),cancelVisible=fullyVisible(cancel);
+    boolean actionsAboveIme=ime&&review!=null&&cancel!=null&&
+     screenBounds(review).bottom<=imeBounds.top&&screenBounds(cancel).bottom<=imeBounds.top;
+    lastObservation.set("profileWindowFocus="+focused+"; imePredicate="+ime+
+     "; dialogImeVisible="+imeVisible(insets)+"; inputMethodScreenBounds="+imeBounds+
+     "; reviewFullyVisible="+reviewVisible+"; cancelFullyVisible="+cancelVisible+"; actionsAboveIme="+actionsAboveIme);
+    if(!focused||!ime||!reviewVisible||!cancelVisible||!actionsAboveIme){previous.set(null);return false;}
+    Rect usable=new Rect();profile.getWindowVisibleDisplayFrame(usable);
+    String geometry=usable+" / "+screenBounds(review)+" / "+screenBounds(cancel)+" / imeScreen="+imeBounds;
+    if(!geometry.equals(previous.get())){previous.set(geometry);stableSince.set(SystemClock.elapsedRealtime());return false;}
+    return SystemClock.elapsedRealtime()-stableSince.get()>=250;
+   });
+   twoFrames();onMain(()->assertProfileActionsAboveKeyboard(requireDialog(PROFILE)));
+  }catch(Exception|AssertionError issue){
+   // Capture here: ActivityScenario.close() removes the dialog before the
+   // outer test catch can take its otherwise blank failure screenshot.
+   captureProfileKeyboardFailure(attempt,issue,observedProfile.get(),lastObservation.get(),
+    previous.get(),stableSince.get(),layoutCount.get(),lastLayoutAt.get());
+   throw issue;
+  }finally{
+   try{onMain(()->{
+    ViewTreeObserver watched=observer.get();
+    if(watched!=null&&watched.isAlive())watched.removeOnGlobalLayoutListener(layouts);
+    View profile=observedProfile.get();
+    if(profile!=null){ViewTreeObserver current=profile.getViewTreeObserver();
+     if(current!=watched&&current.isAlive())current.removeOnGlobalLayoutListener(layouts);}
+   });}catch(Exception|AssertionError cleanupIssue){System.out.println("Optional keyboard observer cleanup: "+cleanupIssue);}
+  }
+ }
+ private void captureProfileKeyboardFailure(int attempt,Throwable failure,View observedProfile,
+   String predicates,String stableGeometry,long stableSince,long layoutCount,long lastLayoutAt){
+  String filename="premium-large-text-profile-keyboard-failure-"+attempt+".png";
+  StringBuilder record=new StringBuilder("file=").append(filename).append("\nfailure=").append(failure)
+   .append("\nelapsedRealtime=").append(SystemClock.elapsedRealtime()).append("\nlastWaitPredicates=").append(predicates)
+   .append("\nlastStableGeometry=").append(stableGeometry).append("\nstableSince=").append(stableSince)
+   .append("\nobservedGlobalLayouts=").append(layoutCount).append("\nlastGlobalLayoutAt=").append(lastLayoutAt);
+  try{onMain(()->{
+   record.append("\nfontScale=").append(activity.getResources().getConfiguration().fontScale)
+    .append("\nwidthDp=").append(activity.getResources().getConfiguration().screenWidthDp)
+    .append("\ndensity=").append(activity.getResources().getDisplayMetrics().density)
+    .append("\nactivityFinishing=").append(activity.isFinishing()).append("; activityDestroyed=").append(activity.isDestroyed())
+    .append("\nactivityCurrentWindowBounds=").append(activity.getWindowManager().getCurrentWindowMetrics().getBounds())
+    .append("\nactivityMaximumWindowBounds=").append(activity.getWindowManager().getMaximumWindowMetrics().getBounds());
+   appendKeyboardWindow(record,"activity",decor());
+   View current=dialog(PROFILE),profile=current==null?observedProfile:current;
+   record.append("\nprofileFoundByTitle=").append(current!=null).append("; sameObservedProfile=").append(current==observedProfile);
+   appendKeyboardWindow(record,"profile",profile);
+   if(profile!=null){
+    appendKeyboardAncestors(record,"review",profile.findViewById(android.R.id.button1));
+    appendKeyboardAncestors(record,"cancel",profile.findViewById(android.R.id.button2));
+    appendKeyboardAncestors(record,"notes",findHint(profile,"Optional notes"));
+    appendKeyboardView(record,"active",findText(profile,"Active club member"));
+    appendKeyboardScrollViews(record,profile);
    }
-   Rect usable=new Rect();profile.getWindowVisibleDisplayFrame(usable);
-   String geometry=usable+" / "+screenBounds(review)+" / "+screenBounds(cancel)+" / "+insets.getInsets(WindowInsets.Type.ime());
-   if(!geometry.equals(previous.get())){previous.set(geometry);stableSince.set(SystemClock.elapsedRealtime());return false;}
-   return SystemClock.elapsedRealtime()-stableSince.get()>=250;
-  });
-  twoFrames();onMain(()->assertProfileActionsAboveKeyboard(requireDialog(PROFILE)));
+   List<View> windows=WindowInspector.getGlobalWindowViews();record.append("\nglobalWindowCount=").append(windows.size());
+   for(int index=0;index<windows.size();index++)appendKeyboardWindow(record,"window["+index+"]",windows.get(index));
+   appendAccessibilityWindows(record);
+  });}catch(Exception|AssertionError diagnosticIssue){record.append("\ngeometryCaptureIssue=").append(diagnosticIssue);}
+  screenshot(filename);
+  try{
+   File directory=context.getExternalFilesDir("premium-ui-evidence");
+   if(directory!=null&&(directory.isDirectory()||directory.mkdirs()))
+    try(FileOutputStream output=new FileOutputStream(new File(directory,filename+".txt"))){
+     output.write(record.append('\n').toString().getBytes(StandardCharsets.UTF_8));
+    }
+  }catch(Exception diagnosticIssue){System.out.println("Optional keyboard geometry write: "+diagnosticIssue);}
+  for(String line:record.toString().split("\n"))System.out.println("V283_KEYBOARD_FAILURE "+line);
+ }
+ private void appendKeyboardWindow(StringBuilder record,String label,View window){
+  appendKeyboardView(record,label,window);if(window==null)return;
+  WindowInsets insets=window.getRootWindowInsets();
+  record.append('\n').append(label).append(".rootInsets=").append(insets);
+  if(insets!=null){
+   int bottom=insets.getInsets(WindowInsets.Type.ime()).bottom;
+   record.append('\n').append(label).append(".imeVisible=").append(insets.isVisible(WindowInsets.Type.ime()))
+    .append("; imeBottom=").append(bottom).append("; imePredicate=").append(imeVisible(insets))
+    .append("; activityBottomMinusIme=").append(activity.getWindowManager().getCurrentWindowMetrics().getBounds().bottom-bottom)
+    .append("; windowScreenBottomMinusIme=").append(screenBounds(window).bottom-bottom)
+    .append("; systemBarInsets=").append(insets.getInsets(WindowInsets.Type.systemBars()));
+  }
+  if(window.getLayoutParams() instanceof WindowManager.LayoutParams){
+   WindowManager.LayoutParams params=(WindowManager.LayoutParams)window.getLayoutParams();
+   record.append('\n').append(label).append(".windowParams=").append(params)
+    .append("; softInputMode=").append(params.softInputMode).append("; flags=").append(params.flags)
+    .append("; gravity=").append(params.gravity);
+  }
+  appendKeyboardView(record,label+".focusedView",window.findFocus());
+ }
+ private void appendKeyboardAncestors(StringBuilder record,String label,View view){
+  if(view==null){appendKeyboardView(record,label,null);return;}
+  int depth=0;
+  for(View node=view;node!=null&&depth<12;node=node.getParent() instanceof View?(View)node.getParent():null)
+   appendKeyboardView(record,label+".ancestor["+(depth++)+"]",node);
+ }
+ private void appendKeyboardScrollViews(StringBuilder record,View view){
+  if(view instanceof ScrollView){
+   appendKeyboardView(record,"scrollBody",view);
+   ScrollView scroll=(ScrollView)view;
+   if(scroll.getChildCount()>0)appendKeyboardView(record,"scrollBody.content",scroll.getChildAt(0));
+  }
+  if(view instanceof ViewGroup){ViewGroup group=(ViewGroup)view;
+   for(int index=0;index<group.getChildCount();index++)appendKeyboardScrollViews(record,group.getChildAt(index));}
+ }
+ private void appendKeyboardView(StringBuilder record,String label,View view){
+  record.append('\n').append(label).append('=');if(view==null){record.append("missing");return;}
+  Rect global=new Rect(),local=new Rect(),usable=new Rect();
+  boolean globallyVisible=view.getGlobalVisibleRect(global),locallyVisible=view.getLocalVisibleRect(local);
+  view.getWindowVisibleDisplayFrame(usable);int[] position=new int[2];view.getLocationInWindow(position);
+  record.append(view.getClass().getName()).append("; id=").append(view.getId())
+   .append("; screenBounds=").append(screenBounds(view)).append("; windowXY=").append(position[0]).append(',').append(position[1])
+   .append("; parentBounds=").append(new Rect(view.getLeft(),view.getTop(),view.getRight(),view.getBottom()))
+   .append("; measured=").append(view.getMeasuredWidth()).append('x').append(view.getMeasuredHeight())
+   .append("; globalVisible=").append(globallyVisible).append(':').append(global)
+   .append("; localVisible=").append(locallyVisible).append(':').append(local).append("; usableFrame=").append(usable)
+   .append("; fullyVisible=").append(fullyVisible(view)).append("; shown=").append(view.isShown())
+   .append("; attached=").append(view.isAttachedToWindow()).append("; visibility=").append(view.getVisibility())
+   .append("; windowFocus=").append(view.hasWindowFocus()).append("; focused=").append(view.isFocused())
+   .append("; enabled=").append(view.isEnabled()).append("; layoutRequested=").append(view.isLayoutRequested())
+   .append("; scrollXY=").append(view.getScrollX()).append(',').append(view.getScrollY());
+  ViewGroup.LayoutParams params=view.getLayoutParams();
+  if(params!=null)record.append("; layoutSize=").append(params.width).append('x').append(params.height);
+  if(view instanceof TextView){TextView text=(TextView)view;Layout layout=text.getLayout();
+   record.append("; text=").append(text.getText().toString().replace('\n',' '));
+   if(text instanceof EditText)record.append("; hint=").append(text.getHint());
+   if(layout!=null){record.append("; textLayout=").append(layout.getWidth()).append('x').append(layout.getHeight())
+     .append("; lineCount=").append(layout.getLineCount());
+    if(layout.getLineCount()>0)record.append("; textScreenBounds=").append(textBounds(text));}
+  }
  }
  private static boolean imeVisible(WindowInsets insets){
-  return insets!=null&&insets.isVisible(WindowInsets.Type.ime())&&insets.getInsets(WindowInsets.Type.ime()).bottom>0;
+  return insets!=null&&insets.isVisible(WindowInsets.Type.ime());
+ }
+ private Rect inputMethodWindowBounds(){
+  // Insets describe overlap with their own window. A floating dialog resized
+  // above the IME can correctly have a zero IME inset while the IME is visible.
+  // Only actual accessibility input-method windows supply the screen boundary.
+  Rect result=null;List<AccessibilityWindowInfo> windows=instrumentation.getUiAutomation().getWindows();
+  try{
+   for(AccessibilityWindowInfo window:windows)if(window.getType()==AccessibilityWindowInfo.TYPE_INPUT_METHOD){
+    Rect bounds=new Rect();window.getBoundsInScreen(bounds);
+    if(!bounds.isEmpty()){if(result==null)result=new Rect(bounds);else result.union(bounds);}
+   }
+  }finally{for(AccessibilityWindowInfo window:windows)window.recycle();}
+  return result;
+ }
+ private boolean validInputMethodBounds(Rect bounds){
+  return bounds!=null&&bounds.width()>0&&bounds.height()>0&&
+   activity.getWindowManager().getMaximumWindowMetrics().getBounds().contains(bounds);
+ }
+ private void appendAccessibilityWindows(StringBuilder record){
+  AccessibilityServiceInfo service=instrumentation.getUiAutomation().getServiceInfo();
+  record.append("\nautomationAccessibilityFlags=").append(service==null?"missing":service.flags);
+  List<AccessibilityWindowInfo> windows=instrumentation.getUiAutomation().getWindows();
+  record.append("\naccessibilityWindowCount=").append(windows.size());
+  try{
+   for(AccessibilityWindowInfo window:windows){Rect bounds=new Rect();window.getBoundsInScreen(bounds);
+    record.append("\naccessibilityWindow=").append(window.getId()).append("; type=").append(window.getType())
+     .append("; inputMethod=").append(window.getType()==AccessibilityWindowInfo.TYPE_INPUT_METHOD)
+     .append("; screenBounds=").append(bounds).append("; layer=").append(window.getLayer())
+     .append("; active=").append(window.isActive()).append("; focused=").append(window.isFocused());
+   }
+  }finally{for(AccessibilityWindowInfo window:windows)window.recycle();}
+  record.append("\ninputMethodScreenBounds=").append(inputMethodWindowBounds());
  }
  private void assertProfileActionsAboveKeyboard(View profile){
   assertTrue("Original profile is the focused window",profile.hasWindowFocus());
-  WindowInsets insets=profile.getRootWindowInsets();assertTrue("Actual software keyboard remains visible",imeVisible(insets));
-  Rect windowBounds=activity.getWindowManager().getCurrentWindowMetrics().getBounds();
-  int imeTop=windowBounds.bottom-insets.getInsets(WindowInsets.Type.ime()).bottom;
+  WindowInsets insets=profile.getRootWindowInsets();assertTrue("Profile window reports a visible software keyboard",imeVisible(insets));
+  Rect imeBounds=inputMethodWindowBounds();assertNotNull("Actual accessibility input-method window is present",imeBounds);
+  assertTrue("Actual keyboard has nonempty screen bounds inside the display: "+imeBounds,validInputMethodBounds(imeBounds));
+  int imeTop=imeBounds.top;
   for(int id:new int[]{android.R.id.button1,android.R.id.button2}){
    View action=profile.findViewById(id);String label=id==android.R.id.button1?"Review":"Cancel";
    assertTrue(label+" is a native dialog button",action instanceof Button);
@@ -328,10 +506,13 @@ public final class V283AccessibilityStateTest {
    View profile=requireDialog(PROFILE);assertProfileActionsAboveKeyboard(profile);
    Rect usable=new Rect();profile.getWindowVisibleDisplayFrame(usable);
    WindowInsets insets=profile.getRootWindowInsets();Rect windowBounds=activity.getWindowManager().getCurrentWindowMetrics().getBounds();
+   Rect imeBounds=inputMethodWindowBounds();
+   assertTrue("Capture retains actual input-method screen bounds",validInputMethodBounds(imeBounds));
    record.append("\nimeVisible=").append(insets.isVisible(WindowInsets.Type.ime()))
-    .append("\nimeInsets=").append(insets.getInsets(WindowInsets.Type.ime()))
+    .append("\ndialogImeInsets=").append(insets.getInsets(WindowInsets.Type.ime()))
+    .append("\nactivityImeInsets=").append(decor().getRootWindowInsets()==null?"missing":decor().getRootWindowInsets().getInsets(WindowInsets.Type.ime()))
     .append("\nwindowBounds=").append(windowBounds).append("\nusableDisplayFrame=").append(usable)
-    .append("\nimeTop=").append(windowBounds.bottom-insets.getInsets(WindowInsets.Type.ime()).bottom);
+    .append("\ninputMethodScreenBounds=").append(imeBounds).append("\nimeTop=").append(imeBounds.top);
    for(int id:new int[]{android.R.id.button1,android.R.id.button2}){
     TextView action=(TextView)profile.findViewById(id);Rect visible=new Rect();action.getGlobalVisibleRect(visible);
     record.append("\naction=").append(action.getText()).append("; class=").append(action.getClass().getName())
