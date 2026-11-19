@@ -120,7 +120,7 @@ public final class V283FormWorkflowTest {
    FormState rejectedWaiver=snapshot(WAIVER);
    clickDialog(WAIVER,"Review");awaitDialog("Confirm concession, not a cash receipt");
    requireSyntheticFixture();
-   clickDialog("Confirm concession, not a cash receipt","Record concession");
+   clickDialog("Confirm concession, not a cash receipt","Save");
    expectError("Fee must be configured and remaining concession cannot exceed its rate",rejectedWaiver);
    clickDialog(WAIVER,"Cancel");awaitClosed(WAIVER);
    assertEquals("Rejected concession cannot add an event or cash receipt",before,canonical());
@@ -163,14 +163,14 @@ public final class V283FormWorkflowTest {
    setText(PROFILE,"Joining date YYYY-MM-DD","2026-02-30");
    FormState badDate=snapshot(PROFILE);
    clickDialog(PROFILE,"Review");awaitDialog("Save member profile?");
-   requireSyntheticFixture();clickDialog("Save member profile?","Save audited profile");
+   requireSyntheticFixture();clickDialog("Save member profile?","Save");
    expectError("Joining date must be a valid calendar day",badDate);
    assertEquals("Invalid joining date cannot write a profile event",before,canonical());
    setText(PROFILE,"Joining date YYYY-MM-DD","2026-08-01");
    setProfileName(OTHER_NAME);
    FormState duplicateProfile=snapshot(PROFILE);
    clickDialog(PROFILE,"Review");awaitDialog("Save member profile?");
-   requireSyntheticFixture();clickDialog("Save member profile?","Save audited profile");
+   requireSyntheticFixture();clickDialog("Save member profile?","Save");
    expectError("Possible duplicate member name; profile change canceled",duplicateProfile);
    assertEquals("Duplicate profile rejection preserves every original field",before,canonical());
    System.out.println("V283_PROFILE_RETAINED_ASYNC_FAILURE_PASS");
@@ -182,7 +182,7 @@ public final class V283FormWorkflowTest {
    requireSyntheticFixture();
    QueueHold profileHold=holdQueue();
    try {
-    clickTwice("Save member profile?","Save audited profile");
+    clickTwice("Save member profile?","Save");
     assertSavingForm(PROFILE);
     assertEquals("Queued profile has not committed before its worker runs",before,canonical());
    } finally {profileHold.release.countDown();}

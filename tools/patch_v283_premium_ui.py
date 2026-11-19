@@ -727,6 +727,13 @@ for signature, title, action in (
     assert original.count(builder) == 1
     revised = original.replace(builder, builder.replace("AlertDialog.Builder", "PremiumV283FormBuilder"))
     revised = revised.replace('commitV26Metadata("' + action + '",', 'commitV26Metadata(d,"' + action + '",')
+    # Native stacked button bars can reserve only a peek of Cancel at large
+    # text sizes. The review title/message already identify the audited action.
+    confirmation_label = {"Fee policy": "Save policy", "Fee concession": "Record concession",
+                          "Member profile": "Save audited profile"}.get(action)
+    if confirmation_label:
+        revised = revised.replace('.setPositiveButton("' + confirmation_label + '",',
+                                  '.setPositiveButton("Save",')
     if action == "Member profile":
         revised = revised.replace('      boolean enabled=active.isChecked();',
                                   '      boolean enabled=active.isChecked();\n'

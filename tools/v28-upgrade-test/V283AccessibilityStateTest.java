@@ -58,7 +58,7 @@ public final class V283AccessibilityStateTest {
  private Instrumentation instrumentation;
  private Context context;
  private MainActivity activity;
- private int profileKeyboardAttempts;
+ private int profileKeyboardAttempts,tapAttempts;
 
  @Test public void accessibilityAndScreenStateSurviveRecreation()throws Exception {
   init();LedgerDatabase db=syntheticLedger();
@@ -238,8 +238,8 @@ public final class V283AccessibilityStateTest {
   captureProfileKeyboardEvidence("premium-large-text-profile-keyboard.png",()->findText(requireDialog(PROFILE),"Active club member"));
   tap(()->requireDialog(PROFILE).findViewById(android.R.id.button1),"Review profile above keyboard",true);
   await("Coordinate tap opens profile review",()->dialog(PROFILE_REVIEW)!=null&&requireDialog(PROFILE_REVIEW).hasWindowFocus());
-  twoFrames();
-  tap(()->requireDialog(PROFILE_REVIEW).findViewById(android.R.id.button2),"Cancel profile review",false);
+  tap(()->requireDialog(PROFILE_REVIEW).findViewById(android.R.id.button2),"Cancel profile review",false,
+   "premium-large-text-profile-review-ready.png");
   await("Cancel review returns to profile form",()->dialog(PROFILE_REVIEW)==null&&dialog(PROFILE)!=null&&requireDialog(PROFILE).hasWindowFocus());
   onMain(()->{
    assertSame("Cancel review retains the original form",originalForm.get(),requireDialog(PROFILE));
@@ -340,6 +340,9 @@ public final class V283AccessibilityStateTest {
    for(int index=0;index<windows.size();index++)appendKeyboardWindow(record,"window["+index+"]",windows.get(index));
    appendAccessibilityWindows(record);
   });}catch(Exception|AssertionError diagnosticIssue){record.append("\ngeometryCaptureIssue=").append(diagnosticIssue);}
+  writeFailureEvidence(filename,record,"V283_KEYBOARD_FAILURE");
+ }
+ private void writeFailureEvidence(String filename,StringBuilder record,String prefix){
   screenshot(filename);
   try{
    File directory=context.getExternalFilesDir("premium-ui-evidence");
@@ -347,8 +350,8 @@ public final class V283AccessibilityStateTest {
     try(FileOutputStream output=new FileOutputStream(new File(directory,filename+".txt"))){
      output.write(record.append('\n').toString().getBytes(StandardCharsets.UTF_8));
     }
-  }catch(Exception diagnosticIssue){System.out.println("Optional keyboard geometry write: "+diagnosticIssue);}
-  for(String line:record.toString().split("\n"))System.out.println("V283_KEYBOARD_FAILURE "+line);
+  }catch(Exception diagnosticIssue){System.out.println("Optional failure geometry write: "+diagnosticIssue);}
+  for(String line:record.toString().split("\n"))System.out.println(prefix+" "+line);
  }
  private void appendKeyboardWindow(StringBuilder record,String label,View window){
   appendKeyboardView(record,label,window);if(window==null)return;
@@ -483,23 +486,97 @@ public final class V283AccessibilityStateTest {
   return new Rect(originX+(int)Math.floor(left),originY,originX+(int)Math.ceil(right),originY+layout.getHeight());
  }
  private void tap(Finder finder,String label,boolean keyboardRequired)throws Exception {
+  tap(finder,label,keyboardRequired,null);
+ }
+ private void tap(Finder finder,String label,boolean keyboardRequired,String readyEvidence)throws Exception {
   // Inject through Android's input dispatcher. performClick() would wrongly
   // report success for an action covered by the IME or outside the window.
-  twoFrames();AtomicReference<Rect> bounds=new AtomicReference<>();
-  onMain(()->{
-   View action=finder.find();assertNotNull(label,action);assertTrue(label+" owns window focus",action.hasWindowFocus());
-   if(keyboardRequired)assertProfileActionsAboveKeyboard(requireDialog(PROFILE));
-   assertVisible(action,label);assertTouch(action,label);assertTrue(label+" is a native button",action instanceof Button);
-   assertTextFits((Button)action,label);bounds.set(screenBounds(action));
-  });
-  float x=bounds.get().exactCenterX(),y=bounds.get().exactCenterY();long downAt=SystemClock.uptimeMillis();
-  MotionEvent down=MotionEvent.obtain(downAt,downAt,MotionEvent.ACTION_DOWN,x,y,0);down.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-  try{assertTrue(label+" touch DOWN is dispatched",instrumentation.getUiAutomation().injectInputEvent(down,true));}finally{down.recycle();}
-  Thread.sleep(60);
-  MotionEvent up=MotionEvent.obtain(downAt,SystemClock.uptimeMillis(),MotionEvent.ACTION_UP,x,y,0);up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
-  try{assertTrue(label+" touch UP is dispatched",instrumentation.getUiAutomation().injectInputEvent(up,true));}finally{up.recycle();}
-  System.out.println("V283_COORDINATE_TAP label="+label+" bounds="+bounds.get()+" x="+x+" y="+y+" keyboardRequired="+keyboardRequired);
-  twoFrames();
+  final int attempt=++tapAttempts;
+  AtomicReference<View> observedAction=new AtomicReference<>();AtomicReference<Rect> bounds=new AtomicReference<>();
+  AtomicReference<String> lastObservation=new AtomicReference<>("Tap wait not started"),previous=new AtomicReference<>();
+  AtomicLong stableSince=new AtomicLong();
+  try{
+   await(label+" has focused, fully visible, stable native button bounds",()->{
+    View action=finder.find();observedAction.set(action);
+    if(action==null){lastObservation.set("action=missing");previous.set(null);return false;}
+    Rect visible=new Rect(),usable=new Rect();action.getGlobalVisibleRect(visible);action.getWindowVisibleDisplayFrame(usable);
+    Rect imeBounds=inputMethodWindowBounds();
+    boolean focused=action.hasWindowFocus(),full=fullyVisible(action);
+    boolean interactive=action instanceof Button&&action.isEnabled()&&action.isClickable();
+    boolean keyboardReady=true;
+    if(keyboardRequired){
+     View profile=dialog(PROFILE);
+     keyboardReady=profile!=null&&imeVisible(profile.getRootWindowInsets())&&validInputMethodBounds(imeBounds);
+     if(keyboardReady)for(int id:new int[]{android.R.id.button1,android.R.id.button2}){
+      View other=profile.findViewById(id);
+      keyboardReady=keyboardReady&&fullyVisible(other)&&screenBounds(other).bottom<=imeBounds.top;
+     }
+    }
+    lastObservation.set("windowFocus="+focused+"; fullyVisible="+full+"; nativeEnabledClickable="+interactive+
+     "; keyboardRequired="+keyboardRequired+"; keyboardReady="+keyboardReady+
+     "; buttonBounds="+screenBounds(action)+"; visibleBounds="+visible+"; usableFrame="+usable+"; inputMethodScreenBounds="+imeBounds);
+    if(!focused||!full||!interactive||!keyboardReady){previous.set(null);return false;}
+    String geometry=System.identityHashCode(action)+" / "+screenBounds(action)+" / "+visible+" / "+usable+
+     " / root="+screenBounds(action.getRootView())+" / imeScreen="+imeBounds+
+     " / text="+(((Button)action).getLayout()==null?"missing":textBounds((Button)action));
+    if(!geometry.equals(previous.get())){previous.set(geometry);stableSince.set(SystemClock.elapsedRealtime());return false;}
+    return SystemClock.elapsedRealtime()-stableSince.get()>=300;
+   },20000);
+   if(readyEvidence!=null)captureEvidence(readyEvidence,finder,record->{
+    View action=finder.find(),window=action.getRootView();
+    record.append("\ntapLabel=").append(label).append("\nkeyboardRequired=").append(keyboardRequired)
+     .append("\nlastTapWaitPredicates=").append(lastObservation.get());
+    appendKeyboardWindow(record,"readyTapWindow",window);
+    appendKeyboardAncestors(record,"readyPositive",window.findViewById(android.R.id.button1));
+    appendKeyboardAncestors(record,"readyNegative",window.findViewById(android.R.id.button2));
+    appendAccessibilityWindows(record);
+   });
+   onMain(()->{
+    View action=finder.find();assertNotNull(label,action);assertTrue(label+" owns window focus",action.hasWindowFocus());
+    if(keyboardRequired)assertProfileActionsAboveKeyboard(requireDialog(PROFILE));
+    assertVisible(action,label);assertTouch(action,label);assertTrue(label+" is a native button",action instanceof Button);
+    assertTextFits((Button)action,label);bounds.set(screenBounds(action));
+   });
+   float x=bounds.get().exactCenterX(),y=bounds.get().exactCenterY();long downAt=SystemClock.uptimeMillis();
+   MotionEvent down=MotionEvent.obtain(downAt,downAt,MotionEvent.ACTION_DOWN,x,y,0);down.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+   try{assertTrue(label+" touch DOWN is dispatched",instrumentation.getUiAutomation().injectInputEvent(down,true));}finally{down.recycle();}
+   Thread.sleep(60);
+   MotionEvent up=MotionEvent.obtain(downAt,SystemClock.uptimeMillis(),MotionEvent.ACTION_UP,x,y,0);up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+   try{assertTrue(label+" touch UP is dispatched",instrumentation.getUiAutomation().injectInputEvent(up,true));}finally{up.recycle();}
+   System.out.println("V283_COORDINATE_TAP label="+label+" bounds="+bounds.get()+" x="+x+" y="+y+" keyboardRequired="+keyboardRequired);
+   twoFrames();
+  }catch(Exception|AssertionError issue){
+   captureTapFailure(attempt,label,keyboardRequired,issue,observedAction.get(),lastObservation.get(),previous.get());
+   throw issue;
+  }
+ }
+ private void captureTapFailure(int attempt,String label,boolean keyboardRequired,Throwable failure,
+   View observedAction,String predicates,String stableGeometry){
+  String filename="premium-large-text-tap-failure-"+attempt+".png";
+  StringBuilder record=new StringBuilder("file=").append(filename).append("\nfailure=").append(failure)
+   .append("\ntapLabel=").append(label).append("\nkeyboardRequired=").append(keyboardRequired)
+   .append("\nelapsedRealtime=").append(SystemClock.elapsedRealtime()).append("\nlastTapWaitPredicates=").append(predicates)
+   .append("\nlastStableGeometry=").append(stableGeometry);
+  try{onMain(()->{
+   record.append("\nfontScale=").append(activity.getResources().getConfiguration().fontScale)
+    .append("\nwidthDp=").append(activity.getResources().getConfiguration().screenWidthDp)
+    .append("\nactivityFinishing=").append(activity.isFinishing()).append("; activityDestroyed=").append(activity.isDestroyed())
+    .append("\nactivityCurrentWindowBounds=").append(activity.getWindowManager().getCurrentWindowMetrics().getBounds());
+   appendKeyboardAncestors(record,"observedTapTarget",observedAction);
+   View window=observedAction==null?null:observedAction.getRootView();
+   appendKeyboardWindow(record,"observedTapWindow",window);
+   View confirmation=dialog(PROFILE_REVIEW);appendKeyboardWindow(record,"confirmation",confirmation);
+   if(confirmation!=null){
+    appendKeyboardAncestors(record,"confirmationPositive",confirmation.findViewById(android.R.id.button1));
+    appendKeyboardAncestors(record,"confirmationNegative",confirmation.findViewById(android.R.id.button2));
+    appendKeyboardScrollViews(record,confirmation);
+   }
+   appendKeyboardWindow(record,"profile",dialog(PROFILE));
+   List<View> windows=WindowInspector.getGlobalWindowViews();record.append("\nglobalWindowCount=").append(windows.size());
+   for(int index=0;index<windows.size();index++)appendKeyboardWindow(record,"window["+index+"]",windows.get(index));
+   appendAccessibilityWindows(record);
+  });}catch(Exception|AssertionError diagnosticIssue){record.append("\ngeometryCaptureIssue=").append(diagnosticIssue);}
+  writeFailureEvidence(filename,record,"V283_TAP_FAILURE");
  }
  private void captureProfileKeyboardEvidence(String filename,Finder target)throws Exception {
   captureEvidence(filename,target,record->{
@@ -665,7 +742,10 @@ public final class V283AccessibilityStateTest {
  }
  private static View clickable(View view){for(View node=view;node!=null;node=node.getParent() instanceof View?(View)node.getParent():null)if(node.isClickable())return node;return null;}
  private void await(String label,BooleanSupplier condition)throws Exception {
-  long deadline=SystemClock.elapsedRealtime()+15000;AtomicBoolean done=new AtomicBoolean();
+  await(label,condition,15000);
+ }
+ private void await(String label,BooleanSupplier condition,long timeoutMs)throws Exception {
+  long deadline=SystemClock.elapsedRealtime()+timeoutMs;AtomicBoolean done=new AtomicBoolean();
   do{onMain(()->done.set(condition.getAsBoolean()));if(done.get())return;Thread.sleep(100);}while(SystemClock.elapsedRealtime()<deadline);
   fail("Timed out: "+label);
  }
