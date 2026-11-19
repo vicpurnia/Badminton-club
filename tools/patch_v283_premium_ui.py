@@ -286,6 +286,29 @@ new_payments = new_payments.replace(
     'Map<String,Member> names=new HashMap<>();')
 new_payments = new_payments.replace('avatar(m.name)', 'avatar(effectiveName(m,displayProfiles))')
 new_payments = new_payments.replace('text(m.name,14,', 'text(effectiveName(m,displayProfiles),14,')
+receipt_start = new_payments.index('   LinearLayout card=row();card.addView(avatar(')
+receipt_end = new_payments.index('if(++n==16)break;}', receipt_start)
+new_payments = new_payments[:receipt_start] + '''
+   LinearLayout card=col();LinearLayout identity=row();
+   identity.addView(avatar(effectiveName(m,displayProfiles)),new LinearLayout.LayoutParams(dp(44),dp(44)));
+   LinearLayout info=col();pad(info,11,0);
+   TextView memberLabel=text(effectiveName(m,displayProfiles),15,DARK,true);
+   memberLabel.setMaxLines(2);memberLabel.setEllipsize(android.text.TextUtils.TruncateAt.END);
+   info.addView(memberLabel);gap(info,5);
+   info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),12,GRAY,false));
+   identity.addView(info,new LinearLayout.LayoutParams(0,-2,1));card.addView(identity,fill());gap(card,12);
+   long net=corrections.containsKey(c.id)?corrections.get(c.id).effective:c.amount;
+   LinearLayout receiptFooter=row();
+   TextView receiptAmount=text(net==0?"VOID":rupee(net),19,net==0?GRAY:DARK,true);
+   receiptAmount.setTag("receipt-amount:"+c.id);
+   receiptFooter.addView(receiptAmount,new LinearLayout.LayoutParams(0,-2,1));
+   TextView receiptAction=inlineButton(net==0?"Void record":"Receipt ▤",GREEN,()->shareRecordedReceipt(m,c));
+   receiptAction.setTag("receipt-action:"+c.id);
+   receiptAction.setContentDescription((net==0?"Share void record for ":"Share receipt for ")+
+    effectiveName(m,displayProfiles)+" · "+dateLabel(c.feeMonth));
+   receiptFooter.addView(receiptAction,new LinearLayout.LayoutParams(-2,-2));
+   card.addView(receiptFooter,fill());panel(content,card);
+   ''' + new_payments[receipt_end:]
 once(payments, new_payments)
 
 expenses = method("private void showExpenses()")

@@ -66,6 +66,14 @@ public final class V283WorkflowUiTest {
    for(Member member:members)if(MEMBER.equals(member.id))selected=member;
    assertNotNull("Known positive-payment fixture member must exist",selected);
    final Member member=selected;
+   Contribution selectedReceipt=null;
+   for(Contribution receipt:db.dao().contributions())
+    if(MEMBER.equals(receipt.memberId)&&MONTH.equals(receipt.feeMonth)&&"cash".equals(receipt.kind)){
+     selectedReceipt=receipt;break;
+    }
+   assertNotNull("Known cash receipt must exist",selectedReceipt);
+   assertEquals("Cash receipt fixture amount",1379L,selectedReceipt.amount);
+   final String receiptId=selectedReceipt.id;
    String before=canonical(db);
    try(ActivityScenario<MainActivity> scenario=ActivityScenario.launch(MainActivity.class)){
     scenario.onActivity(value->activity=value);
@@ -86,6 +94,7 @@ public final class V283WorkflowUiTest {
      selectTab(tab);
      await("Loaded content on "+tab,()->screenReady(tab));
      twoFrames();
+     if("Collect".equals(tab))assertReceiptFooterVisible(receiptId);
      onMain(()->assertNavigation(tab));
      screenshot("premium-"+tab.toLowerCase(java.util.Locale.ROOT)+".png");
     }
@@ -296,6 +305,37 @@ public final class V283WorkflowUiTest {
   if("Collect".equals(tab))return activityText("Collect fees")&&activityText(NAME);
   if("Shuttles".equals(tab))return activityText("Shuttle purchases (1)");
   return activity.getWindow().getDecorView().findViewWithTag("report:Verified account export")!=null;
+ }
+ private void assertReceiptFooterVisible(String receiptId)throws Exception {
+  onMain(()->{
+   View action=activity.getWindow().getDecorView().findViewWithTag("receipt-action:"+receiptId);
+   assertNotNull("Known receipt action exists",action);
+   action.requestRectangleOnScreen(new Rect(0,0,action.getWidth(),action.getHeight()),true);
+  });
+  twoFrames();
+  onMain(()->{
+   View root=activity.getWindow().getDecorView();
+   TextView amount=root.findViewWithTag("receipt-amount:"+receiptId);
+   TextView action=root.findViewWithTag("receipt-action:"+receiptId);
+   assertNotNull("Known receipt amount exists",amount);assertNotNull("Known receipt action exists",action);
+   assertEquals("Receipt shows its actual cash amount","₹1,379",amount.getText().toString());
+   assertEquals("Receipt action label","Receipt ▤",action.getText().toString());
+   assertTrue("Receipt action is enabled and clickable",action.isEnabled()&&action.isClickable());
+   Rect viewport=new Rect();assertTrue("Window has a visible viewport",root.getGlobalVisibleRect(viewport));
+   for(View view:new View[]{amount,action}){
+    String label=String.valueOf(view.getTag());
+    assertTrue(label+" has positive measured bounds",view.getMeasuredWidth()>0&&view.getMeasuredHeight()>0);
+    assertTrue(label+" is shown",view.isShown());
+    Rect visible=new Rect();assertTrue(label+" is on screen",view.getGlobalVisibleRect(visible));
+    assertEquals(label+" is not horizontally clipped",view.getWidth(),visible.width());
+    assertEquals(label+" is not vertically clipped",view.getHeight(),visible.height());
+    Rect parent=new Rect();assertTrue(label+" footer is visible",((View)view.getParent()).getGlobalVisibleRect(parent));
+    assertTrue(label+" is fully within its footer: "+visible+" / "+parent,parent.contains(visible));
+    assertTrue(label+" is fully within the viewport: "+visible+" / "+viewport,viewport.contains(visible));
+   }
+   assertTouchTarget(action,"Receipt action");
+  });
+  System.out.println("V283_COLLECT_RECEIPT_FOOTER_VISIBLE_PASS");
  }
  private void clickReport(String title)throws Exception {
   clickView(()->activity.getWindow().getDecorView().findViewWithTag("report:"+title),"Report "+title);

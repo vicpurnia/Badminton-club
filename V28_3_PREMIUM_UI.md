@@ -12,6 +12,7 @@ Based on v28.2 source 9fd4ec9b5218d41b62927ba59665e8aaca0fc454.
 - Everyday Home actions above the longer backup information.
 - Add player before the roster, cleaner member cards, and the existing direct photo actions.
 - Clear primary/secondary actions for collections and shuttle activity.
+- Collection cards put the amount and Receipt button on their own row so a long member name cannot hide them.
 - Advanced stock setup and physical counting in an expandable section.
 - Searchable Reports catalogue with All, Reports, Club and Backups categories.
 - All 24 original report handlers preserved, including conditional external-folder disconnect.
@@ -22,6 +23,8 @@ Based on v28.2 source 9fd4ec9b5218d41b62927ba59665e8aaca0fc454.
 2. Canceling duplicate-payment review with Android Back or outside dismissal releases its review flag. Save can be tried again without reopening the form.
 3. Initials use Unicode code points and a safe fallback, including the accepted name Dr.
 4. Receipt Library indicates its active filter and accepts the current display name as well as the immutable recorded name. Home and Collect also use the current profile display name.
+5. The Backups category includes Back up now, and an empty member list finishes loading with an accurate no-ledger state.
+6. Long member names no longer crowd out the amount and sharing control on monthly collection cards. The UI check verifies their measured, visible bounds.
 
 PDF callbacks continue to receive the original recorded Member object.
 
