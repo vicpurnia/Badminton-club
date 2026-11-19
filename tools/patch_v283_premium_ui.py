@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+"""v28.3 native presentation overlay; preserve all financial handlers and formats."""
+from pathlib import Path
+import re
+import shutil
+
+root = Path("app/src/main/java/com/vinayak/badminton/nativepreview")
+activity = root / "MainActivity.java"
+s = activity.read_text(encoding="utf-8")
+
+
+def matching(source, start, opening="{", closing="}"):
+    """Match Java delimiters while ignoring comments and quoted text."""
+    assert source[start] == opening
+    depth, state, i = 0, None, start
+    while i < len(source):
+        ch = source[i]
+        following = source[i:i + 2]
+        if state in ('"', "'"):
+            if ch == "\\":
+                i += 2
+                continue
+            if ch == state:
+                state = None
+        elif state == "//":
+            if ch == "\n":
+                state = None
+        elif state == "/*":
+            if following == "*/":
+                state = None
+                i += 1
+        elif following in ("//", "/*"):
+            state = following
+            i += 1
+        elif ch in ('"', "'"):
+            state = ch
+        elif ch == opening:
+            depth += 1
+        elif ch == closing:
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    raise AssertionError("Unbalanced Java source")
+
+
+def method(signature):
+    start = s.index(signature)
+    brace = s.index("{", start)
+    return s[start:matching(s, brace) + 1]
+
+
+def once(old, new):
+    global s
+    if s.count(old) != 1:
+        raise AssertionError(f"Expected one v28.3 source anchor ({s.count(old)}): {old[:100]}")
+    s = s.replace(old, new, 1)
+
+
+def replace_method(signature, new):
+    once(method(signature), new.strip())
+
+
+once(
+    "private static final int GREEN=0xFF12644E,DARK=0xFF102E29,LIGHT=0xFFF6F8F4,GRAY=0xFF72847C,GOLD=0xFFE6C88A,LINE=0xFFE6EBE5,PALE=0xFFEAF3ED;",
+    "private static final int GREEN=PremiumV283Ui.ACCENT,DARK=PremiumV283Ui.INK,"
+    "LIGHT=PremiumV283Ui.IVORY,GRAY=PremiumV283Ui.MUTED,GOLD=PremiumV283Ui.GOLD,"
+    "LINE=PremiumV283Ui.LINE,PALE=PremiumV283Ui.SOFT;",
+)
+
+replace_method("private Button button(", """
+private Button button(String label,Runnable task){
+ Button view=new Button(this);view.setAllCaps(false);view.setText(label);
+ view.setTextColor(Color.WHITE);view.setTextSize(15);
+ view.setTypeface(Typeface.create("sans-serif-medium",Typeface.NORMAL));
+ view.setMinHeight(dp(50));pad(view,16,12);
+ view.setBackground(bg(GREEN,12));bindGuardedClick(view,task);return view;
+}
+private Button secondaryButton(String label,Runnable task){
+ Button view=button(label,task);view.setTextColor(GREEN);
+ view.setBackground(border(Color.WHITE,LINE,12));return view;
+}
+private Button dangerButton(String label,Runnable task){
+ Button view=button(label,task);view.setTextColor(PremiumV283Ui.DANGER);
+ view.setBackground(bg(PremiumV283Ui.DANGER_SOFT,12));return view;
+}""")
+once("private void bindGuardedClick(View view,Runnable task){",
+     "private void bindGuardedClick(View view,Runnable task){\n  PremiumV283Ui.touch(view);")
+once("t.setTextSize(size);", "t.setTextSize(Math.max(12,size));")
+replace_method("private TextView inlineButton(", """
+private TextView inlineButton(String label,int color,Runnable run){
+ TextView view=text(label,13,color,true);pad(view,12,12);
+ view.setGravity(Gravity.CENTER);view.setBackground(border(PALE,LINE,12));
+ bindGuardedClick(view,run);return view;
+}""")
+replace_method("private LinearLayout metric(", """
+private LinearLayout metric(String label,String value,String symbol){
+ LinearLayout card=col();card.setBackground(border(Color.WHITE,LINE,16));pad(card,14,16);
+ card.addView(PremiumV283Ui.icon(this,PremiumV283Ui.iconKey(label),GREEN,22),
+  new LinearLayout.LayoutParams(dp(22),dp(22)));
+ gap(card,12);card.addView(text(label,12,GRAY,false));gap(card,6);
+ card.addView(text(value,22,DARK,true));return card;
+}""")
+replace_method("private LinearLayout action(", """
+private LinearLayout action(String symbol,String caption,Runnable runnable){
+ LinearLayout box=col();box.setGravity(Gravity.CENTER);
+ box.setBackground(border(Color.WHITE,LINE,16));pad(box,8,16);
+ box.addView(PremiumV283Ui.icon(this,PremiumV283Ui.iconKey(caption),GREEN,24),
+  new LinearLayout.LayoutParams(dp(24),dp(24)));
+ gap(box,10);TextView label=text(caption,12,DARK,true);
+ label.setGravity(Gravity.CENTER);box.addView(label);
+ pressable(box,runnable);return box;
+}""")
+replace_method("private TextView avatar(", """
+private TextView avatar(String name){
+ TextView view=text(PremiumV283Ui.initials(name),14,GREEN,true);
+ view.setGravity(Gravity.CENTER);view.setBackground(bg(PALE,15));
+ view.setWidth(dp(44));view.setHeight(dp(44));return view;
+}""")
+replace_method("private void title(", """
+private void title(String heading,String sub){
+ content.removeAllViews();if(pageScroll!=null)pageScroll.scrollTo(0,0);
+ content.addView(text(heading,23,DARK,true));gap(content,6);
+ content.addView(text(sub,13,GRAY,false));gap(content,18);
+}""")
+
+version = re.search(r'"(v\d+\.\d+ DEVELOPMENT CANDIDATE)"', method("private void layout()")).group(1)
+replace_method("private void layout()", """
+private void layout(){
+ root=col();root.setBackgroundColor(LIGHT);setContentView(root);
+ if(Build.VERSION.SDK_INT>=35){
+  root.setOnApplyWindowInsetsListener((view,insets)->{
+   android.graphics.Insets bars=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
+   view.setPadding(bars.left,bars.top,bars.right,bars.bottom);return insets;
+  });root.requestApplyInsets();
+ }
+ getWindow().setStatusBarColor(LIGHT);getWindow().setNavigationBarColor(LIGHT);
+ androidx.core.view.WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView())
+  .setAppearanceLightStatusBars(true);
+ androidx.core.view.WindowCompat.getInsetsController(getWindow(),getWindow().getDecorView())
+  .setAppearanceLightNavigationBars(true);
+ header=col();header.setBackgroundColor(LIGHT);pad(header,18,10);
+ LinearLayout top=row();
+ ImageView brandIcon=PremiumV283Ui.icon(this,"court",DARK,32);
+ brandIcon.setBackground(bg(GOLD,11));pad(brandIcon,6,6);
+ top.addView(brandIcon,new LinearLayout.LayoutParams(dp(40),dp(40)));
+ LinearLayout brand=col();pad(brand,11,0);
+ brand.addView(text("Badminton Club",17,DARK,true));gap(brand,4);
+ brand.addView(text("__VERSION__".replace(" DEVELOPMENT CANDIDATE"," · Preview"),11,GRAY,false));
+ top.addView(brand,new LinearLayout.LayoutParams(0,-2,1));
+ top.addView(pill("Offline",PremiumV283Ui.SUCCESS,PremiumV283Ui.SUCCESS_SOFT));
+ header.addView(top);root.addView(header,fill());
+ ScrollView scroll=new ScrollView(this);pageScroll=scroll;
+ scroll.setFillViewport(true);scroll.setVerticalScrollBarEnabled(false);
+ content=col();pad(content,16,16);scroll.addView(content);
+ root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
+ nav=row();nav.setBackgroundColor(Color.WHITE);nav.setElevation(dp(6));pad(nav,5,6);
+ root.addView(nav,new LinearLayout.LayoutParams(-1,-2));
+}""".replace("__VERSION__", version))
+replace_method("private void drawNav()", """
+private void drawNav(){
+ nav.removeAllViews();
+ for(String item:new String[]{"Home","Collect","Shuttles","Members","Reports"}){
+  boolean active=tab.equals(item);LinearLayout tile=col();tile.setGravity(Gravity.CENTER);
+  tile.setBackground(bg(active?PALE:Color.WHITE,14));pad(tile,2,8);
+  tile.setTag("nav:"+item);tile.setSelected(active);tile.setContentDescription(item);
+  tile.addView(PremiumV283Ui.icon(this,PremiumV283Ui.iconKey(item),active?GREEN:GRAY,24),
+   new LinearLayout.LayoutParams(dp(24),dp(24)));
+  gap(tile,5);TextView caption=text(item,11,active?GREEN:GRAY,active);
+  caption.setTextSize(11);caption.setGravity(Gravity.CENTER);tile.addView(caption);
+  LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(0,-2,1);
+  params.setMargins(dp(2),0,dp(2),0);nav.addView(tile,params);
+  pressable(tile,()->selectTab(item));tile.setMinimumHeight(dp(68));
+ }
+}""")
+replace_method("private void monthPicker()", """
+private void monthPicker(){
+ LinearLayout holder=row();holder.setBackground(border(Color.WHITE,LINE,14));pad(holder,6,4);
+ ImageView previous=PremiumV283Ui.icon(this,"chevron-left",GREEN,24);pad(previous,12,12);
+ previous.setBackground(bg(PALE,12));pressable(previous,()->shiftMonth(-1));
+ previous.setContentDescription("Previous month");
+ holder.addView(previous,new LinearLayout.LayoutParams(dp(48),dp(48)));
+ LinearLayout middle=col();middle.setGravity(Gravity.CENTER);
+ TextView month=text(dateLabel(reportMonth)+"  ▾",16,DARK,true);
+ month.setGravity(Gravity.CENTER);middle.addView(month);
+ middle.setContentDescription("Choose month, "+dateLabel(reportMonth));
+ pressable(middle,()->chooseMonth(reportMonth,value->{reportMonth=value;selectTab(tab);}));
+ holder.addView(middle,new LinearLayout.LayoutParams(0,-2,1));
+ ImageView next=PremiumV283Ui.icon(this,"chevron-right",GREEN,24);pad(next,12,12);
+ next.setBackground(bg(PALE,12));pressable(next,()->shiftMonth(1));
+ next.setContentDescription("Next month");
+ holder.addView(next,new LinearLayout.LayoutParams(dp(48),dp(48)));
+ content.addView(holder,fill());gap(content,16);
+}""")
+
+# Fields use consistent native, keyboard-accessible controls. Existing handlers,
+# input types, hints and values remain intact.
+s = s.replace("new EditText(this)", "PremiumV283Ui.field(this)")
+s = s.replace("AutoCompleteTextView who=new AutoCompleteTextView(this);",
+              "AutoCompleteTextView who=new AutoCompleteTextView(this);PremiumV283Ui.styleField(who);")
+once('.setNegativeButton("Keep editing",(d,w)->reviewing.set(false))',
+     '.setNegativeButton("Keep editing",(d,w)->reviewing.set(false))\n'
+     '        .setOnCancelListener(cancelled->reviewing.set(false))')
+
+# Everyday actions appear before longer status information.
+home = method("private void showHome()")
+quick_start = home.index('    sectionHeading("Quick actions"')
+quick_end = home.index('    sectionHeading("Recent activity"', quick_start)
+quick = home[quick_start:quick_end]
+new_home = home[:quick_start] + home[quick_end:]
+new_home = new_home.replace('    LinearLayout stats=row();', quick + '    LinearLayout stats=row();', 1)
+new_home = new_home.replace('text(rupee(latest.closing),39,', 'text(rupee(latest.closing),33,')
+new_home = new_home.replace('pad(card,22,24)', 'pad(card,20,22)')
+new_home = new_home.replace(
+    "VINAYAK Badminton Premium v26.9 — development TEST candidate only. Keep your signed v25.9 ledger and its independently verified external backup. A signed test build is not an approved production release. Verified history can be imported only into an EMPTY database.",
+    "Import your verified ledger to bring your members, receipts and stock records onto this phone. Start from a verified backup. This is a preview build; imports are available only when the ledger is empty.")
+new_home = new_home.replace(
+    '   final int paymentCount=count;',
+    '   final Map<String,PremiumV26State.Profile> displayProfiles=PremiumV26State.profiles(meta.inventoryStockJson,knownMembers());\n'
+    '   final int paymentCount=count;')
+new_home = new_home.replace(
+    'for(Member m:members)names.put(m.id,m.name);',
+    'for(Member m:members)names.put(m.id,effectiveName(m,displayProfiles));')
+once(home, new_home)
+
+# Member cards keep photo action IDs and financial click behavior, with room for
+# names and amounts. The add-player action no longer requires scrolling the roster.
+once(
+    'content.addView(button("Monthly fee rules, dues & concessions",this::showFeeCentre));\n'
+    '  gap(content,13);\n'
+    '  LinearLayout results=col();content.addView(results);gap(content,10);\n'
+    '  content.addView(button("＋ Add new player",this::addMember),fill());',
+    'content.addView(button("＋ Add new player",this::addMember),fill());gap(content,9);\n'
+    '  content.addView(secondaryButton("Monthly fee rules, dues & concessions",this::showFeeCentre));gap(content,14);\n'
+    '  LinearLayout results=col();results.addView(text("Loading members…",13,GRAY,false));content.addView(results);')
+once(
+    '''LinearLayout card=row();
+      card.addView(memberAvatar(item.member,item.name));
+      LinearLayout labels=col();pad(labels,11,0);
+      labels.addView(text(item.name+(item.active?"":" · Archived"),14,DARK,true));gap(labels,5);
+      labels.addView(text(viewedMonth+" · "+item.detail,11,GRAY,false));
+      card.addView(labels,new LinearLayout.LayoutParams(0,-2,1));
+      boolean settled="Paid".equals(item.status)||"Settled".equals(item.status);
+      boolean partial="Partial".equals(item.status);
+      card.addView(pill(item.status,settled?GREEN:partial?0xFF9B6B18:GRAY,
+        settled?PALE:partial?0xFFFFF2D7:0xFFF1F3F1));''',
+    '''LinearLayout card=col();LinearLayout identity=row();
+      identity.addView(memberAvatar(item.member,item.name));
+      TextView memberName=text(item.name+(item.active?"":" · Archived"),15,DARK,true);
+      pad(memberName,11,0);memberName.setMaxLines(2);
+      memberName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      identity.addView(memberName,new LinearLayout.LayoutParams(0,-2,1));
+      boolean settled="Paid".equals(item.status)||"Settled".equals(item.status);
+      boolean partial="Partial".equals(item.status);
+      identity.addView(pill(item.status,settled?PremiumV283Ui.SUCCESS:partial?PremiumV283Ui.WARNING:GRAY,
+        settled?PremiumV283Ui.SUCCESS_SOFT:partial?PremiumV283Ui.WARNING_SOFT:LIGHT));
+      card.addView(identity);gap(card,12);
+      card.addView(text(item.detail,12,GRAY,false));
+      card.setContentDescription(item.name+". "+item.status+". "+item.detail+". Open member history");''')
+once('body.addView(button("Remove photo",', 'body.addView(dangerButton("Remove photo",')
+once('body.addView(button("Done",options::dismiss)', 'body.addView(secondaryButton("Done",options::dismiss)')
+once('LinearLayout body=col();pad(body,20,17);',
+     'LinearLayout body=col();pad(body,20,17);body.setBackground(bg(Color.WHITE,24));')
+s = s.replace('body.addView(button("Remove local member photo",',
+              'body.addView(dangerButton("Remove local member photo",')
+
+payments = method("private void showPayments()")
+hero_start = payments.index("  LinearLayout headline=")
+hero_end = payments.index('  sectionHeading("Monthly receipts"', hero_start)
+new_payments = payments[:hero_start] + '''
+  LinearLayout headline=col();headline.setBackground(border(Color.WHITE,LINE,18));pad(headline,18,18);
+  headline.addView(text("Record a contribution",20,DARK,true));gap(headline,8);
+  headline.addView(text("Choose a player, confirm the cash received and share a receipt.",13,GRAY,false));gap(headline,16);
+  headline.addView(button("＋  Record cash actually received",()->openPayment(null)));gap(headline,9);
+  headline.addView(secondaryButton("▤  Find or share any past receipt",this::showReceiptLibrary));
+  content.addView(headline);gap(content,20);
+''' + payments[hero_end:]
+new_payments = new_payments.replace(
+    'Map<String,Member> names=new HashMap<>();',
+    'Map<String,PremiumV26State.Profile> displayProfiles=PremiumV26State.profiles(meta.inventoryStockJson,knownMembers());'
+    'Map<String,Member> names=new HashMap<>();')
+new_payments = new_payments.replace('avatar(m.name)', 'avatar(effectiveName(m,displayProfiles))')
+new_payments = new_payments.replace('text(m.name,14,', 'text(effectiveName(m,displayProfiles),14,')
+once(payments, new_payments)
+
+expenses = method("private void showExpenses()")
+hero_start = expenses.index("  LinearLayout hero=")
+hero_end = expenses.index("  final String selected=", hero_start)
+new_expenses = expenses[:hero_start] + '''
+  LinearLayout hero=col();hero.setBackground(border(Color.WHITE,LINE,18));pad(hero,18,18);
+  hero.addView(text("Keep your court stocked",20,DARK,true));gap(hero,8);
+  hero.addView(text("Record purchases, donations and the shuttles you use.",13,GRAY,false));gap(hero,16);
+  hero.addView(button("＋ Record shuttle purchase",this::openExpense));gap(hero,9);
+  hero.addView(secondaryButton("＋ Record donated shuttle pack",this::openShuttleDonation));gap(hero,9);
+  hero.addView(secondaryButton("− Record shuttle usage",this::openShuttleUsage));
+  content.addView(hero);gap(content,12);
+  LinearLayout settings=col();settings.setVisibility(View.GONE);
+  settings.addView(secondaryButton("◉ Configure confirmed opening stock",this::openInventoryCheckpoint));gap(settings,8);
+  settings.addView(secondaryButton("Configure low-stock warning",this::openStockThreshold));gap(settings,8);
+  settings.addView(secondaryButton("✓ Reconcile completed-month physical stock",this::openPhysicalStockCount));gap(settings,10);
+  settings.addView(text("Start with a confirmed month-start count. Later physical counts reconcile differences without changing earlier purchases or usage.",12,GRAY,false));
+  TextView setup=inlineButton("Stock settings & physical count  ▾",GREEN,()->{
+   boolean expanded=settings.getVisibility()!=View.VISIBLE;
+   settings.setVisibility(expanded?View.VISIBLE:View.GONE);
+  });
+  setup.setTag("stock:setup");content.addView(setup,fill());gap(content,10);
+  content.addView(settings,fill());gap(content,12);
+''' + expenses[hero_end:]
+once(expenses, new_expenses)
+
+# Receipt Library owns its screen epoch; returning always goes through navigation.
+# Searches accept both the immutable recorded name and current profile label.
+library = method("private void showReceiptLibrary()")
+new_library = library.replace(
+    "private void showReceiptLibrary(){",
+    'private void showReceiptLibrary(){\n  screenEpoch++;tab="Collect";drawNav();\n'
+    '  final int libraryScreen=screenEpoch;final String libraryMonth=reportMonth;')
+new_library = new_library.replace('button("‹ Back to Collect",this::showPayments)',
+                                  'secondaryButton("‹ Back to Collect",()->selectTab("Collect"))')
+new_library = new_library.replace(
+    'Map<String,Member> members=new HashMap<>();',
+    'Map<String,PremiumV26State.Profile> displayProfiles=PremiumV26State.profiles(dao.meta().inventoryStockJson,knownMembers());\n'
+    '   Map<String,Member> members=new HashMap<>();')
+new_library = new_library.replace(
+    '   runOnUiThread(()->{\n    final String[] mode=',
+    '   runOnUiThread(()->{\n    if(!currentScreen(libraryScreen,"Collect",libraryMonth))return;\n'
+    '    final java.util.Map<String,TextView> receiptChips=new java.util.LinkedHashMap<>();\n'
+    '    final String[] mode=')
+new_library = new_library.replace(
+    '    repaint[0]=()->{\n     results.removeAllViews();',
+    '''    repaint[0]=()->{
+     if(!currentScreen(libraryScreen,"Collect",libraryMonth))return;
+     for(java.util.Map.Entry<String,TextView> entry:receiptChips.entrySet()){
+      boolean active=entry.getKey().equals(mode[0]);TextView chip=entry.getValue();
+      chip.setSelected(active);chip.setTextColor(active?Color.WHITE:GREEN);
+      chip.setBackground(bg(active?GREEN:PALE,100));
+     }
+     results.removeAllViews();''')
+new_library = new_library.replace(
+    'String haystack=(item.member.name+" "+item.period()',
+    'String displayName=effectiveName(item.member,displayProfiles);\n'
+    '      String haystack=(displayName+" "+item.member.name+" "+item.period()')
+new_library = new_library.replace('avatar(item.member.name)', 'avatar(displayName)')
+new_library = new_library.replace('text(item.member.name,15,', 'text(displayName,15,')
+new_library = new_library.replace('TextView chip=pill(option,GREEN,PALE);',
+                                   'TextView chip=pill(option,GREEN,PALE);receiptChips.put(option,chip);')
+once(library, new_library)
+
+# Retain each Report callback verbatim, including PDF filenames and import guards.
+reports = method("private void showReports()")
+tiles = []
+cursor = 0
+while True:
+    start = reports.find("reportTile(", cursor)
+    if start < 0:
+        break
+    end = matching(reports, start + len("reportTile"), "(", ")") + 1
+    call = reports[start:end] + ";"
+    heading = re.match(r'reportTile\("(?:[^"\\]|\\.)*","((?:[^"\\]|\\.)*)"', call).group(1)
+    tiles.append((heading, call))
+    cursor = end
+assert len(tiles) == 24, f"Expected all 24 report actions, got {len(tiles)}"
+priority = [
+    "MONTH-END FINANCIAL REVIEW", "MONTHLY FEES & DUES", "RECEIPT LIBRARY · ALL MONTHS",
+    "v26 EXECUTIVE DASHBOARD", "SAVE CLASSIC PDF · A4 LANDSCAPE",
+    "PRINT CLASSIC · A4 LANDSCAPE", "Monthly Cashbook", "Save Monthly PDF to phone",
+]
+tiles.sort(key=lambda row: priority.index(row[0]) if row[0] in priority else len(priority))
+selector_start = reports.index("   LinearLayout selector=")
+selector_end = reports.index("   notice(", selector_start)
+selector = reports[selector_start:selector_end].replace("panel(content,selector);gap(content,13);",
+                                                      "panel(content,selector);")
+calls = "\n".join(
+    ('  if(BackupGuardian.folderSelected(this))\n   ' if heading == "Disconnect external folder" else "  ") + call
+    for heading, call in tiles
+)
+replace_method("private void showReports()", '''
+private void showReports(){
+ title("Reports","Your club finances, beautifully presented");
+''' + selector + '''
+ setupReportCatalogue();
+''' + calls + '''
+ filterReportCatalogue();
+ gap(content,12);
+ content.addView(text("PDFs and backups are created on your phone. For printing, choose the A4 landscape actions. Keep a verified external backup before changing phones.",12,GRAY,false));
+}''')
+replace_method("private void reportTile(", '''
+private final ArrayList<PremiumV283Ui.ToolRow> premiumReportRows=new ArrayList<>();
+private final java.util.Map<String,TextView> premiumReportChips=new java.util.LinkedHashMap<>();
+private LinearLayout premiumReportsList;
+private TextView premiumReportCount;
+private EditText premiumReportSearch;
+private String premiumReportGroup="All";
+private void setupReportCatalogue(){
+ premiumReportRows.clear();premiumReportChips.clear();premiumReportGroup="All";
+ premiumReportSearch=PremiumV283Ui.field(this);premiumReportSearch.setSingleLine(true);
+ premiumReportSearch.setHint("Search reports, receipts or backups");
+ premiumReportSearch.setTag("reports:search");content.addView(premiumReportSearch,fill());gap(content,12);
+ LinearLayout chips=row();
+ for(String group:new String[]{"All","Reports","Club","Backups"}){
+  TextView chip=pill(group,GREEN,PALE);chip.setTag("reports:category:"+group);
+  premiumReportChips.put(group,chip);
+  LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-2,-2);params.setMargins(0,0,dp(8),0);
+  chips.addView(chip,params);
+  pressable(chip,()->{premiumReportGroup=group;filterReportCatalogue();});
+ }
+ HorizontalScrollView strip=new HorizontalScrollView(this);strip.setHorizontalScrollBarEnabled(false);
+ strip.addView(chips);content.addView(strip,fill());gap(content,12);
+ premiumReportCount=text("",12,GRAY,false);content.addView(premiumReportCount);gap(content,10);
+ premiumReportsList=col();content.addView(premiumReportsList,fill());
+ premiumReportSearch.addTextChangedListener(new android.text.TextWatcher(){
+  public void beforeTextChanged(CharSequence value,int start,int count,int after){}
+  public void onTextChanged(CharSequence value,int start,int before,int count){filterReportCatalogue();}
+  public void afterTextChanged(android.text.Editable value){}
+ });
+}
+private void filterReportCatalogue(){
+ String query=premiumReportSearch.getText().toString().trim().toLowerCase(Locale.ROOT);int shown=0;
+ for(PremiumV283Ui.ToolRow row:premiumReportRows){
+  boolean matches=("All".equals(premiumReportGroup)||premiumReportGroup.equals(row.category))&&
+   (query.isEmpty()||(row.title+" "+PremiumV283Ui.label(row.title)+" "+row.detail).toLowerCase(Locale.ROOT).contains(query));
+  row.view.setVisibility(matches?View.VISIBLE:View.GONE);if(matches)shown++;
+ }
+ premiumReportCount.setText(shown==0?"No matching tools. Try another search or category.":shown+" tools · "+premiumReportGroup);
+ for(java.util.Map.Entry<String,TextView> entry:premiumReportChips.entrySet()){
+  boolean active=entry.getKey().equals(premiumReportGroup);TextView chip=entry.getValue();
+  chip.setSelected(active);chip.setTextColor(active?Color.WHITE:GREEN);
+  chip.setBackground(bg(active?GREEN:PALE,100));
+ }
+}
+private void reportTile(String symbol,String heading,String detail,Runnable action){
+ LinearLayout card=row();pad(card,14,16);card.setBackground(border(Color.WHITE,LINE,16));
+ card.setTag("report:"+heading);
+ ImageView icon=PremiumV283Ui.icon(this,PremiumV283Ui.iconKey(heading),GREEN,24);
+ icon.setBackground(bg(PALE,12));pad(icon,10,10);
+ card.addView(icon,new LinearLayout.LayoutParams(dp(44),dp(44)));
+ LinearLayout body=col();pad(body,12,0);
+ body.addView(text(PremiumV283Ui.label(heading),15,DARK,true));gap(body,6);
+ body.addView(text(detail,12,GRAY,false));
+ card.addView(body,new LinearLayout.LayoutParams(0,-2,1));
+ card.addView(text("›",24,GRAY,false));pressable(card,action);
+ LinearLayout wrapper=col();wrapper.addView(card,fill());gap(wrapper,10);
+ premiumReportsList.addView(wrapper,fill());
+ premiumReportRows.add(new PremiumV283Ui.ToolRow(wrapper,heading,detail));
+}''')
+
+# Replace legacy green surface tokens only in the UI, never in ledger/PDF code.
+colors = {
+    "0xFF165E4A": "0xFF233C62", "0xFF07352D": "0xFF14243B", "0xFF154E3E": "0xFF233C62",
+    "0xFF0A513F": "0xFF264BA6", "0xFFD7F3E0": "0xFFE2E9F5", "0xFF2C735B": "0xFF38547B",
+    "0xFFD2E7DA": "0xFFD5DFEE", "0xFF376C5B": "0xFF425773", "0xFFB6D4C3": "0xFFCAD5E6",
+    "0xFFD6F0E1": "0xFFE0E7F4", "0xFFD4E9DF": "0xFFDCE5F3", "0xFFD6EBDD": "0xFFDCE5F3",
+    "0xFFE1F1E9": "0xFFE2E9F5", "0x2412644E": "0x24315DCC",
+}
+for old, new in colors.items():
+    s = s.replace(old, new)
+
+activity.write_text(s, encoding="utf-8")
+shutil.copyfile("src/premium/v28_3/PremiumV283Ui.java", root / "PremiumV283Ui.java")
+theme = Path("app/src/main/res/values/premium_v283_styles.xml")
+theme.parent.mkdir(parents=True, exist_ok=True)
+shutil.copyfile("src/premium/v28_3/styles.xml", theme)
+manifest = Path("app/src/main/AndroidManifest.xml")
+manifest_text = manifest.read_text(encoding="utf-8")
+old_theme = '@android:style/Theme.Material.Light.NoActionBar'
+assert manifest_text.count(old_theme) == 1, "Unexpected manifest theme"
+manifest.write_text(manifest_text.replace(old_theme, "@style/PremiumV283Theme"), encoding="utf-8")
+print("PASS v28.3 premium native UI, 24 unchanged report handlers, receipt routing and duplicate-cancel repair")
