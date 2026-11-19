@@ -17,6 +17,13 @@ collect_ui_evidence(){
  mkdir -p "$EVIDENCE/premium-ui"
  adb pull "/sdcard/Android/data/$PKG/files/premium-ui-evidence/." \
   "$EVIDENCE/premium-ui/" >/dev/null 2>&1 || true
+ # Preserve Android lifecycle/error diagnostics even when instrumentation fails
+ # before the normal successful-end log capture. This never changes its verdict.
+ if [ ! -s "$EVIDENCE/post-upgrade-logcat.txt" ]; then
+  if ! timeout 15s adb logcat -d -v brief > "$EVIDENCE/post-upgrade-logcat.txt" 2>/dev/null; then
+   rm -f "$EVIDENCE/post-upgrade-logcat.txt"
+  fi
+ fi
 }
 trap collect_ui_evidence EXIT
 test -s "$OLD" && test -s "$NEW" && test -s "$TEST"

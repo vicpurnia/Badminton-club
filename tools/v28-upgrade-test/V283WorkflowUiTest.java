@@ -266,7 +266,12 @@ public final class V283WorkflowUiTest {
    View root=requireDialog(title);
    for(String label:controls)assertNotNull("Dialog action is present: "+label,clickable(findText(root,label)));
   });
-  backUntilClosed(title);System.out.println("V283_REPORT_DIALOG_PASS: "+title);
+  if(controls.length==1&&"OK".equals(controls[0])){
+   clickDialogText(title,"OK");
+   await("OK dismisses "+title,()->{assertActivityAlive(title);return dialog(title)==null;});
+   twoFrames();onMain(()->assertActivityAlive(title));
+  }else backUntilClosed(title);
+  System.out.println("V283_REPORT_DIALOG_PASS: "+title);
  }
  private void assertForm(String title,int fields,String commit)throws Exception {
   awaitDialog(title);twoFrames();
@@ -353,11 +358,13 @@ public final class V283WorkflowUiTest {
  private interface ViewFinder{View find();}
  private void clickView(ViewFinder finder,String label)throws Exception {
   onMain(()->{
+   assertActivityAlive("Before "+label);
    View target=finder.find();assertNotNull("Cannot find action: "+label,target);
    target.requestRectangleOnScreen(new Rect(0,0,target.getWidth(),target.getHeight()),true);
   });
   twoFrames();
   onMain(()->{
+   assertActivityAlive("Clicking "+label);
    View target=finder.find();assertNotNull(label,target);
    assertTrue("Action enabled: "+label,target.isEnabled());
    assertTrue("Action clickable: "+label,target.isClickable());
@@ -365,13 +372,34 @@ public final class V283WorkflowUiTest {
   });
  }
  private void backUntilClosed(String title)throws Exception {
-  for(int attempt=0;attempt<3;attempt++){
+  awaitDialog(title);
+  AtomicBoolean closed=new AtomicBoolean();
+  for(int attempt=0;attempt<3&&!closed.get();attempt++){
+   // An attached dialog may not own input yet. Never send Back to the
+   // activity beneath it, or retry while its dismiss animation is running.
+   await("Dialog focus before Back: "+title,()->{
+    assertActivityAlive("Before Back: "+title);
+    View target=dialog(title);closed.set(target==null);
+    return closed.get()||target.hasWindowFocus();
+   });
+   if(closed.get())break;
    instrumentation.sendKeyDownUpSync(KeyEvent.KEYCODE_BACK);
-   SystemClock.sleep(180);
-   AtomicBoolean closed=new AtomicBoolean();onMain(()->closed.set(dialog(title)==null));
-   if(closed.get())return;
+   long deadline=SystemClock.elapsedRealtime()+1500;
+   do{
+    onMain(()->{assertActivityAlive("After Back: "+title);closed.set(dialog(title)==null);});
+    if(closed.get())break;
+    Thread.sleep(50);
+   }while(SystemClock.elapsedRealtime()<deadline);
+   // A first Back may only hide the keyboard; retry only after polling
+   // dismissal for 1.5 seconds and rechecking the dialog's window focus.
   }
-  fail("Back did not dismiss dialog: "+title+"\n"+windowDiagnostic());
+  if(!closed.get())fail("Back did not dismiss dialog: "+title+"\n"+windowDiagnostic());
+  twoFrames();onMain(()->assertActivityAlive("Dismissed "+title));
+ }
+ private void assertActivityAlive(String operation){
+  assertNotNull(operation+": activity exists",activity);
+  assertFalse(operation+": activity must not be finishing",activity.isFinishing());
+  assertFalse(operation+": activity must not be destroyed",activity.isDestroyed());
  }
  private void awaitDialog(String title)throws Exception {await("Dialog "+title,()->dialog(title)!=null);}
  private View requireDialog(String title){View root=dialog(title);assertNotNull("Dialog "+title,root);return root;}
