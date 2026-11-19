@@ -36,9 +36,15 @@ final class PremiumV283Ui {
  static void touch(View view){
   view.setMinimumHeight(dp(view.getContext(),48));
   view.setMinimumWidth(dp(view.getContext(),48));
+  // Decorative icons stay hidden until they are bound to an actual action.
+  view.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_YES);
   if(!(view instanceof EditText))view.setFocusable(true);
   view.setClipToOutline(true);
   view.setForeground(new RippleDrawable(ColorStateList.valueOf(0x24315DCC),null,null));
+ }
+ static boolean compact(Context context){
+  android.content.res.Configuration config=context.getResources().getConfiguration();
+  return config.screenWidthDp<360||config.fontScale>1.3f;
  }
  static EditText field(Context context){
   EditText field=new EditText(context);styleField(field);return field;

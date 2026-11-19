@@ -43,6 +43,17 @@ All 38 source reconstruction and integration steps pass locally, along with 19 p
 This is an owner-signed preview APK, retaining the existing package and Room schema.
 Device gallery providers, recipient apps, physical printers and installation on the owner's phone require actual-device acceptance. Member photos remain local to the phone and are not included in financial JSON or encrypted ledger backups.
 
+## Follow-on usability and photograph reliability
+
+- Month arrows are exposed as actionable accessibility controls; decorative icons remain excluded.
+- Selected tab, reporting month, member search/filter and report search/category survive Activity recreation.
+- Member status is below the name. At narrow widths or enlarged text, full member names and stacked receipt amount/actions remain readable.
+- Profile, fee policy, concession, stock threshold and encrypted-export form bodies scroll while their native dialog buttons remain available.
+- Photo mutation work is serialized across Activity recreation. Completion refreshes the live member list, and invalid-image errors cannot attach a window to the destroyed Activity.
+- All eight EXIF orientations are normalized before saving; malformed replacements preserve the existing photo.
+
+Focused acceptance adds real accessibility-node actions, recreation and filter restoration, 320 dp / 2.0 font layout, keyboard/form reachability, queued photo operations across recreation and coloured-quadrant EXIF fixtures. The source reconstruction checks continue to pin the six accounting/schema/Classic PDF modules above. Runtime acceptance for this follow-on revision is recorded below once the candidate passes.
+
 ## Accepted build — 19 November 2026
 
 - Application source and tests: 60cb6f1c777311f0d4e3f5da4e357fab038afc4d.

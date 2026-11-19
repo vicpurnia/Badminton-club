@@ -68,6 +68,135 @@ once(
     "LINE=PremiumV283Ui.LINE,PALE=PremiumV283Ui.SOFT;",
 )
 
+# Recreating the Activity keeps presentation state, while financial forms still
+# use their existing explicit review/commit flow and immutable submission IDs.
+once('restoreMemberPhotoSelection(b);layout();selectTab(pendingPhotoMemberId==null?"Home":"Members");',
+     'restorePremiumUiState(b);restoreMemberPhotoSelection(b);\n'
+     '  memberPhotoActivity=new java.lang.ref.WeakReference<>(this);\n'
+     '  layout();selectTab(pendingPhotoMemberId==null?tab:"Members");')
+once('  super.onSaveInstanceState(state);', '''  super.onSaveInstanceState(state);
+  state.putString("v283.ui.tab",tab);
+  state.putString("v283.ui.month",reportMonth);
+  state.putString("v283.ui.memberSearch",searchText);
+  state.putString("v283.ui.memberFilter",memberFilter);
+  state.putString("v283.ui.reportSearch",premiumReportQuery);
+  state.putString("v283.ui.reportGroup",premiumReportGroup);''')
+once(' private void restoreMemberPhotoSelection(Bundle state){', ''' private void restorePremiumUiState(Bundle state){
+  if(state==null)return;
+  String restoredTab=state.getString("v283.ui.tab","Home");
+  if(Arrays.asList("Home","Collect","Shuttles","Members","Reports").contains(restoredTab))tab=restoredTab;
+  String month=state.getString("v283.ui.month",reportMonth);
+  if(month!=null&&month.matches("[0-9]{4}-(0[1-9]|1[0-2])"))reportMonth=month;
+  searchText=state.getString("v283.ui.memberSearch","");
+  String filter=state.getString("v283.ui.memberFilter","All");
+  if(Arrays.asList("All","Paid","Partial","Unpaid","Settled","Not due","Unconfigured").contains(filter))memberFilter=filter;
+  premiumReportQuery=state.getString("v283.ui.reportSearch","");
+  String group=state.getString("v283.ui.reportGroup","All");
+  if(Arrays.asList("All","Reports","Club","Backups").contains(group))premiumReportGroup=group;
+ }
+ private void restoreMemberPhotoSelection(Bundle state){''')
+once('return screenEpoch==epoch&&expectedTab.equals(tab)&&month.equals(reportMonth);',
+     'return !isFinishing()&&!isDestroyed()&&screenEpoch==epoch&&expectedTab.equals(tab)&&month.equals(reportMonth);')
+once('@Override protected void onDestroy(){io.shutdown();super.onDestroy();}',
+     '@Override protected void onDestroy(){screenEpoch++;memberRenderGeneration++;\n'
+     '  if(memberPhotoActivity.get()==this)memberPhotoActivity.clear();\n'
+     '  io.shutdown();super.onDestroy();}')
+once('private void error(Exception e){', 'private void error(Exception e){if(isFinishing()||isDestroyed())return;')
+replace_method('private void background(', '''
+private void background(CheckedJob job){
+ if(isFinishing()||isDestroyed())return;
+ try{io.execute(()->{try{job.run();}catch(Exception issue){runOnUiThread(()->error(issue));}});}
+ catch(java.util.concurrent.RejectedExecutionException issue){error(issue);}
+}''')
+
+# A photo save is process-scoped, so queued work on a previous Activity cannot
+# overwrite a newer selection made after rotation. Completion follows the live
+# Activity and does not cancel already queued accounting operations.
+once(' private boolean memberPhotoInProgress;', ''' private boolean memberPhotoInProgress;
+ private static final java.util.concurrent.atomic.AtomicBoolean memberPhotoWork=
+  new java.util.concurrent.atomic.AtomicBoolean(false);
+ private static java.lang.ref.WeakReference<MainActivity> memberPhotoActivity=
+  new java.lang.ref.WeakReference<>(null);
+ private void finishMemberPhotoWork(Exception issue,String success){
+  new Handler(Looper.getMainLooper()).post(()->{
+   memberPhotoWork.set(false);
+   memberPhotoInProgress=false;
+   MainActivity current=memberPhotoActivity.get();
+   if(current==null||current.isFinishing()||current.isDestroyed())return;
+   current.memberPhotoInProgress=false;
+   if("Members".equals(current.tab))current.selectTab("Members");
+   if(issue!=null)current.error(issue);
+   else Toast.makeText(current,success,Toast.LENGTH_SHORT).show();
+  });
+ }''')
+once('if(pendingPhotoMemberId==null&&!memberPhotoInProgress)return false;',
+     'if(pendingPhotoMemberId==null&&!memberPhotoInProgress&&!memberPhotoWork.get())return false;')
+once('''    if(memberPhotoBusy())return;
+    memberPhotoInProgress=true;
+    final int screen=screenEpoch;
+    background(()->{
+     try{
+      PremiumV28MemberPhotos.remove(this,member.id);
+      runOnUiThread(()->{
+       if(!isFinishing()&&!isDestroyed()&&screen==screenEpoch)selectTab("Members");
+      });
+     }finally{runOnUiThread(()->memberPhotoInProgress=false);}
+    });''', '''    if(memberPhotoBusy()||!memberPhotoWork.compareAndSet(false,true))return;
+    memberPhotoInProgress=true;
+    try{
+     io.execute(()->{
+      Exception failure=null;
+      try{PremiumV28MemberPhotos.remove(getApplicationContext(),member.id);}
+      catch(Exception issue){failure=issue;}
+      finally{finishMemberPhotoWork(failure,"Member photo removed");}
+     });
+    }catch(java.util.concurrent.RejectedExecutionException issue){finishMemberPhotoWork(issue,"Member photo removed");}''')
+once('''   final Uri chosen=data.getData();
+   final int screen=screenEpoch;
+   memberPhotoInProgress=true;
+   background(()->{
+    try{
+     requireImportedLedger();
+     boolean exists=false;
+     for(Member m:database.dao().members())if(memberId.equals(m.id)){exists=true;break;}
+     if(!exists)throw new IOException("Original member ID no longer exists. Photograph was not saved.");
+     PremiumV28MemberPhotos.addOrReplace(this,chosen,memberId);
+     runOnUiThread(()->{
+      if(isFinishing()||isDestroyed())return;
+      Toast.makeText(this,"Member photo saved",Toast.LENGTH_SHORT).show();
+      if(screen==screenEpoch)selectTab("Members");
+     });
+    }finally{runOnUiThread(()->memberPhotoInProgress=false);}
+   });''', '''   final Uri chosen=data.getData();
+   if(!memberPhotoWork.compareAndSet(false,true)){
+    Toast.makeText(this,"Finish the current photo save first",Toast.LENGTH_SHORT).show();return;
+   }
+   memberPhotoInProgress=true;
+   try{
+    io.execute(()->{
+     Exception failure=null;
+     try{
+      requireImportedLedger();
+      boolean exists=false;
+      for(Member m:database.dao().members())if(memberId.equals(m.id)){exists=true;break;}
+      if(!exists)throw new IOException("Original member ID no longer exists. Photograph was not saved.");
+      PremiumV28MemberPhotos.addOrReplace(getApplicationContext(),chosen,memberId);
+     }catch(Exception issue){failure=issue;}
+     finally{finishMemberPhotoWork(failure,"Member photo saved");}
+    });
+   }catch(java.util.concurrent.RejectedExecutionException issue){finishMemberPhotoWork(issue,"Member photo saved");}''')
+
+# Read-only form preparation may finish after rotation. Never attach a dialog
+# to the obsolete Activity, and leave submitted worker operations untouched.
+for signature in ("private void openMemberProfile(", "private void memberWallet(",
+                  "private void openPayment(", "private void showFeeCentre(",
+                  "private void openStockThreshold("):
+    original = method(signature)
+    guarded = original.replace("runOnUiThread(()->{", "runOnUiThread(()->{\n    if(isFinishing()||isDestroyed())return;")
+    assert guarded != original, "Expected asynchronous form preparation: " + signature
+    once(original, guarded)
+
+
 replace_method("private Button button(", """
 private Button button(String label,Runnable task){
  Button view=new Button(this);view.setAllCaps(false);view.setText(label);
@@ -252,14 +381,17 @@ once(
     '''LinearLayout card=col();LinearLayout identity=row();
       identity.addView(memberAvatar(item.member,item.name));
       TextView memberName=text(item.name+(item.active?"":" · Archived"),15,DARK,true);
-      pad(memberName,11,0);memberName.setMaxLines(2);
-      memberName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      memberName.setTag("member-name:"+item.member.id);pad(memberName,11,0);
+      if(!PremiumV283Ui.compact(this)){
+       memberName.setMaxLines(2);memberName.setEllipsize(android.text.TextUtils.TruncateAt.END);
+      }
       identity.addView(memberName,new LinearLayout.LayoutParams(0,-2,1));
       boolean settled="Paid".equals(item.status)||"Settled".equals(item.status);
       boolean partial="Partial".equals(item.status);
-      identity.addView(pill(item.status,settled?PremiumV283Ui.SUCCESS:partial?PremiumV283Ui.WARNING:GRAY,
-        settled?PremiumV283Ui.SUCCESS_SOFT:partial?PremiumV283Ui.WARNING_SOFT:LIGHT));
-      card.addView(identity);gap(card,12);
+      card.addView(identity);gap(card,10);
+      TextView status=pill(item.status,settled?PremiumV283Ui.SUCCESS:partial?PremiumV283Ui.WARNING:GRAY,
+        settled?PremiumV283Ui.SUCCESS_SOFT:partial?PremiumV283Ui.WARNING_SOFT:LIGHT);
+      card.addView(status,new LinearLayout.LayoutParams(-2,-2));gap(card,10);
       card.addView(text(item.detail,12,GRAY,false));
       card.setContentDescription(item.name+". "+item.status+". "+item.detail+". Open member history");''')
 once('body.addView(button("Remove photo",', 'body.addView(dangerButton("Remove photo",')
@@ -268,6 +400,14 @@ once('LinearLayout body=col();pad(body,20,17);',
      'LinearLayout body=col();pad(body,20,17);body.setBackground(bg(Color.WHITE,24));')
 s = s.replace('body.addView(button("Remove local member photo",',
               'body.addView(dangerButton("Remove local member photo",')
+once('search.setSingleLine(true);search.setTextSize(14);search.setHint("Search members by name");',
+     'search.setSingleLine(true);search.setTextSize(14);search.setHint("Search members by name");\n'
+     '  search.setTag("members:search");')
+once('''   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);
+   lp.setMargins(dp(3),0,dp(5),0);''',
+     '''   chip.setSelected(option.equals(memberFilter));chip.setTag("member-filter:"+option);
+   LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-2,-2);
+   lp.setMargins(dp(3),0,dp(5),0);''')
 
 payments = method("private void showPayments()")
 hero_start = payments.index("  LinearLayout headline=")
@@ -298,15 +438,17 @@ new_payments = new_payments[:receipt_start] + '''
    info.addView(text(dateLabel(c.feeMonth)+(c.approximate?" · Imported":" · "+c.method),12,GRAY,false));
    identity.addView(info,new LinearLayout.LayoutParams(0,-2,1));card.addView(identity,fill());gap(card,12);
    long net=corrections.containsKey(c.id)?corrections.get(c.id).effective:c.amount;
-   LinearLayout receiptFooter=row();
+   boolean compactReceipt=PremiumV283Ui.compact(this);
+   LinearLayout receiptFooter=compactReceipt?col():row();
    TextView receiptAmount=text(net==0?"VOID":rupee(net),19,net==0?GRAY:DARK,true);
    receiptAmount.setTag("receipt-amount:"+c.id);
-   receiptFooter.addView(receiptAmount,new LinearLayout.LayoutParams(0,-2,1));
+   receiptFooter.addView(receiptAmount,compactReceipt?fill():new LinearLayout.LayoutParams(0,-2,1));
+   if(compactReceipt)gap(receiptFooter,8);
    TextView receiptAction=inlineButton(net==0?"Void record":"Receipt ▤",GREEN,()->shareRecordedReceipt(m,c));
    receiptAction.setTag("receipt-action:"+c.id);
    receiptAction.setContentDescription((net==0?"Share void record for ":"Share receipt for ")+
     effectiveName(m,displayProfiles)+" · "+dateLabel(c.feeMonth));
-   receiptFooter.addView(receiptAction,new LinearLayout.LayoutParams(-2,-2));
+   receiptFooter.addView(receiptAction,compactReceipt?fill():new LinearLayout.LayoutParams(-2,-2));
    card.addView(receiptFooter,fill());panel(content,card);
    ''' + new_payments[receipt_end:]
 once(payments, new_payments)
@@ -418,11 +560,12 @@ private final java.util.Map<String,TextView> premiumReportChips=new java.util.Li
 private LinearLayout premiumReportsList;
 private TextView premiumReportCount;
 private EditText premiumReportSearch;
-private String premiumReportGroup="All";
+private String premiumReportGroup="All",premiumReportQuery="";
 private void setupReportCatalogue(){
- premiumReportRows.clear();premiumReportChips.clear();premiumReportGroup="All";
+ premiumReportRows.clear();premiumReportChips.clear();
  premiumReportSearch=PremiumV283Ui.field(this);premiumReportSearch.setSingleLine(true);
  premiumReportSearch.setHint("Search reports, receipts or backups");
+ premiumReportSearch.setText(premiumReportQuery);
  premiumReportSearch.setTag("reports:search");content.addView(premiumReportSearch,fill());gap(content,12);
  LinearLayout chips=row();
  for(String group:new String[]{"All","Reports","Club","Backups"}){
@@ -443,6 +586,7 @@ private void setupReportCatalogue(){
  });
 }
 private void filterReportCatalogue(){
+ premiumReportQuery=premiumReportSearch.getText().toString();
  String query=premiumReportSearch.getText().toString().trim().toLowerCase(Locale.ROOT);int shown=0;
  for(PremiumV283Ui.ToolRow row:premiumReportRows){
   boolean matches=("All".equals(premiumReportGroup)||premiumReportGroup.equals(row.category))&&
@@ -482,6 +626,24 @@ colors = {
 }
 for old, new in colors.items():
     s = s.replace(old, new)
+
+# Native AlertDialog buttons stay outside the scrollable custom body. Long
+# forms can therefore reach their final field with large text or an open IME.
+for signature, body in (("private void editFeePolicy(", "f"),
+                        ("private void editFeeWaiver(", "f"),
+                        ("private void openMemberProfile(", "v"),
+                        ("private void openStockThreshold(", "v"),
+                        ("private void startEncryptedExport(", "form")):
+    original = method(signature)
+    old_view = ".setView(" + body + ")"
+    assert original.count(old_view) == 1, "Unexpected form container: " + signature
+    once(original, original.replace(old_view, ".setView(premiumForm(" + body + "))"))
+once("private Button button(", '''private ScrollView premiumForm(View body){
+ ScrollView scroll=new ScrollView(this);scroll.setFillViewport(false);
+ scroll.setClipToPadding(false);scroll.addView(body);
+ return scroll;
+}
+private Button button(''')
 
 activity.write_text(s, encoding="utf-8")
 shutil.copyfile("src/premium/v28_3/PremiumV283Ui.java", root / "PremiumV283Ui.java")

@@ -20,11 +20,24 @@ assert 'v28.3 DEVELOPMENT CANDIDATE' in activity, 'v28.3 build identity is missi
 helper_text = helper.read_text(encoding='utf-8')
 for term in ('INK=0xFF14243B', 'ACCENT=0xFF315DCC', 'IVORY=0xFFF5F3EE',
              'class LineIcon extends Drawable', 'setMinimumHeight(dp(view.getContext(),48))',
-             'setMinimumWidth(dp(view.getContext(),48))', 'codePointAt(0)', 'Character.toChars'):
+             'setMinimumWidth(dp(view.getContext(),48))', 'IMPORTANT_FOR_ACCESSIBILITY_YES',
+             'config.screenWidthDp<360||config.fontScale>1.3f', 'codePointAt(0)', 'Character.toChars'):
     assert term in helper_text, 'Missing premium presentation/accessibility feature: ' + term
 for term in ('PremiumV283Ui.INK', 'PremiumV283Ui.ACCENT', 'PremiumV283Ui.IVORY',
              'PremiumV283Ui.initials', 'PremiumV283Ui.icon', 'PremiumV283Ui.touch'):
     assert term in activity, 'Native premium UI integration is missing: ' + term
+
+for term in ('restorePremiumUiState(b)', '"v283.ui.tab"', '"v283.ui.month"',
+             '"v283.ui.memberSearch"', '"v283.ui.memberFilter"',
+             '"v283.ui.reportSearch"', '"v283.ui.reportGroup"',
+             'memberPhotoWork.compareAndSet(false,true)', 'memberPhotoWork.set(false)',
+             'memberPhotoActivity=new java.lang.ref.WeakReference<>(this)',
+             'private ScrollView premiumForm(View body)',
+             'chip.setSelected(option.equals(memberFilter))'):
+    assert term in activity, 'Missing reviewed state/accessibility/photo behavior: ' + term
+assert 'private void error(Exception e){if(isFinishing()||isDestroyed())return;' in activity, (
+    'An obsolete Activity must not attach an error dialog after recreation')
+assert activity.count('.setView(premiumForm(') == 5, 'All five long custom forms must scroll'
 
 styles = Path('app/src/main/res/values/premium_v283_styles.xml')
 assert styles.read_bytes() == Path('src/premium/v28_3/styles.xml').read_bytes(), (
