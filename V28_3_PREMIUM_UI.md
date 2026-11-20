@@ -36,7 +36,7 @@ V283WorkflowUiTest.premiumScreensAndActionsRemainUsable exercises the actual nav
 
 The existing signed upgrade, complete-field ledger, encrypted-backup, photo and navigation suites remain in the workflow. Emulator screenshots are retained for all five main tabs.
 
-All 38 source reconstruction and integration steps pass locally. The latest accepted CI passed the existing Java regressions, complete financial/AES suite, both Android builds, all ten instrumentation invocations, and populated navigation checks. All five normal screens and the enlarged-text evidence were visually reviewed; receipt amounts and actions passed measured visibility assertions.
+All 38 source reconstruction and integration steps pass locally. The latest accepted CI passed the existing Java regressions, complete financial/AES suite, both Android builds, all twelve instrumentation invocations, and populated navigation checks. The normal screens and enlarged-text evidence were visually reviewed; receipt amounts and actions passed measured visibility assertions. The latest follow-on screenshots also confirm the restored Receipt Library and live Reports after delayed recovery.
 
 ## Scope
 
@@ -92,7 +92,7 @@ The keyboard acceptance test measures the real Android input-method window in sc
 
 The added form-workflow case requires the exact synthetic club, known member identities and original receipt. It checks six forms, asynchronous rejections, review Cancel/Back, password correction and picker cancellation, plus corrected profile/threshold retries under a deterministic worker hold. It commits exactly two intended synthetic metadata events, preserves every original financial/roster row and original audit event, and runs last after the display is restored.
 
-## Latest accepted build — 19 November 2026 (rc-test.13)
+## Earlier accepted build — 19 November 2026 (rc-test.13)
 
 - Application source and tests: 0ae201bae6507cc847b1d67c0ecadb2041f5c0f6.
 - Signed preview: 28.3-rc-test.13, versionCode 30013.
@@ -126,4 +126,27 @@ This remains a signed preview and draft change. Owner-phone ledger comparison, g
 - System Back returns from Receipt Library to Collect. The native Android 13+ callback is registered only while the library is open and released on navigation or destruction; the earlier-Android fallback remains available. At a top-level destination Android retains its normal Back behavior.
 - The new receipt-navigation case exercises real platform Back, delayed indexing, recreation, filter state and stale result rejection. The recovery-lifecycle case delays real worker operations across recreation, checks temporary-file/gate cleanup and fresh retries, and verifies exact import-review cancellation against an isolated empty in-memory database. Both require the synthetic club and preserve the complete canonical ledger.
 
-These two instrumentation cases run with normal display settings before the final form test's intentional synthetic metadata changes. Signed Android acceptance for this follow-on revision is recorded below after the workflow finishes.
+These two instrumentation cases run with normal display settings before the final form test's intentional synthetic metadata changes.
+
+## Latest accepted build — 20 November 2026 (rc-test.15)
+
+- Application/test source: 91cf915b270cf8fade6336042b61775391aff132.
+- Signed preview: 28.3-rc-test.15, versionCode 30015; application ID com.vinayak.badminton.premiumv24.
+- Certificate SHA-256: 0e1c35c2da5a0582cc0e3be45319b027a38fbfe9d04ad78df89e10126a40ca8e.
+- [Signed upgrade and Android acceptance: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44648745143).
+- [Debug build and regression checks: PASS](https://github.com/vicpurnia/Badminton-club/actions/runs/44648745044).
+- Signed APK artifact: 14589139767. Runtime evidence artifact: 14589833478.
+- APK SHA-256: f07fd11f531ddad62aae8c99c91a484a310b67914e91e4c03a2f20e104a95f44.
+- APK size: 2,193,340 bytes.
+- APK artifact ZIP SHA-256: 884653850202024d2a63f681042528811d5bb2af4b6b43b00b49d053704a9152.
+- Original runtime evidence ZIP SHA-256: 2e9ec4c3844862e97eed3597612a2628ba550df3c4c92d49fdcda12dbac6575a.
+
+All twelve mandatory instrumentation invocations passed, along with populated navigation. The original signed v25.9.1.21/code 24021 updated in place to this preview. Read-only navigation/recovery tests preserve the complete canonical synthetic ledger; the final form test creates exactly its two intended metadata events while preserving original financial, roster and audit records. The complete captured runtime log contains no FATAL EXCEPTION or BadTokenException.
+
+The new receipt test confirms retained typing during delayed indexing, query/filter restoration, actual system Back to Collect, explicit Back, stale index rejection and normal top-level Back behavior. The recovery test confirms accepted backup completion after recreation, removal of abandoned JSON/PDF/preview files, released picker gates, successful fresh export/cancellation, and exact import-review token revocation on obsolete-owner completion and actual Back. Import-review tests use an isolated empty in-memory database; no import is accepted.
+
+Final Members, restored Receipt Library and post-recovery Reports screenshots were inspected. Existing photo, duplicate-payment, retained-form and 320 dp / 200% text checks passed again, including real keyboard-action taps.
+
+rc-test.14 was not accepted because its new test selected the Reports category while Receipt Library belongs to Club. Two test-only selection/assertion lines were corrected; no application behavior or Back/state acceptance assertion was weakened. The full signed workflow then passed as rc-test.15.
+
+This remains a signed preview and draft change under the existing owner-phone acceptance gate. Actual gallery/document providers, recipient apps, physical printing, owner-ledger comparison and second-device recovery remain pending. Photos remain local and excluded from financial JSON/encrypted backups.
