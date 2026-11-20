@@ -71,7 +71,7 @@ public final class V283ReceiptNavigationTest {
      await("Filtered member loaded",()->tag("member-photo-action:"+MEMBER)!=null);
      selectTab("Reports");
      onMain(()->((EditText)tag("reports:search")).setText("receipt"));
-     click(()->tag("reports:category:Reports"),"Reports category");
+     click(()->tag("reports:category:Club"),"Club category");
      await("Receipt Library report is available",()->reportVisible());
 
      // The search must survive even when the old index worker has not run yet.
@@ -132,7 +132,7 @@ public final class V283ReceiptNavigationTest {
      selectTab("Reports");
      onMain(()->{
       assertEquals("Original report search remains","receipt",((EditText)tag("reports:search")).getText().toString());
-      assertTrue("Original report category remains selected",tag("reports:category:Reports").isSelected());
+      assertTrue("Original report category remains selected",tag("reports:category:Club").isSelected());
       assertEquals("Original historical month remains",MONTH,field("reportMonth"));
      });
      assertNoReceiptBackHandler();
