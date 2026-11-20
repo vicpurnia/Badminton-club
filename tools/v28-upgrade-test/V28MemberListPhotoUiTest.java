@@ -41,8 +41,10 @@ public final class V28MemberListPhotoUiTest {
  private static final String MONTH="2026-08";
  private static final String SEARCH="CI Synthetic Member";
  private static final int REQUEST=2012;
+ private boolean recoveredPixelLauncherAnr;
 
  @Test public void memberListPhotoActionsPreserveIdentityAndLedger()throws Exception {
+  recoveredPixelLauncherAnr=false;
   Instrumentation instrumentation=InstrumentationRegistry.getInstrumentation();
   Context context=instrumentation.getTargetContext();
   LedgerDatabase db=Room.databaseBuilder(context,LedgerDatabase.class,"badminton_room_v18.db")
@@ -288,12 +290,13 @@ public final class V28MemberListPhotoUiTest {
   } while(SystemClock.elapsedRealtime()<deadline);
   fail(message);
  }
- private static void awaitAccessible(Instrumentation instrumentation,String label,boolean click)throws Exception {
+ private void awaitAccessible(Instrumentation instrumentation,String label,boolean click)throws Exception {
   long deadline=SystemClock.elapsedRealtime()+15000;
   do {
    AccessibilityNodeInfo root=instrumentation.getUiAutomation().getRootInActiveWindow();
    if(root!=null){
     try {
+     if(recoverPixelLauncherAnr(root))continue;
      List<AccessibilityNodeInfo> matches=root.findAccessibilityNodeInfosByText(label);
      boolean done=false;
      for(AccessibilityNodeInfo node:matches){
@@ -317,6 +320,34 @@ public final class V28MemberListPhotoUiTest {
   } else diagnostic.append("No active accessibility window");
   screenshot(instrumentation,instrumentation.getTargetContext(),"member-photo-ui-failure.png");
   fail((click?"Cannot click ":"Cannot find ")+"visible dialog control: "+label+"\n"+diagnostic);
+ }
+ private boolean recoverPixelLauncherAnr(AccessibilityNodeInfo root){
+  if(recoveredPixelLauncherAnr)return false;
+  boolean launcherAlert=false;
+  List<AccessibilityNodeInfo> titles=root.findAccessibilityNodeInfosByViewId("android:id/alertTitle");
+  for(AccessibilityNodeInfo title:titles){
+   try {
+    if("android".contentEquals(title.getPackageName()==null?"":title.getPackageName())&&
+      "android:id/alertTitle".equals(title.getViewIdResourceName())&&title.isVisibleToUser()&&
+      "Pixel Launcher isn't responding".contentEquals(title.getText()==null?"":title.getText()))launcherAlert=true;
+   }finally{title.recycle();}
+  }
+  if(!launcherAlert)return false;
+  boolean dispatched=false;
+  List<AccessibilityNodeInfo> controls=root.findAccessibilityNodeInfosByViewId("android:id/aerr_close");
+  for(AccessibilityNodeInfo control:controls){
+   try {
+    if(!recoveredPixelLauncherAnr&&"android".contentEquals(control.getPackageName()==null?"":control.getPackageName())&&
+      "android:id/aerr_close".equals(control.getViewIdResourceName())&&
+      "Close app".equalsIgnoreCase(control.getText()==null?"":control.getText().toString())&&
+      control.isVisibleToUser()&&control.isEnabled()&&control.isClickable()){
+     recoveredPixelLauncherAnr=true;
+     dispatched=control.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+     System.out.println("V28_PIXEL_LAUNCHER_ANR_RECOVERY: exact launcher Close app dispatched="+dispatched);
+    }
+   }finally{control.recycle();}
+  }
+  return dispatched;
  }
  private static void describeNodes(AccessibilityNodeInfo node,StringBuilder out,int[] remaining,int depth){
   if(node==null||remaining[0]--<=0||depth>10)return;

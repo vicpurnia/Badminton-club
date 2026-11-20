@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="PremiumV283Theme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#315DCC</item>
+        <item name="android:colorControlActivated">#315DCC</item>
+        <item name="android:windowBackground">#F5F3EE</item>
+        <item name="android:colorBackground">#F5F3EE</item>
+        <item name="android:textColorPrimary">#14243B</item>
+        <item name="android:textColorSecondary">#59687C</item>
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:statusBarColor">#F5F3EE</item>
+        <item name="android:navigationBarColor">#F5F3EE</item>
+    </style>
+</resources>

@@ -1,11 +1,14 @@
-name: Validate Badminton Premium v28.2 Photo & Recovery Candidate (debug only)
+name: Validate Badminton Premium v28.3 Native UI & Workflow Candidate (debug only)
 
 on:
   push:
-    branches: [dev/v28-0-to-28-2-20261118]
+    branches: [dev/v28-3-premium-ui-20261119]
     paths:
       - 'src/premium/v28_0/**'
       - 'src/premium/v28_1/**'
+      - 'src/premium/v28_3/**'
+      - 'tools/patch_v283_premium_ui.py'
+      - 'tools/check_v283_integrated.py'
       - 'tools/patch_v28_member_photos.py'
       - 'tools/patch_v28_readiness.py'
       - 'tools/check_v28_integrated.py'
@@ -352,7 +355,9 @@ jobs:
         run: python3 tools/patch_v28_member_photos.py
       - name: Integrate read-only v28 backup and ledger acceptance audit
         run: python3 tools/patch_v28_readiness.py
-      - name: Label isolated v28.2 development build without changing stable app identity
+      - name: Integrate v28.3 premium native UI and reviewed action repairs
+        run: python3 tools/patch_v283_premium_ui.py
+      - name: Label isolated v28.3 development build without changing stable app identity
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -360,17 +365,19 @@ jobs:
           src=Path("app/src/main/java/com/vinayak/badminton/nativepreview/MainActivity.java")
           a=src.read_text(encoding="utf-8")
           assert a.count("v27.9 DEVELOPMENT CANDIDATE")>=1
-          src.write_text(a.replace("v27.9 DEVELOPMENT CANDIDATE","v28.2 DEVELOPMENT CANDIDATE"),encoding="utf-8")
+          src.write_text(a.replace("v27.9 DEVELOPMENT CANDIDATE","v28.3 DEVELOPMENT CANDIDATE"),encoding="utf-8")
           build=Path("app/build.gradle")
           g=build.read_text(encoding="utf-8")
           old_code="versionCode "+str(28000+int(os.environ["GITHUB_RUN_NUMBER"]))
-          new_code="versionCode "+str(29000+int(os.environ["GITHUB_RUN_NUMBER"]))
+          new_code="versionCode "+str(30000+int(os.environ["GITHUB_RUN_NUMBER"]))
           assert g.count(old_code)==1 and g.count("27.9-dev.")==1, "v27 baseline version gate changed"
-          g=g.replace(old_code,new_code).replace("27.9-dev.","28.2-dev.")
+          g=g.replace(old_code,new_code).replace("27.9-dev.","28.3-dev.")
           build.write_text(g,encoding="utf-8")
           PY
       - name: Verify v28 member photos and readonly recovery audit integration
         run: python3 tools/check_v28_integrated.py
+      - name: Verify v28.3 premium UI routes and existing financial behavior
+        run: python3 tools/check_v283_integrated.py
       - name: Verify changed source rules
         run: |
           python3 - <<'PY'
@@ -485,10 +492,10 @@ jobs:
       - name: Compile unsigned debug candidate
         run: gradle --no-daemon :app:assembleDebug
       - name: Verify v26 development APK package ID and upgrade version
-        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 28.2-dev.
+        run: python3 tools/verify_v26_apk_identity.py app/build/outputs/apk/debug/app-debug.apk 28.3-dev.
       - name: Upload non-release v26 candidate debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: Badminton-Premium-v28.2-MEMBER-PHOTOS-RECOVERY-DEBUG
+          name: Badminton-Premium-v28.3-PREMIUM-UI-DEBUG
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

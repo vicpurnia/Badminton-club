@@ -102,10 +102,22 @@ final class PremiumV28MemberPhotos {
     orientation=exif.getAttributeInt(ExifInterface.TAG_ORIENTATION,ExifInterface.ORIENTATION_NORMAL);
    }catch(Exception ignore){ /* non-EXIF files still supported */ }
    Matrix rotate=new Matrix();
-   if(orientation==ExifInterface.ORIENTATION_ROTATE_90)rotate.postRotate(90);
-   else if(orientation==ExifInterface.ORIENTATION_ROTATE_180)rotate.postRotate(180);
-   else if(orientation==ExifInterface.ORIENTATION_ROTATE_270)rotate.postRotate(270);
-   else if(orientation==ExifInterface.ORIENTATION_FLIP_HORIZONTAL)rotate.postScale(-1,1);
+   switch(orientation){
+    case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:rotate.postScale(-1,1);break;
+    case ExifInterface.ORIENTATION_ROTATE_180:rotate.postRotate(180);break;
+    case ExifInterface.ORIENTATION_FLIP_VERTICAL:rotate.postScale(1,-1);break;
+    case ExifInterface.ORIENTATION_TRANSPOSE:
+     // Rotate, then mirror: reflection about the top-left/bottom-right diagonal.
+     rotate.postRotate(90);rotate.postScale(-1,1);break;
+    case ExifInterface.ORIENTATION_ROTATE_90:rotate.postRotate(90);break;
+    case ExifInterface.ORIENTATION_TRANSVERSE:
+     // Reflection about the top-right/bottom-left diagonal.
+     rotate.postRotate(270);rotate.postScale(-1,1);break;
+    case ExifInterface.ORIENTATION_ROTATE_270:rotate.postRotate(270);break;
+    case ExifInterface.ORIENTATION_NORMAL:
+    case ExifInterface.ORIENTATION_UNDEFINED:
+    default:break;
+   }
    // The app stores a normalized image, so private EXIF metadata is dropped.
    oriented=Bitmap.createBitmap(source,0,0,source.getWidth(),source.getHeight(),rotate,true);
    int edge=Math.min(oriented.getWidth(),oriented.getHeight());
