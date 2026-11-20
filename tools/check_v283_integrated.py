@@ -33,6 +33,10 @@ for term in ('PremiumV283Ui.INK', 'PremiumV283Ui.ACCENT', 'PremiumV283Ui.IVORY',
 for term in ('restorePremiumUiState(b)', '"v283.ui.tab"', '"v283.ui.month"',
              '"v283.ui.memberSearch"', '"v283.ui.memberFilter"',
              '"v283.ui.reportSearch"', '"v283.ui.reportGroup"',
+             '"v283.ui.receiptLibrary"', '"v283.ui.receiptSearch"',
+             '"v283.ui.receiptFilter"', '"v283.ui.receiptLimit"',
+             'private void postRecoveryUi(Runnable ready,Runnable abandoned)',
+             'registerOnBackInvokedCallback(', 'unregisterOnBackInvokedCallback(',
              'memberPhotoWork.compareAndSet(false,true)', 'memberPhotoWork.set(false)',
              'memberPhotoActivity=new java.lang.ref.WeakReference<>(this)',
              'private ScrollView premiumForm(View body)',
@@ -49,6 +53,8 @@ assert styles.read_bytes() == Path('src/premium/v28_3/styles.xml').read_bytes(),
     'Premium Android theme differs from reviewed source')
 manifest = Path('app/src/main/AndroidManifest.xml').read_text(encoding='utf-8')
 assert '@style/PremiumV283Theme' in manifest, 'Premium native theme is not active'
+assert 'android:enableOnBackInvokedCallback="true"' in manifest, (
+    'Receipt Library must receive native system Back on Android 13 and later')
 
 library_start = activity.index('private void showReceiptLibrary(){')
 library_end = activity.index('private void showPayments(){', library_start)
@@ -56,6 +62,8 @@ library = activity[library_start:library_end]
 assert 'screenEpoch++;tab="Collect";drawNav();' in library, (
     'Opening Receipt Library from Reports must select the Collect navigation context')
 assert '()->selectTab("Collect")' in library, 'Receipt Library Back must route through navigation'
+assert 'setReceiptLibraryOpen(true)' in library and 'search.setText(receiptSearch)' in library, (
+    'Receipt Library must restore its subpage and search state')
 assert '"‹ Back to Collect",this::showPayments' not in library, (
     'Receipt Library Back still bypasses the selected tab/epoch')
 

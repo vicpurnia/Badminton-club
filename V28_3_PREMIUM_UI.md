@@ -115,3 +115,15 @@ The final log includes V283_RETAINED_FORM_WORKFLOWS_PASS, V283_PROFILE_CORRECTED
 rc-test.11 and rc-test.12 were not accepted. The first exposed an invalid test assumption about dialog-relative IME insets; the second exposed the native confirmation button clipping fixed above. The final gate retains complete visibility and real-touch requirements.
 
 This remains a signed preview and draft change. Owner-phone ledger comparison, gallery/document providers, recipient apps, physical printing and second-device recovery remain subject to the existing device acceptance gate. Photos remain local and are excluded from financial JSON/encrypted ledger backups.
+
+## Recovery lifecycle and Receipt Library navigation
+
+- Backup, verification, restore-rehearsal and import-review results check their original Activity before opening a window. Accepted backup and import work still completes after recreation.
+- Abandoned JSON/PDF export preparation removes its own temporary file and releases its own picker gate. A completed receipt preview also releases its bitmap and PDF when its original screen has expired.
+- Plain and encrypted import reviews revoke their exact review token on obsolete-owner completion or Android Back. Existing empty-database and commit-time import validation is unchanged.
+- The verified JSON import chooser reports an unavailable picker through the existing error dialog.
+- Receipt Library retains its subpage, search, selected filter and display limit across recreation. Typing is captured even while the receipt index is loading.
+- System Back returns from Receipt Library to Collect. The native Android 13+ callback is registered only while the library is open and released on navigation or destruction; the earlier-Android fallback remains available. At a top-level destination Android retains its normal Back behavior.
+- The new receipt-navigation case exercises real platform Back, delayed indexing, recreation, filter state and stale result rejection. The recovery-lifecycle case delays real worker operations across recreation, checks temporary-file/gate cleanup and fresh retries, and verifies exact import-review cancellation against an isolated empty in-memory database. Both require the synthetic club and preserve the complete canonical ledger.
+
+These two instrumentation cases run with normal display settings before the final form test's intentional synthetic metadata changes. Signed Android acceptance for this follow-on revision is recorded below after the workflow finishes.

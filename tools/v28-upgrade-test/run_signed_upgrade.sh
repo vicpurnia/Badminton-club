@@ -201,7 +201,15 @@ instrument_premium_case "$ACCESSIBILITY_CLASS" largeTextOnNarrowScreenKeepsActio
  v283-narrow-large-text.txt
 restore_test_display
 adb shell am force-stop "$PKG"
-echo "9. Verify retained form errors, Cancel/Back, and exactly-once synthetic metadata retries"
+echo "9. Verify receipt search/filter recreation, system Back, and stale index rejection"
+instrument_premium_case "com.vinayak.badminton.nativepreview.V283ReceiptNavigationTest" \
+ receiptLibraryRestoresFiltersAndReturnsThroughSystemBack v283-receipt-navigation.txt
+adb shell am force-stop "$PKG"
+echo "10. Verify delayed recovery results, abandoned export cleanup, and import review cancellation"
+instrument_premium_case "com.vinayak.badminton.nativepreview.V283RecoveryLifecycleTest" \
+ delayedRecoveryAndExportsRespectActivityOwnership v283-recovery-lifecycle.txt
+adb shell am force-stop "$PKG"
+echo "11. Verify retained form errors, Cancel/Back, and exactly-once synthetic metadata retries"
 # This case intentionally commits two non-financial metadata events. Keep it
 # after every original-fixture assertion and after restoring the display.
 instrument_premium_case "com.vinayak.badminton.nativepreview.V283FormWorkflowTest" \

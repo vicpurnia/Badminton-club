@@ -600,6 +600,8 @@ jobs:
           cp tools/v28-upgrade-test/V283WorkflowUiTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           cp tools/v28-upgrade-test/V283AccessibilityStateTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           cp tools/v28-upgrade-test/V283PhotoLifecycleTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
+          cp tools/v28-upgrade-test/V283ReceiptNavigationTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
+          cp tools/v28-upgrade-test/V283RecoveryLifecycleTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           cp tools/v28-upgrade-test/V283FormWorkflowTest.java app/src/androidTest/java/com/vinayak/badminton/nativepreview/
           grep -q 'verifyReadOnlyArtifactsAfterSignedUpgrade' app/src/androidTest/java/com/vinayak/badminton/nativepreview/V27ArtifactsAfterUpgradeTest.java
           cat >> app/build.gradle <<'GRADLE'

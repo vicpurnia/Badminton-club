@@ -73,14 +73,21 @@ once(
 once('restoreMemberPhotoSelection(b);layout();selectTab(pendingPhotoMemberId==null?"Home":"Members");',
      'restorePremiumUiState(b);restoreMemberPhotoSelection(b);\n'
      '  memberPhotoActivity=new java.lang.ref.WeakReference<>(this);\n'
-     '  layout();selectTab(pendingPhotoMemberId==null?tab:"Members");')
+     '  layout();\n'
+     '  if(pendingPhotoMemberId!=null)selectTab("Members");\n'
+     '  else if(receiptLibraryOpen)showReceiptLibrary();\n'
+     '  else selectTab(tab);')
 once('  super.onSaveInstanceState(state);', '''  super.onSaveInstanceState(state);
   state.putString("v283.ui.tab",tab);
   state.putString("v283.ui.month",reportMonth);
   state.putString("v283.ui.memberSearch",searchText);
   state.putString("v283.ui.memberFilter",memberFilter);
   state.putString("v283.ui.reportSearch",premiumReportQuery);
-  state.putString("v283.ui.reportGroup",premiumReportGroup);''')
+  state.putString("v283.ui.reportGroup",premiumReportGroup);
+  state.putBoolean("v283.ui.receiptLibrary",receiptLibraryOpen);
+  state.putString("v283.ui.receiptSearch",receiptSearch);
+  state.putString("v283.ui.receiptFilter",receiptFilter);
+  state.putInt("v283.ui.receiptLimit",receiptShownLimit);''')
 once(' private void restoreMemberPhotoSelection(Bundle state){', ''' private void restorePremiumUiState(Bundle state){
   if(state==null)return;
   String restoredTab=state.getString("v283.ui.tab","Home");
@@ -93,12 +100,17 @@ once(' private void restoreMemberPhotoSelection(Bundle state){', ''' private voi
   premiumReportQuery=state.getString("v283.ui.reportSearch","");
   String group=state.getString("v283.ui.reportGroup","All");
   if(Arrays.asList("All","Reports","Club","Backups").contains(group))premiumReportGroup=group;
+  receiptLibraryOpen="Collect".equals(tab)&&state.getBoolean("v283.ui.receiptLibrary",false);
+  receiptSearch=state.getString("v283.ui.receiptSearch","");
+  String receiptMode=state.getString("v283.ui.receiptFilter","All");
+  if(Arrays.asList("All","Recorded","Historical").contains(receiptMode))receiptFilter=receiptMode;
+  receiptShownLimit=Math.max(25,state.getInt("v283.ui.receiptLimit",25));
  }
  private void restoreMemberPhotoSelection(Bundle state){''')
 once('return screenEpoch==epoch&&expectedTab.equals(tab)&&month.equals(reportMonth);',
      'return !isFinishing()&&!isDestroyed()&&screenEpoch==epoch&&expectedTab.equals(tab)&&month.equals(reportMonth);')
 once('@Override protected void onDestroy(){io.shutdown();super.onDestroy();}',
-     '@Override protected void onDestroy(){screenEpoch++;memberRenderGeneration++;\n'
+     '@Override protected void onDestroy(){setReceiptLibraryOpen(false);screenEpoch++;memberRenderGeneration++;\n'
      '  if(memberPhotoActivity.get()==this)memberPhotoActivity.clear();\n'
      '  io.shutdown();super.onDestroy();}')
 once('private void error(Exception e){', 'private void error(Exception e){if(isFinishing()||isDestroyed())return;')
@@ -108,6 +120,41 @@ private void background(CheckedJob job){
  try{io.execute(()->{try{job.run();}catch(Exception issue){runOnUiThread(()->error(issue));}});}
  catch(java.util.concurrent.RejectedExecutionException issue){error(issue);}
 }''')
+
+# The library is a Collect subpage. Register native Back only while it is open;
+# isolate API 33 types so the existing Android 8+ minimum stays unchanged.
+once('private void selectTab(String name){', '''private boolean receiptLibraryOpen=false;
+ private String receiptSearch="",receiptFilter="All";
+ private int receiptShownLimit=25;
+ private Object receiptBackCallback;
+ private void setReceiptLibraryOpen(boolean open){
+  receiptLibraryOpen=open;
+  if(Build.VERSION.SDK_INT<33)return;
+  if(open&&receiptBackCallback==null){
+   receiptBackCallback=ReceiptBackApi33.register(this,()->{
+    if(receiptLibraryOpen&&!isFinishing()&&!isDestroyed())selectTab("Collect");
+   });
+  }else if(!open&&receiptBackCallback!=null){
+   ReceiptBackApi33.unregister(this,receiptBackCallback);receiptBackCallback=null;
+  }
+ }
+ private static final class ReceiptBackApi33 {
+  static Object register(Activity owner,Runnable goBack){
+   android.window.OnBackInvokedCallback callback=goBack::run;
+   owner.getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+    android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,callback);
+   return callback;
+  }
+  static void unregister(Activity owner,Object callback){
+   owner.getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(
+    (android.window.OnBackInvokedCallback)callback);
+  }
+ }
+ @Override public void onBackPressed(){
+  if(receiptLibraryOpen){selectTab("Collect");return;}
+  super.onBackPressed();
+ }
+ private void selectTab(String name){setReceiptLibraryOpen(false);''')
 
 # A photo save is process-scoped, so queued work on a previous Activity cannot
 # overwrite a newer selection made after rotation. Completion follows the live
@@ -503,7 +550,8 @@ once(expenses, new_expenses)
 library = method("private void showReceiptLibrary()")
 new_library = library.replace(
     "private void showReceiptLibrary(){",
-    'private void showReceiptLibrary(){\n  screenEpoch++;tab="Collect";drawNav();\n'
+    'private void showReceiptLibrary(){\n  if(isFinishing()||isDestroyed())return;\n'
+    '  setReceiptLibraryOpen(true);screenEpoch++;tab="Collect";drawNav();\n'
     '  final int libraryScreen=screenEpoch;final String libraryMonth=reportMonth;')
 new_library = new_library.replace('button("‹ Back to Collect",this::showPayments)',
                                   'secondaryButton("‹ Back to Collect",()->selectTab("Collect"))')
@@ -533,7 +581,38 @@ new_library = new_library.replace(
 new_library = new_library.replace('avatar(item.member.name)', 'avatar(displayName)')
 new_library = new_library.replace('text(item.member.name,15,', 'text(displayName,15,')
 new_library = new_library.replace('TextView chip=pill(option,GREEN,PALE);',
-                                   'TextView chip=pill(option,GREEN,PALE);receiptChips.put(option,chip);')
+                                   'TextView chip=pill(option,GREEN,PALE);receiptChips.put(option,chip);\n'
+                                   '     chip.setTag("receipts:filter:"+option);')
+new_library = new_library.replace(
+    '  search.setHint("Player, month, receipt ID, amount, payment method");',
+    '''  search.setHint("Player, month, receipt ID, amount, payment method");
+  search.setTag("receipts:search");search.setText(receiptSearch);
+  // Capture typing even while the receipt index is still loading.
+  search.addTextChangedListener(new android.text.TextWatcher(){
+   public void beforeTextChanged(CharSequence v,int start,int count,int after){}
+   public void onTextChanged(CharSequence value,int start,int before,int count){
+    if(!currentScreen(libraryScreen,"Collect",libraryMonth))return;
+    receiptSearch=value.toString();receiptShownLimit=25;
+   }
+   public void afterTextChanged(android.text.Editable editable){}
+  });''')
+new_library = new_library.replace('final String[] mode={"All"};',
+                                  'final String[] mode={receiptFilter};')
+new_library = new_library.replace('final int[] shownLimit={25};',
+                                  'final int[] shownLimit={receiptShownLimit};')
+new_library = new_library.replace(
+    '()->{shownLimit[0]+=25;repaint[0].run();}',
+    '''()->{
+       if(!currentScreen(libraryScreen,"Collect",libraryMonth))return;
+       shownLimit[0]+=25;receiptShownLimit=shownLimit[0];repaint[0].run();
+      }''')
+new_library = new_library.replace('      mode[0]=option;shownLimit[0]=25;repaint[0].run();',
+                                  '      if(!currentScreen(libraryScreen,"Collect",libraryMonth))return;\n'
+                                  '      mode[0]=option;receiptFilter=option;\n'
+                                  '      shownLimit[0]=25;receiptShownLimit=25;repaint[0].run();')
+new_library = new_library.replace('      shownLimit[0]=25;repaint[0].run();',
+                                  '      if(!currentScreen(libraryScreen,"Collect",libraryMonth))return;\n'
+                                  '      shownLimit[0]=25;repaint[0].run();')
 once(library, new_library)
 
 # Retain each Report callback verbatim, including PDF filenames and import guards.
@@ -777,6 +856,68 @@ revised = revised.replace("    });\n   }).show();", '''    });}catch(java.util.c
 assert revised != original and 'if(!PremiumV283FormBuilder.beginSave(d))' in revised
 once(original, revised)
 
+# A completed backup/recovery job may outlive its Activity. Keep accepted work
+# running, but attach its result only to the original owner's live window.
+once('private void pickBackupFolder(){', '''private void postRecoveryUi(Runnable ready){
+  postRecoveryUi(ready,()->{});
+ }
+ private void postRecoveryUi(Runnable ready,Runnable abandoned){
+  runOnUiThread(()->{
+   if(isFinishing()||isDestroyed()){abandoned.run();return;}
+   ready.run();
+  });
+ }
+ private void pickBackupFolder(){''')
+for signature in ("private void verifyPrivateBackup(", "private void verifyExternalBackup(",
+                  "private void backupNow(", "private void warnOnBackupFailure(",
+                  "@Override protected void onActivityResult(", "private void readEncryptedBackup(",
+                  "private void importPending("):
+    original = method(signature)
+    revised = original.replace('runOnUiThread(', 'postRecoveryUi(')
+    assert revised != original, "Expected recovery UI callback: " + signature
+    once(original, revised)
+
+for label, callback in (("Import securely", "(d,w)"),
+                        ("Import verified history", "(dd,ww)")):
+    # Cancel only this exact review token; a later review owns another token.
+    old = '.setPositiveButton("' + label + '",' + callback + '->importPending('
+    start = s.index(old)
+    ending = s.index('.show());', start)
+    original = s[start:ending + len('.show());')]
+    revised = original.replace('.show());',
+        '.setOnCancelListener(cancelled->importGate.cancel(importReview))\n'
+        '        .show(),()->importGate.cancel(importReview));')
+    once(original, revised)
+
+for signature, field, gate in (("private void startVerifiedExport(", "pendingExport", "jsonExportGate"),
+                               ("private void savePdf(", "pendingReportPdf", "pdfSaveGate")):
+    original = method(signature)
+    anchor = '    runOnUiThread(()->{\n     Intent save='
+    assert original.count(anchor) == 1
+    revised = original.replace(anchor,
+        '    runOnUiThread(()->{\n'
+        '     if(isFinishing()||isDestroyed()){\n'
+        '      ' + field + '=null;staged.delete();' + gate + '.finish();return;\n'
+        '     }\n     Intent save=')
+    once(original, revised)
+
+replace_method('private void pickMigration(', '''
+private void pickMigration(){
+ Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT);
+ pick.setType("application/json");pick.addCategory(Intent.CATEGORY_OPENABLE);
+ pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+ try{startActivityForResult(pick,PICK_LEDGER);}
+ catch(Exception issue){error(new IOException("Android cannot open the verified JSON picker.",issue));}
+}''')
+
+original = method('private void previewPdf(')
+revised = original.replace('runOnUiThread(()->{', 'postRecoveryUi(()->{')
+anchor = '    if(window!=null)window.setLayout(-1,-1);\n   });'
+assert revised.count(anchor) == 1
+revised = revised.replace(anchor, '''    if(window!=null)window.setLayout(-1,-1);
+   },()->{if(!bitmap.isRecycled())bitmap.recycle();file.delete();});''')
+once(original, revised)
+
 # Only the form body scrolls. The retained builder constrains its viewport to
 # the usable dialog window, keeping native Review/Cancel actions above the IME.
 for signature, body in (("private void editFeePolicy(", "f"),
@@ -804,5 +945,10 @@ manifest = Path("app/src/main/AndroidManifest.xml")
 manifest_text = manifest.read_text(encoding="utf-8")
 old_theme = '@android:style/Theme.Material.Light.NoActionBar'
 assert manifest_text.count(old_theme) == 1, "Unexpected manifest theme"
-manifest.write_text(manifest_text.replace(old_theme, "@style/PremiumV283Theme"), encoding="utf-8")
+manifest_text = manifest_text.replace(old_theme, "@style/PremiumV283Theme")
+activity_tag = '<activity android:name=".MainActivity"'
+assert manifest_text.count(activity_tag) == 1, "Unexpected main Activity manifest entry"
+manifest_text = manifest_text.replace(activity_tag,
+    activity_tag + ' android:enableOnBackInvokedCallback="true"')
+manifest.write_text(manifest_text, encoding="utf-8")
 print("PASS v28.3 premium native UI, 24 unchanged report handlers, receipt routing and duplicate-cancel repair")
